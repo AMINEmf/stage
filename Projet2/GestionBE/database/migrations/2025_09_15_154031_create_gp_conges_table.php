@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('gp_conges', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('employe_id')
+                  ->constrained('employes')
+                  ->onDelete('cascade');
+
+            $table->decimal('jours_cumules', 5, 2)->default(0);
+            $table->decimal('jours_consomes', 5, 2)->default(0);
+            $table->decimal('solde_actuel', 5, 2)->default(0);
+            $table->date('last_update')->nullable();
+
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('gp_conges');
+    }
+};
