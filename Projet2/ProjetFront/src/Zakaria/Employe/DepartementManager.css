@@ -1,0 +1,256 @@
+/* Styles principaux pour le conteneur des départements */
+.departement_home1 {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 160px);
+  display: flex;
+  border: none;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+  
+
+  /* Styles pour la liste des départements */
+  .departement_home1 .departement_list {
+    display: flex;
+    flex-direction: column;
+    width: 10%;
+    min-width: 16%;
+    max-width: 20%;
+    height: calc(100vh - 160px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 1%;
+    margin-right: 20px;
+    transition: all 0.3s ease;
+    border: none !important;
+    scrollbar-width: thin;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  
+  
+  .departement_home1 .departement_list::-webkit-scrollbar {
+    width: 5px;
+  }
+  
+  .departement_home1 .departement_list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+  
+  .departement_home1 .departement_list::-webkit-scrollbar-thumb {
+    background: #3a8a90;
+    border-radius: 10px;
+  }
+  
+  
+  /* Styles pour les éléments de département */
+  .department-item {
+    border-radius: 8px;
+    transition: all 0.2s ease-in-out;
+    margin-bottom: 8px;
+    border-left: 3px solid transparent;
+  }
+  
+  .department-item:hover {
+    background-color: rgba(8, 179, 173, 0.05);
+    /* transform: translateX(2px); */
+  }
+  
+  .department-item.selected {
+    background-color: rgba(8, 179, 173, 0.1);
+    border-left: 3px solid #3a8a90;
+  }
+  
+  .department-item-content {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 8px;
+  }
+  
+  /* Styles pour les boutons d'expansion */
+  .expand-button {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin-right: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+  
+  .expand-button:hover {
+    background-color: rgba(8, 179, 173, 0.1);
+  }
+  
+  .expand-button svg {
+    color: #3a8a90;
+    font-size: 14px;
+  }
+  
+  /* Styles pour les textes */
+  .common-text {
+    color: #2c767c;
+    font-size: 1rem;
+    font-family: inherit;
+    font-weight: 500;
+    line-height: 1.5;
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .common-text svg {
+    margin-right: 8px;
+    color: #3a8a90;
+    font-size: 18px;
+  }
+  
+  .common-text.selected {
+    color: #3a8a90;
+    font-weight: 600;
+  }
+  
+  /* Styles pour les sous-départements */
+  .sub-departments {
+    margin-left: 24px;
+    margin-top: 4px;
+    padding-left: 12px;
+    border-left: 1px dashed rgba(8, 179, 173, 0.3);
+  }
+  
+  /* Styles pour les inputs */
+  .sub-departement-input {
+    margin-left: 30px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+  }
+  
+  .sub-departement-input input {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 12px;
+    width: 90%;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+  }
+  
+  .sub-departement-input input:focus {
+    border-color: #3a8a90;
+    box-shadow: 0 0 0 2px rgba(8, 179, 173, 0.2);
+    outline: none;
+  }
+  
+  /* Styles pour le menu contextuel */
+  .context-menu {
+    position: fixed;
+    z-index: 1000;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    width: 200px;
+    animation: fadeIn 0.15s ease-in-out;
+  }
+  
+  .context-menu button {
+    width: 100%;
+    padding: 10px 15px;
+    text-align: left;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 0.9rem;
+    color: #333;
+  }
+  
+  .context-menu button:hover {
+    background-color: rgba(8, 179, 173, 0.1);
+    color: #3a8a90;
+  }
+  
+  .context-menu button:last-child {
+    color: #e53e3e;
+  }
+  
+  .context-menu button:last-child:hover {
+    background-color: rgba(229, 62, 62, 0.1);
+  }
+  
+  /* Animation */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  /* Checkbox style */
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 5px 0;
+  }
+  
+  
+  .checkbox-container input[type="checkbox"] {
+    accent-color: #3a8a90;
+    margin-right: 8px;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+  }
+  
+
+  .checkbox-container label {
+    font-size: 0.9rem;
+    color: #6b7280;
+    cursor: pointer;
+    user-select: none;
+  }
+  
+
+
+  /* Séparateur */
+  .separator {
+    height: 1px;
+    background-color: #e5e7eb;
+    margin: 10px 0;
+    width: 100%;
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

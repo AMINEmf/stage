@@ -1,0 +1,267 @@
+/* .groups-section {
+    position: fixed;
+    left: 12.6%;
+    top: 10%;
+    width: 15.3%;
+    height: calc(100vh - 160px);
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 15px;
+    margin-right: 20px;
+    transition: all 0.3s ease;
+    border: none !important;
+    scrollbar-width: thin;
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-shadow: 0 6px 20px rgba(8, 179, 173, 0.08), 0 2px 6px rgba(8, 179, 173, 0.04);
+} */
+
+.groups-section::-webkit-scrollbar {
+    width: 5px;
+}
+
+.groups-section::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.groups-section::-webkit-scrollbar-thumb {
+    background: #3a8a90;
+    border-radius: 10px;
+}
+
+.groups-section::-webkit-scrollbar-thumb:hover {
+    background: #06a39d;
+}
+
+.groups-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    padding: 0 5px;
+}
+
+.groups-header h5 {
+    color: #2c767c;
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+.groups-header .gear-icon {
+    color: #3a8a90;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+}
+
+.groups-header .gear-icon:hover {
+    transform: rotate(45deg);
+    color: #06a39d;
+}
+
+.groups-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.group-item {
+    border-radius: 8px;
+    transition: all 0.2s ease-in-out;
+    margin-bottom: 8px;
+    border-left: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+}
+
+.group-item:hover {
+    background-color: rgba(8, 179, 173, 0.05);
+    transform: translateX(2px);
+}
+
+.group-item.selected {
+    background-color: rgba(8, 179, 173, 0.1);
+    border-left: 3px solid #3a8a90;
+}
+
+.group-item-content {
+    color: #2c767c;
+    font-size: 1rem;
+    font-weight: 500;
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.group-item.selected .group-item-content {
+    color: #3a8a90;
+    font-weight: 600;
+}
+
+.group-item-actions {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.group-item:hover .group-item-actions {
+    opacity: 1;
+}
+
+.group-item-actions button {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.group-item-actions button:hover {
+    background-color: rgba(8, 179, 173, 0.1);
+}
+
+.group-item-actions button.edit {
+    color: #3a8a90;
+}
+
+.group-item-actions button.delete {
+    color: #e53e3e;
+}
+
+.group-item-actions button.save {
+    color: #38a169;
+}
+
+.group-item-actions button.cancel {
+    color: #e53e3e;
+}
+
+.group-input {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 12px;
+    width: 100%;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.group-input:focus {
+    border-color: #3a8a90;
+    box-shadow: 0 0 0 2px rgba(8, 179, 173, 0.2);
+    outline: none;
+}
+
+.group-modal {
+    margin-top: 10%;
+}
+
+.group-modal .modal-body {
+    padding: 20px;
+}
+
+.group-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.group-table th,
+.group-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.group-table th {
+    color: #2c767c;
+    font-weight: 600;
+    background-color: #f9fafb;
+}
+
+.group-table tr:hover {
+    background-color: rgba(8, 179, 173, 0.05);
+}
+
+.group-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.group-actions button {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.group-actions button.edit {
+    color: #3a8a90;
+}
+
+.group-actions button.delete {
+    color: #e53e3e;
+}
+
+.group-actions button.save {
+    color: #38a169;
+}
+
+.group-actions button.cancel {
+    color: #e53e3e;
+}
+
+.group-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 15px 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.fab-button {
+    text-transform: none;
+    font-weight: 500;
+    padding: 0 20px;
+}
+
+.fab-button.validate {
+    background-color: #3a8a90;
+    color: white;
+}
+
+.fab-button.cancel {
+    background-color: #e53e3e;
+    color: white;
+}
+
+.fab-button:hover {
+    opacity: 0.9;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+} 

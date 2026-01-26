@@ -1,0 +1,75 @@
+#formContainer {
+  position: fixed;
+  right: -900px;
+  width: 500px;
+  height: auto;
+  transition: right 0.3s ease; /* Effet de glissement du formulaire */
+  border: 3px solid rgb(224, 224, 224);
+  background-color: #fff;
+}
+#formContainer1SC {
+  position: fixed;
+  right: -900px;
+  width: 400px;
+  height: auto;
+  transition: right 0.3s ease; /* Effet de glissement du formulaire */
+  border: 3px solid rgb(224, 224, 224);
+  background-color: #fff;
+}
+#tableContainer {
+  margin-right: 350px; /* Espacement pour afficher le tableau à côté du formulaire */
+}
+
+a {
+  text-decoration: none;
+}
+.clientS {
+  list-style-type: none;
+  margin: 0;
+  padding: 5px;
+  margin-left: 5px;
+  overflow: hidden;
+  background-color: #f1f1f1;
+}
+
+.table-hover {
+  background-color: rgb(23, 7, 7);
+  border-radius: 10px;
+}
+.page-header {
+  display: none;
+}
+.hidden {
+  display: none;
+}
+
+
+.custom-modal {
+  width: 60% !important;
+  max-width: none !important;
+
+}
+
+.custom-modal .modal-content {
+  height: 34vh;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s;
+}
+
+
+
+
+
+
+
+
+
+.custom-modal-excel {
+  width: 60% !important;
+  max-width: none !important;
+  height: 600px;
+}
+

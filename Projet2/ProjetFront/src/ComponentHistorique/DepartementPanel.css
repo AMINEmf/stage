@@ -1,0 +1,533 @@
+/* Styles principaux pour le conteneur des départements */
+.departement_historique {
+    position: relative;
+    /* left: 12.5%;
+    top: 10.6%; */
+    width: 100%;
+    height: calc(100vh - 160px);
+    display: flex;
+    gap: 15px;
+}
+
+/* Classe pour déplacer la section quand les filtres sont affichés */
+.departement_historique.filters-visible {
+    top: 23.5%;
+}
+
+/* Styles communs pour les deux panneaux */
+.departement_list {
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(8, 179, 173, 0.08), 0 2px 6px rgba(8, 179, 173, 0.04);
+    padding: 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    border: 1px solid rgba(8, 179, 173, 0.08);
+    backdrop-filter: blur(10px);
+    transition: box-shadow 0.3s ease;
+    overflow: hidden;
+}
+
+
+.departement_list:hover {
+    box-shadow: 0 8px 25px rgba(8, 179, 173, 0.12), 0 4px 10px rgba(8, 179, 173, 0.06);
+}
+
+.employee-panel {
+    flex: 1;
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(8, 179, 173, 0.08), 0 2px 6px rgba(8, 179, 173, 0.04);
+    padding: 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    border: 1px solid rgba(8, 179, 173, 0.08);
+    backdrop-filter: blur(10px);
+    transition: box-shadow 0.3s ease;
+    overflow: hidden;
+}
+
+.employee-panel:hover {
+    box-shadow: 0 8px 25px rgba(8, 179, 173, 0.12), 0 4px 10px rgba(8, 179, 173, 0.06);
+}
+
+/* Scrollbar styles améliorés pour les deux panneaux */
+.departement_list::-webkit-scrollbar,
+.employee-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.departement_list::-webkit-scrollbar-track,
+.employee-panel::-webkit-scrollbar-track {
+    background: rgba(8, 179, 173, 0.05);
+    border-radius: 10px;
+}
+
+.departement_list::-webkit-scrollbar-thumb,
+.employee-panel::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #3a8a90, #06a39d);
+    border-radius: 10px;
+    transition: background 0.3s ease;
+}
+
+
+.departement_list::-webkit-scrollbar-thumb:hover,
+.employee-panel::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #06a39d, #058a85);
+}
+
+/* Styles pour les éléments de département */
+.department-item {
+    border-radius: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 6px;
+    border-left: 3px solid transparent;
+    position: relative;
+    overflow: hidden;
+}
+
+.department-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(135deg, rgba(8, 179, 173, 0.1), rgba(8, 179, 173, 0.05));
+    transition: width 0.3s ease;
+    z-index: -1;
+}
+
+.department-item:hover::before {
+    width: 100%;
+}
+
+.department-item:hover {
+    background-color: rgba(8, 179, 173, 0.05);
+    /* transform: translateX(2px); */
+    box-shadow: 0 4px 12px rgba(8, 179, 173, 0.15);
+    overflow: hidden;
+}
+
+.department-item.selected {
+    background: linear-gradient(135deg, rgba(8, 179, 173, 0.12), rgba(8, 179, 173, 0.08));
+    border-left: 4px solid #3a8a90;
+    /* transform: translateX(2px); */
+    box-shadow: 0 4px 15px rgba(8, 179, 173, 0.2);
+}
+
+.department-item-content {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    cursor: pointer;
+    border-radius: 10px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Styles pour les boutons d'expansion améliorés */
+.expand-button {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin-right: 10px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.expand-button:hover {
+    background: linear-gradient(135deg, rgba(8, 179, 173, 0.15), rgba(8, 179, 173, 0.1));
+    transform: scale(1.1);
+}
+
+.expand-button svg {
+    color: #3a8a90;
+    font-size: 16px;
+    transition: transform 0.3s ease;
+}
+
+.expand-button:hover svg {
+    transform: rotate(5deg);
+}
+
+/* Styles pour les textes améliorés */
+.common-text {
+    color: #2c767c;
+    font-size: 1rem;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-weight: 500;
+    line-height: 1.5;
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.3s ease;
+}
+
+.common-text svg {
+    margin-right: 10px;
+    color: #3a8a90;
+    font-size: 18px;
+    transition: transform 0.3s ease;
+}
+
+.common-text:hover svg {
+    transform: scale(1.1);
+}
+
+.common-text.selected {
+    color: #3a8a90;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(8, 179, 173, 0.1);
+}
+
+/* Styles pour les sous-départements améliorés */
+.sub-departments {
+    margin-left: 28px;
+    margin-top: 6px;
+    padding-left: 15px;
+    border-left: 2px dashed rgba(8, 179, 173, 0.3);
+    position: relative;
+}
+
+.sub-departments::before {
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: 0;
+    height: 100%;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(8, 179, 173, 0.3), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sub-departments:hover::before {
+    opacity: 1;
+}
+
+/* Checkbox style amélioré */
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    background: rgba(8, 179, 173, 0.02);
+    border: 1px solid rgba(8, 179, 173, 0.1);
+}
+
+.checkbox-container:hover {
+    background: rgba(8, 179, 173, 0.05);
+    transform: translateY(-1px);
+}
+
+.checkbox-container input[type="checkbox"] {
+    accent-color: #3a8a90;
+    margin-right: 10px;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    transition: transform 0.2s ease;
+}
+
+.checkbox-container input[type="checkbox"]:hover {
+    transform: scale(1.1);
+}
+
+.checkbox-container label {
+    font-size: 0.9rem;
+    color: #4a5568;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.checkbox-container:hover label {
+    color: #2c767c;
+}
+
+/* Séparateur amélioré */
+.separator {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(8, 179, 173, 0.3), transparent);
+    margin: 15px 0;
+    width: 100%;
+    position: relative;
+}
+
+.separator::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px;
+    height: 4px;
+    background: #3a8a90;
+    border-radius: 50%;
+}
+
+/* Search input styles améliorés */
+.search-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid rgba(8, 179, 173, 0.1);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    transition: all 0.3s ease;
+    background: rgba(8, 179, 173, 0.02);
+    box-shadow: 0 2px 4px rgba(8, 179, 173, 0.05);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #3a8a90;
+    box-shadow: 0 0 0 3px rgba(8, 179, 173, 0.1), 0 4px 12px rgba(8, 179, 173, 0.15);
+    transform: translateY(-1px);
+}
+
+.search-input::placeholder {
+    color: #9ca3af;
+    transition: color 0.3s ease;
+}
+
+.search-input:focus::placeholder {
+    color: rgba(8, 179, 173, 0.6);
+}
+
+/* Employee list styles - HARMONISÉ avec les départements */
+.employee-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.employee-item {
+    border-radius: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 6px;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.employee-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(135deg, rgba(8, 179, 173, 0.1), rgba(8, 179, 173, 0.05));
+    transition: width 0.3s ease;
+    z-index: -1;
+}
+
+.employee-item:hover::before {
+    width: 100%;
+}
+
+.employee-item:hover {
+    background-color: rgba(8, 179, 173, 0.05);
+    transform: translateX(3px);
+    box-shadow: 0 4px 12px rgba(8, 179, 173, 0.15);
+}
+
+.employee-item.selected {
+    background: linear-gradient(135deg, rgba(8, 179, 173, 0.12), rgba(8, 179, 173, 0.08));
+    border-left: 4px solid #3a8a90;
+    transform: translateX(2px);
+    box-shadow: 0 4px 15px rgba(8, 179, 173, 0.2);
+}
+
+.employee-item > div {
+    padding: 12px 15px;
+    border-radius: 10px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Avatar amélioré */
+.employee-avatar {
+    width: 55px;
+    height: 55px;
+    border-radius: 50%;
+    margin-right: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #2c767c, #3a8a90);
+    color: white;
+    font-weight: 600;
+    font-size: 1.1rem;
+    border: 3px solid rgba(8, 179, 173, 0.2);
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 8px rgba(8, 179, 173, 0.2);
+}
+
+.employee-item:hover .employee-avatar {
+    transform: scale(1.05);
+    border-color: rgba(8, 179, 173, 0.4);
+    box-shadow: 0 6px 12px rgba(8, 179, 173, 0.3);
+}
+
+.employee-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+
+
+
+.employee-item:hover .employee-avatar img {
+    transform: scale(1.1);
+}
+
+.employee-info {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.employee-name {
+    font-weight: 600;
+    color: #2c767c;
+    margin-bottom: 6px;
+    font-size: 1.05rem;
+    line-height: 1.4;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    transition: all 0.3s ease;
+}
+
+.employee-item:hover .employee-name {
+    color: #3a8a90;
+    transform: translateX(2px);
+}
+
+.employee-item.selected .employee-name {
+    color: #3a8a90;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(8, 179, 173, 0.1);
+}
+
+.employee-details {
+    font-size: 0.9rem;
+    color: #6b7280;
+    line-height: 1.4;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    transition: all 0.3s ease;
+}
+
+.employee-item:hover .employee-details {
+    color: #4a5568;
+    transform: translateX(2px);
+}
+
+.employee-item.selected .employee-details {
+    color: #4a5568;
+    font-weight: 500;
+}
+
+/* Animation pour les éléments qui apparaissent */
+
+.employee-item,
+.department-item {
+    animation: fadeInUp 0.3s ease forwards;
+}
+
+/* Responsive design amélioré */
+@media (max-width: 1200px) {
+    .departement_historique {
+        left: 10%;
+        width: 35%;
+    }
+}
+
+@media (max-width: 768px) {
+    .departement_historique {
+        left: 5%;
+        width: 90%;
+        flex-direction: column;
+        height: auto;
+        gap: 10px;
+    }
+    
+    .departement_list {
+        width: 100%;
+        height: 300px;
+    }
+    
+    .employee-panel {
+        height: 400px;
+    }
+}
+
+/* États de focus améliorés pour l'accessibilité */
+.department-item:focus,
+.employee-item:focus {
+    outline: 2px solid #3a8a90;
+    outline-offset: 2px;
+}
+
+/* Amélioration des transitions globales */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Effet de survol global pour les conteneurs */
+.departement_list,
+.employee-panel {
+    position: relative;
+}
+
+.departement_listP::after,
+.employee-panel::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, transparent, rgba(8, 179, 173, 0.1), transparent);
+    border-radius: 14px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+}
+
+.departement_employee {
+    position: fixed;
+    left: 12.5%;
+    top: 10%;
+    width: 25.5%;
+    height: calc(100vh - 160px);
+    display: flex;
+    gap: 15px;
+}
+
+/* Classe pour déplacer la section quand les filtres sont affichés */
+.departement_employee.filters-visible {
+    top: 23.5%;
+}
