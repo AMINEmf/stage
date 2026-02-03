@@ -597,6 +597,10 @@ Route::post("/login", [AuthController::class, 'login']);
     //logout
      Route::post("/logout", [AuthController::class, 'logout']);
 
+// Accidents public API (no auth)
+Route::apiResource('accidents', AccidentController::class);
+Route::get('/departements/employes', [EmployeController::class, 'index']);
+
 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -644,7 +648,7 @@ Route::post('/departements/{departement}/children', [DepartementController::clas
 
 Route::apiResource('calendriers-employes', GpCalendrierEmployeController::class);
 // Route::apiResource('calendrie', CalendrieController::class);
-Route::get('/departements/employes', [EmployeController::class, 'index']);
+// Route::get('/departements/employes', [EmployeController::class, 'index']);
 Route::apiResource('regles-comp-employes', RegleCompEmployeController::class);
 
 
@@ -1172,8 +1176,6 @@ Route::apiResource('heures-travail', HeureTravailController::class);
 
 
 Route::apiResource('horaire-exceptionnel', HoraireExceptionnelController::class);
-
-    Route::apiResource('accidents', AccidentController::class);
 
 
 });

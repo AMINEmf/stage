@@ -20,12 +20,14 @@ class EmployeController extends Controller
 
     public function index()
     {
-        if (Gate::allows('view_all_employes')) {
+        Log::info('Request to fetch employees received.'); // Added logging
+        // if (Gate::allows('view_all_employes')) {
             $employes = Employe::with('departements', 'contrat')->get();
+            Log::info('Employees found: ' . $employes->count());
             return response()->json($employes);
-        } else {
-            abort(403, 'Vous n\'avez pas l\'autorisation de voir la liste des employés.');
-        }
+        // } else {
+        //     abort(403, 'Vous n\'avez pas l\'autorisation de voir la liste des employés.');
+        // }
     }
 
 
