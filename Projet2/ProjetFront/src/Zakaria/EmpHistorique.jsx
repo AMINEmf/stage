@@ -49,7 +49,7 @@ function EmpHistorique() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [filtersVisible, setFiltersVisible] = useState(false);
 
-  
+
   const { setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, searchQuery, setSearchQuery, clearActions } = useHeader();
 
 
@@ -90,9 +90,9 @@ function EmpHistorique() {
       setFilteredData([]);
       return;
     }
-  
+
     let filtered = [...employeeHistories];
-  
+
     filterOptions.filters.forEach(filter => {
       if (filter.value && filter.value.trim() !== '') {
         if (filter.key === 'date_debut' || filter.key === 'date_fin') {
@@ -103,22 +103,22 @@ function EmpHistorique() {
               parseInt(filterDateParts[1], 10) - 1,
               parseInt(filterDateParts[0], 10)
             );
-  
+
             filtered = filtered.filter(row => {
               const dateValue = row[filter.key];
               if (!dateValue) return false;
-  
+
               const rowDateParts = dateValue.split('/');
               if (rowDateParts.length !== 3) return false;
-  
+
               const rowDate = new Date(
                 parseInt(rowDateParts[2], 10),
                 parseInt(rowDateParts[1], 10) - 1,
                 parseInt(rowDateParts[0], 10)
               );
-  
+
               if (isNaN(rowDate)) return false;
-  
+
               if (filter.key === 'date_debut') {
                 return rowDate >= filterDate;
               } else if (filter.key === 'date_fin') {
@@ -137,7 +137,7 @@ function EmpHistorique() {
         }
       }
     });
-  
+
     if (globalSearch.trim()) {
       const searchTerm = globalSearch.toLowerCase();
       filtered = filtered.filter(row => {
@@ -148,11 +148,11 @@ function EmpHistorique() {
         });
       });
     }
-  
+
     setFilteredData(filtered);
     setPage(0);
   }, [employeeHistories, globalSearch, filterOptions]);
-      
+
   const handleFilterChange = (key, value) => {
     setFilterOptions(prev => {
       const newFilters = prev.filters.map(filter => {
@@ -205,7 +205,7 @@ function EmpHistorique() {
     const newSelectedItems = selectedItems.includes(itemId)
       ? selectedItems.filter(id => id !== itemId)
       : [...selectedItems, itemId];
-    
+
     setSelectedItems(newSelectedItems);
     setSelectAll(newSelectedItems.length === filteredData.length && filteredData.length > 0);
   };
@@ -225,18 +225,18 @@ function EmpHistorique() {
     }).then((result) => {
       if (result.isConfirmed) {
         // Filtrer les données pour exclure les éléments sélectionnés
-        const newFilteredData = filteredData.filter(item => 
+        const newFilteredData = filteredData.filter(item =>
           !selectedItems.includes(item.id || `${item.employeeId}-${item.date_debut}-${item.date_fin}`)
         );
-        const newEmployeeHistories = employeeHistories.filter(item => 
+        const newEmployeeHistories = employeeHistories.filter(item =>
           !selectedItems.includes(item.id || `${item.employeeId}-${item.date_debut}-${item.date_fin}`)
         );
-        
+
         setFilteredData(newFilteredData);
         setEmployeeHistories(newEmployeeHistories);
         setSelectedItems([]);
         setSelectAll(false);
-        
+
         Swal.fire(
           'Supprimé!',
           'Les éléments sélectionnés ont été supprimés.',
@@ -580,200 +580,206 @@ function EmpHistorique() {
 
 
 
-// <----------------------------------- Filtre ------------------------------------------------->
-function convertToInputDate(value) {
-  if (!value) return '';
-  const parts = value.split('/');
-  if (parts.length !== 3) return '';
-  const [day, month, year] = parts;
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-}
+  // <----------------------------------- Filtre ------------------------------------------------->
+  function convertToInputDate(value) {
+    if (!value) return '';
+    const parts = value.split('/');
+    if (parts.length !== 3) return '';
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
 
-function convertToDisplayDate(value) {
-  if (!value) return '';
-  const parts = value.split('-');
-  if (parts.length !== 3) return '';
-  const [year, month, day] = parts;
-  return `${day}/${month}/${year}`;
-}
+  function convertToDisplayDate(value) {
+    if (!value) return '';
+    const parts = value.split('-');
+    if (parts.length !== 3) return '';
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  }
 
-useEffect(() => {
-  setTitle("Historique des employés");
+  useEffect(() => {
+    setTitle("Historique des employés");
 
-  setOnPrint(() => handlePrint);
-  setOnExportPDF(() => handleExportPDF);
-  setOnExportExcel(() => handleExportExcel);
+    setOnPrint(() => handlePrint);
+    setOnExportPDF(() => handleExportPDF);
+    setOnExportExcel(() => handleExportExcel);
 
-  return () => {
-    clearActions();
-    setTitle('');
-  };
-}, [setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, clearActions, handlePrint, handleExportPDF, handleExportExcel]);
+    return () => {
+      clearActions();
+      setTitle('');
+    };
+  }, [setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, clearActions, handlePrint, handleExportPDF, handleExportExcel]);
 
-useEffect(() => {
-  setGlobalSearch(searchQuery || '');
-}, [searchQuery]);
+  useEffect(() => {
+    setGlobalSearch(searchQuery || '');
+  }, [searchQuery]);
 
 
 
   return (
 
     <ThemeProvider theme={createTheme()}>
-    <Box sx={{ ...dynamicStyles }}>
-      <Box component="main"
-sx={{ flexGrow: 1, p: 0, mt: 12 }}
->
-      <div style={{ 
-        display: "flex", 
-        flex: 1, 
-        position: "relative",
-        margin: 0,
-        padding: 0,
-        height: "calc(100vh - 80px)",
+      <Box sx={{ ...dynamicStyles }}>
+        <Box component="main"
+          sx={{ flexGrow: 1, p: 0, mt: 12 }}
+        >
+          <div style={{
+            display: "flex",
+            flex: 1,
+            position: "relative",
+            margin: 0,
+            padding: 0,
+            height: "calc(100vh - 120px)",
+            overflow: 'hidden'
 
-      }}>
+          }}>
 
-        <div style={{ 
-          width: "30%", 
-          height: "100%",
-          // backgroundColor:"red",
-          margin: 0,
-          padding: 0
-        }}>
-          <DepartmentPanel
-            onSelectDepartment={handleDepartementClick}
-            selectedDepartmentId={selectedDepartementId}
-            includeSubDepartments={includeSubDepartments}
-            onIncludeSubDepartmentsChange={setIncludeSubDepartments}
-            employees={selectedDepartmentEmployees}
-            selectedEmployees={selectedEmployees}
-            processedEmployees={processedEmployees}
-            onSelectEmployee={(employee) => handleEmployeeClick(employee)}
-            onCheckEmployee={handleCheckboxClick}
-            findDepartmentName={findDepartmentName}
-            filtersVisible={filtersVisible}
-          />
-        </div>
-  
-        {/* Section Table */}
+            <div style={{
+              width: "300px",
+              minWidth: "300px",
+              height: "100%",
+              margin: 0,
+              padding: 0,
+              borderRight: '1px solid #e5e7eb'
+            }}>
+              <DepartmentPanel
+                onSelectDepartment={handleDepartementClick}
+                selectedDepartmentId={selectedDepartementId}
+                includeSubDepartments={includeSubDepartments}
+                onIncludeSubDepartmentsChange={setIncludeSubDepartments}
+                employees={selectedDepartmentEmployees}
+                selectedEmployees={selectedEmployees}
+                processedEmployees={processedEmployees}
+                onSelectEmployee={(employee) => handleEmployeeClick(employee)}
+                onCheckEmployee={handleCheckboxClick}
+                findDepartmentName={findDepartmentName}
+                filtersVisible={filtersVisible}
+              />
+            </div>
 
-<div className="container3" style={{ 
- }}>   
+            {/* Section Table */}
 
-  <div style={{             
-    width: "100%",             
-    height: "100%",             
-    transition: "width 0.2s ease",             
-    marginTop:"3%",             
-    padding: 0 ,
-  }}>       
-        <div className="mt-4">
-                    <div className="section-header mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span className="section-title mb-1">
-                                    <i className="fas fa-calendar-times me-2"></i>
-                                    Détails d'historique
-                                </span>
-                                <p className="section-description text-muted mb-0">
-                                     - Groupe sélectionné
-                                </p>
-                            </div>
-                        </div>
+            <div className="container3" style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: 'auto',
+              padding: '20px'
+            }}>
+
+              <div style={{
+                width: "100%",
+                height: "100%",
+                transition: "width 0.2s ease",
+                marginTop: "3%",
+                padding: 0,
+              }}>
+                <div className="mt-4">
+                  <div className="section-header mb-3">
+                    <div className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: '16px' }}>
+                      <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+                        <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
+                          <i className="fas fa-history me-2"></i>
+                          Détails d'historique
+                        </span>
+                        <p className="section-description text-muted mb-0">
+                          - Groupe sélectionné
+                        </p>
+                      </div>
                     </div>
+                  </div>
                 </div>
 
-{/* <-------------- Filtre -----------------> */}
-    <AnimatePresence>               
-      {filtersVisible && (  
-                       
-        <motion.div                   
-          initial={{ opacity: 0, y: -20 }}                   
-          animate={{ opacity: 1, y: 0 }}                   
-          exit={{ opacity: 0, y: -20 }}                   
-          transition={{ duration: 0.3 }}                   
-          className="filters-container"
-        >
-          <div className="filters-icon-section">
-            <svg 
-              width="20" 
-              height="20" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="#4a90a4" 
-              strokeWidth="2"
-              className="filters-icon"
-            >
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-            </svg>
-            <span className="filters-title">
-              Filtres
-            </span>
-          </div>
-            <div className="filter-group" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-          
-            {/* Date Début */}
-            <label className="filter-label" style={{ marginRight: '-4%' }}>
-              {filterOptions.filters[0].label}
-            </label>
-            <div className="filter-input-wrapper">
-              <input
-                type="date"
-                value={convertToInputDate(filterOptions.filters[0].value)}
-                onChange={e => {
-                  const newFilters = [...filterOptions.filters];
-                  newFilters[0].value = convertToDisplayDate(e.target.value);
-                  setFilterOptions({ filters: newFilters });
-                }}
-                className="filter-input"
-              />
+                {/* <-------------- Filtre -----------------> */}
+                <AnimatePresence>
+                  {filtersVisible && (
+
+                    <motion.div
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3 }}
+                      className="filters-container"
+                    >
+                      <div className="filters-icon-section">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#4a90a4"
+                          strokeWidth="2"
+                          className="filters-icon"
+                        >
+                          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span className="filters-title">
+                          Filtres
+                        </span>
+                      </div>
+                      <div className="filter-group" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+
+                        {/* Date Début */}
+                        <label className="filter-label" style={{ marginRight: '-4%' }}>
+                          {filterOptions.filters[0].label}
+                        </label>
+                        <div className="filter-input-wrapper">
+                          <input
+                            type="date"
+                            value={convertToInputDate(filterOptions.filters[0].value)}
+                            onChange={e => {
+                              const newFilters = [...filterOptions.filters];
+                              newFilters[0].value = convertToDisplayDate(e.target.value);
+                              setFilterOptions({ filters: newFilters });
+                            }}
+                            className="filter-input"
+                          />
+                        </div>
+                        {/* Date Fin */}
+                        <label className="filter-label" style={{ marginRight: '-7.5%', marginLeft: '30px', }}>
+                          {filterOptions.filters[1].label}
+                        </label>
+                        <div className="filter-input-wrapper">
+                          <input
+                            type="date"
+                            value={convertToInputDate(filterOptions.filters[1].value)}
+                            onChange={e => {
+                              const newFilters = [...filterOptions.filters];
+                              newFilters[1].value = convertToDisplayDate(e.target.value);
+                              setFilterOptions({ filters: newFilters });
+                            }}
+                            className="filter-input"
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+
+
+
+                <ExpandRTable
+                  columns={historyColumns}
+                  data={filteredData}
+                  filteredData={filteredData}
+                  searchTerm={globalSearch}
+                  highlightText={highlightText}
+                  selectAll={selectAll}
+                  selectedItems={selectedItems}
+                  handleSelectAllChange={handleSelectAllChange}
+                  handleCheckboxChange={handleCheckboxChange}
+                  handleDeleteSelected={handleDeleteSelected}
+                  rowsPerPage={rowsPerPage}
+                  page={page}
+                  handleChangePage={handleChangePage}
+                  handleChangeRowsPerPage={handleChangeRowsPerPage}
+                />
+              </div>
             </div>
-            {/* Date Fin */}
-            <label className="filter-label" style={{ marginRight: '-7.5%', marginLeft:'30px',  }}>
-              {filterOptions.filters[1].label}
-            </label>
-            <div className="filter-input-wrapper">
-              <input
-                type="date"
-                value={convertToInputDate(filterOptions.filters[1].value)}
-                onChange={e => {
-                  const newFilters = [...filterOptions.filters];
-                  newFilters[1].value = convertToDisplayDate(e.target.value);
-                  setFilterOptions({ filters: newFilters });
-                }}
-                className="filter-input"
-              />
-            </div>
+
+
           </div>
-        </motion.div>               
-      )}             
-    </AnimatePresence>              
-
-
-
-
-    <ExpandRTable               
-      columns={historyColumns}               
-      data={filteredData}               
-      filteredData={filteredData}               
-      searchTerm={globalSearch}               
-      highlightText={highlightText}               
-      selectAll={selectAll}               
-      selectedItems={selectedItems}               
-      handleSelectAllChange={handleSelectAllChange}               
-      handleCheckboxChange={handleCheckboxChange}               
-      handleDeleteSelected={handleDeleteSelected}               
-      rowsPerPage={rowsPerPage}               
-      page={page}               
-      handleChangePage={handleChangePage}               
-      handleChangeRowsPerPage={handleChangeRowsPerPage}             
-    />           
-  </div>         
-</div>
-
-
-      </div>
-    </Box>
+        </Box>
       </Box>
     </ThemeProvider>
 

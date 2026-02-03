@@ -93,7 +93,7 @@ const ExpandRTable = ({
   const filterData = (item, searchTerm) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
-    
+
     return columns.some(column => {
       const value = item[column.key];
       if (!value) return false;
@@ -106,7 +106,7 @@ const ExpandRTable = ({
   };
 
   const handleMuiChangeRowsPerPage = (event) => {
-    handleChangeRowsPerPage({ target: { value: parseInt(event.target.value, 10) }});
+    handleChangeRowsPerPage({ target: { value: parseInt(event.target.value, 10) } });
   };
 
   const renderImageCell = (item, column) => {
@@ -117,12 +117,12 @@ const ExpandRTable = ({
 
       if (imgSrc) {
         const fullImgSrc = imgSrc.startsWith('http') ? imgSrc : `http://127.0.0.1:8000/storage/${imgSrc}`;
-        
+
         return (
           <div className="employee-avatar">
-            <img 
-              src={fullImgSrc} 
-              alt={item.designation || item.name || item.nom || 'Image'} 
+            <img
+              src={fullImgSrc}
+              alt={item.designation || item.name || item.nom || 'Image'}
               className={`zoomable-image ${isZoomed ? 'zoomed' : ''}`}
               style={{
                 width: "50px",
@@ -145,7 +145,7 @@ const ExpandRTable = ({
         if (item.nom) initials.push(item.nom.charAt(0).toUpperCase());
         if (item.prenom) initials.push(item.prenom.charAt(0).toUpperCase());
         if (item.name) initials.push(item.name.charAt(0).toUpperCase());
-        
+
         if (initials.length > 0) {
           return (
             <div className="employee-avatar">
@@ -173,8 +173,8 @@ const ExpandRTable = ({
       return null;
     }
 
-    return column.render 
-      ? column.render(item, searchTerm, toggleRowExpansion) 
+    return column.render
+      ? column.render(item, searchTerm, toggleRowExpansion)
       : (highlightText ? highlightText(item[column.key], searchTerm) : item[column.key]) || '';
   };
 
@@ -195,11 +195,10 @@ const ExpandRTable = ({
   });
 
   const headerCellStyles = {
-    gridTemplateColumns: 'repeat(9, 1fr)',
-    gap: '1rem',                         
-    paddingBottom: '0.5rem',             
+    gap: '1rem',
+    paddingBottom: '0.5rem',
     borderBottom: 'none',
-    fontSize: '0.875rem',      
+    fontSize: '0.875rem',
     fontWeight: 600,
     color: '#4b5563',
     backgroundColor: '#f9fafb',
@@ -208,12 +207,12 @@ const ExpandRTable = ({
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   };
-  
+
   const tableCellStyles = {
     padding: '0.75rem 1rem',
     borderBottom: 'none',
-    paddingTop: '0.5rem',                 
-    paddingBottom: '0.75rem',             
+    paddingTop: '0.5rem',
+    paddingBottom: '0.75rem',
     alignItems: 'center',
     color: '#111827',
     position: 'relative',
@@ -224,8 +223,10 @@ const ExpandRTable = ({
   const tableContainerStyles = {
     boxShadow: 'none',
     borderRadius: 2,
-    overflow: 'auto',
+    overflowX: 'auto',
+    overflowY: 'auto',
     border: '1px solid #e5e7eb',
+    width: '100%',
     maxWidth: '100%',
   };
 
@@ -254,9 +255,9 @@ const ExpandRTable = ({
 
 
 
-      <div className="overflow-hidden">
-        <TableContainer 
-          component={Paper} 
+      <div className="table-wrapper" style={{ width: '100%', overflow: 'hidden' }}>
+        <TableContainer
+          component={Paper}
           sx={tableContainerStyles}
         >
           <Table sx={tableStyles} aria-label="table de données" stickyHeader>
@@ -272,17 +273,17 @@ const ExpandRTable = ({
                     sx={{ padding: '0', borderBottom: 'none' }}
                   />
                 </TableCell>
-                
+
                 {columns.map((column) => (
-                  <TableCell 
-                    key={column.key} 
+                  <TableCell
+                    key={column.key}
                     sx={headerCellStyles}
                     align={column.key === 'prix' || column.key === 'price' ? 'right' : 'left'}
                   >
                     {column.label}
                   </TableCell>
                 ))}
-                
+
                 {hasActions && (
                   <TableCell align="right" sx={{
                     ...headerCellStyles,
@@ -343,10 +344,10 @@ const ExpandRTable = ({
                             sx={{ padding: '0', borderBottom: 'none' }}
                           />
                         </TableCell>
-                        
+
                         {columns.map((column, colIndex) => {
                           return (
-                            <TableCell 
+                            <TableCell
                               key={`${item.id}-${column.key}`}
                               align={column.key === 'prix' || column.key === 'price' ? 'right' : 'left'}
                               sx={tableCellStyles}
@@ -369,15 +370,15 @@ const ExpandRTable = ({
                               borderBottom: "1px solid #e5e7eb",
                             }}
                           >
-  <div
-    style={{
-      display: 'flex',
-      justifyContent: 'flex-end',
-      alignItems: 'center',
-      gap: '10px',
-      height: '100%',
-    }}
-  >
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                alignItems: 'center',
+                                gap: '10px',
+                                height: '100%',
+                              }}
+                            >
                               {supportPDF && (
                                 <button
                                   onClick={(e) => {
@@ -394,7 +395,7 @@ const ExpandRTable = ({
                                   <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
                                 </button>
                               )}
-                              
+
                               {/* Bouton Imprimer */}
                               {handlePrint && (
                                 <button
@@ -413,7 +414,7 @@ const ExpandRTable = ({
                                   <FontAwesomeIcon icon={faPrint} style={{ color: '#28a745', fontSize: '14px' }} />
                                 </button>
                               )}
-                              
+
                               {/* Bouton Modifier */}
                               {handleEdit && (
                                 <button
@@ -436,7 +437,7 @@ const ExpandRTable = ({
                                   <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
                                 </button>
                               )}
-                              
+
                               {/* Bouton Dupliquer - Affiché seulement si handleDuplicate est fourni */}
                               {handleDuplicate && (
                                 <button
@@ -455,7 +456,7 @@ const ExpandRTable = ({
                                   <FontAwesomeIcon icon={faCopy} style={{ color: '#17a2b8', fontSize: '14px' }} />
                                 </button>
                               )}
-                              
+
                               {/* Bouton Supprimer */}
                               {handleDelete && (
                                 <button
@@ -478,13 +479,13 @@ const ExpandRTable = ({
                                   <FontAwesomeIcon icon={faTrash} style={{ color: '#ff0000', fontSize: '14px' }} />
                                 </button>
                               )}
-                              
+
                               {renderCustomActions && renderCustomActions(item)}
                             </div>
                           </TableCell>
                         )}
                       </TableRow>
-                      
+
                       {isRowExpanded(item.id) && (
                         <TableRow
                           sx={{
@@ -503,10 +504,10 @@ const ExpandRTable = ({
                             })
                           }}
                         >
-                          <TableCell 
+                          <TableCell
                             colSpan={columns.length + (hasActions ? 1 : 0) + 1}
-                            sx={{ 
-                              padding: '16px', 
+                            sx={{
+                              padding: '16px',
                               backgroundColor: '#f9fafb',
                             }}
                           >
@@ -517,12 +518,12 @@ const ExpandRTable = ({
                     </React.Fragment>
                   );
                 })}
-                
+
               {filteredItems.length === 0 && (
                 <TableRow>
-                  <TableCell 
+                  <TableCell
                     colSpan={columns.length + (hasActions ? 1 : 0) + 1}
-                    align="center" 
+                    align="center"
                     sx={{ padding: '24px', color: '#6b7280' }}
                   >
                     Aucune donnée disponible
@@ -532,11 +533,11 @@ const ExpandRTable = ({
             </TableBody>
           </Table>
         </TableContainer>
-        
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: '10px' }}>
-          <div className="pagination-container" style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div className="pagination-container" style={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
             margin: '20px 0'
           }}>
@@ -560,10 +561,10 @@ const ExpandRTable = ({
               SUPPRIMER SELECTION
             </Button>
           </div>
-          
-          <div className="pagination-container" style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+
+          <div className="pagination-container" style={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
             margin: '20px 0'
           }}>

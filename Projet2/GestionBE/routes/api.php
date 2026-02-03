@@ -465,6 +465,7 @@ use App\Http\Controllers\DepartementController;
 use App\Http\Controllers\EmployeController;
 use App\Http\Controllers\EmployeDepartementController;
 use App\Http\Controllers\ContratController;
+use App\Http\Controllers\AccidentController;
 
 
 use App\Http\Controllers\ContractTypeController;
@@ -1171,6 +1172,8 @@ Route::apiResource('heures-travail', HeureTravailController::class);
 
 
 Route::apiResource('horaire-exceptionnel', HoraireExceptionnelController::class);
+
+    Route::apiResource('accidents', AccidentController::class);
 
 
 });

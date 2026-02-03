@@ -6,13 +6,12 @@ const OpenContext = createContext();
 export const OpenProvider = ({ children }) => {
   const [open, setOpen] = useState(true);
   const [dynamicStyles, setDynamicStyles] = useState({
-    position: 'fixed',
-    top: '0px',
-    // left: '20%',
-    width: '100%',
+    // width: '100%',
     left: 0,
     right: 0,
-  
+    position: 'relative',
+    marginTop: '0px',
+
     transition: 'all 0.2s ease',
   });
 
@@ -24,17 +23,15 @@ export const OpenProvider = ({ children }) => {
   useEffect(() => {
     setDynamicStyles(prevStyles => ({
       ...prevStyles,
-      left: open ? '13.8%' : '4.5%',
-      // width: open ? '86.7%' : '96.5%',
-      width: open ? '86.2%' : '95.5%',
-
+      left: open ? '260px' : '72px',
+      width: open ? 'calc(100% - 260px)' : 'calc(100% - 72px)',
     }));
   }, [open]);
 
   return (
     <OpenContext.Provider value={{ dynamicStyles, open, toggleOpen }}>
       {children}
-    </OpenContext.Provider> 
+    </OpenContext.Provider>
   );
 };
 

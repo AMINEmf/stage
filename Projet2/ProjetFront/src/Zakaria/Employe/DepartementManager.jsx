@@ -256,13 +256,13 @@ function DepartementManager() {
       employeTableRef.current.exportToPDF();
     }
   };
-  
+
   const handleExportExcel = () => {
     if (employeTableRef.current) {
       employeTableRef.current.exportToExcel();
     }
   };
-  
+
   const handlePrint = () => {
     if (employeTableRef.current) {
       employeTableRef.current.handlePrint();
@@ -338,7 +338,7 @@ function DepartementManager() {
 
   const renderDepartement = (departement) => (
     <li key={departement.id} style={{ listStyleType: "none" }}>
-      <div 
+      <div
         className={`department-item ${departement.id === selectedDepartementId ? 'selected' : ''}`}
         ref={(el) => (departementRef.current[departement.id] = el)}
       >
@@ -358,7 +358,7 @@ function DepartementManager() {
           {departement.children && departement.children.length === 0 && (
             <div style={{ width: "24px", marginRight: "8px" }}></div>
           )}
-          
+
           {editingDepartement && editingDepartement.id === departement.id ? (
             <input
               ref={editInputRef}
@@ -391,7 +391,7 @@ function DepartementManager() {
           )}
         </div>
       </div>
-      
+
       {addingSubDepartement === departement.id && (
         <div className="sub-departement-input">
           <input
@@ -410,7 +410,7 @@ function DepartementManager() {
           />
         </div>
       )}
-      
+
       {expandedDepartements[departement.id] &&
         departement.children &&
         departement.children.length > 0 && (
@@ -420,7 +420,7 @@ function DepartementManager() {
         )}
     </li>
   );
-  
+
   const findDepartement = (departments, id) => {
     for (let dept of departments) {
       if (dept.id === id) {
@@ -632,110 +632,108 @@ function DepartementManager() {
     <ThemeProvider theme={createTheme()}>
       <Box sx={{ ...dynamicStyles }}>
         <Box component="main"
-  sx={{ flexGrow: 1, p: 0, mt: 12 }}
-  >
-            <div className="departement_home1">
-              <ul className="departement_list">
-                <li style={{ listStyleType: "none" }}>
-                  <div className="checkbox-container" style={{ marginTop:'5%', width:'90%',display: 'flex',alignItems: 'center', justifyContent:'center',marginLeft:'5%' }}>
-                    <input
-                      type="checkbox"
-                      checked={includeSubDepartments}
-                      onChange={(e) => setIncludeSubDepartments(e.target.checked)}
-                      id="include-sub-deps"
-                    />
-                    <label htmlFor="include-sub-deps">Inclure les sous-départements</label>
-                  </div>
-                </li>
-                <div className="separator" style={{marginTop:'-1%'}}></div>
-                {departements.map((departement) => renderDepartement(departement))}
-              </ul>
+          sx={{ flexGrow: 1, p: 0, mt: 12 }}
+        >
+          <div className="departement_home1">
+            <ul className="departement_list">
+              <li style={{ listStyleType: "none" }}>
+                <div className="checkbox-container" style={{ marginTop: '5%', width: '90%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: '5%' }}>
+                  <input
+                    type="checkbox"
+                    checked={includeSubDepartments}
+                    onChange={(e) => setIncludeSubDepartments(e.target.checked)}
+                    id="include-sub-deps"
+                  />
+                  <label htmlFor="include-sub-deps">Inclure les sous-départements</label>
+                </div>
+              </li>
+              <div className="separator" style={{ marginTop: '-1%' }}></div>
+              {departements.map((departement) => renderDepartement(departement))}
+            </ul>
 
-              {contextMenu.visible && (
-                <div 
-                  className="context-menu" 
-                  // style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
-                  style={{ top: "15%", left:  "16%" }}
-
+            {contextMenu.visible && (
+              <div
+                className="context-menu"
+                style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+              >
+                <button onClick={() => handleAddEmployeClick(contextMenu.departementId)}>
+                  Ajouter un employé
+                </button>
+                <button
+                  onClick={() => { if (!canCreate) return; handleAddSousDepartement(contextMenu.departementId); }}
+                  className={!canCreate ? 'disabled-btn' : ''}
+                  style={{ cursor: canCreate ? 'pointer' : 'not-allowed', opacity: canCreate ? 1 : 0.5 }}
                 >
-                  <button onClick={() => handleAddEmployeClick(contextMenu.departementId)}>
-                    Ajouter un employé
-                  </button>
-                  <button
-                    onClick={() => { if (!canCreate) return; handleAddSousDepartement(contextMenu.departementId); }}
-                    className={!canCreate ? 'disabled-btn' : ''}
-                    style={{ cursor: canCreate ? 'pointer' : 'not-allowed', opacity: canCreate ? 1 : 0.5 }}
-                  >
-                    Ajouter sous département
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!canUpdate) return;
-                      const dept = findDepartement(departements, contextMenu.departementId);
-                      if (dept) {
-                        handleStartEditing(contextMenu.departementId, dept.nom);
-                      }
-                    }}
-                    className={!canUpdate ? 'disabled-btn' : ''}
-                    style={{ cursor: canUpdate ? 'pointer' : 'not-allowed', opacity: canUpdate ? 1 : 0.5 }}
-                  >
-                    Modifier
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!canDelete) return;
-                      confirmDeleteDepartement(contextMenu.departementId);
-                      setContextMenu({ visible: false, x: 0, y: 0, departementId: null });
-                    }}
-                    className={!canDelete ? 'disabled-btn' : ''}
-                    style={{ cursor: canDelete ? 'pointer' : 'not-allowed', opacity: canDelete ? 1 : 0.5 }}
-                  >
-                    Supprimer
-                  </button>
-                </div>
-              )}
+                  Ajouter sous département
+                </button>
+                <button
+                  onClick={() => {
+                    if (!canUpdate) return;
+                    const dept = findDepartement(departements, contextMenu.departementId);
+                    if (dept) {
+                      handleStartEditing(contextMenu.departementId, dept.nom);
+                    }
+                  }}
+                  className={!canUpdate ? 'disabled-btn' : ''}
+                  style={{ cursor: canUpdate ? 'pointer' : 'not-allowed', opacity: canUpdate ? 1 : 0.5 }}
+                >
+                  Modifier
+                </button>
+                <button
+                  onClick={() => {
+                    if (!canDelete) return;
+                    confirmDeleteDepartement(contextMenu.departementId);
+                    setContextMenu({ visible: false, x: 0, y: 0, departementId: null });
+                  }}
+                  className={!canDelete ? 'disabled-btn' : ''}
+                  style={{ cursor: canDelete ? 'pointer' : 'not-allowed', opacity: canDelete ? 1 : 0.5 }}
+                >
+                  Supprimer
+                </button>
+              </div>
+            )}
 
-              {isEditingDepartement && (
-                <div className="edit-form" style={{
-                  width: '90%',
-                  maxWidth: '300px',
-                  position: 'fixed',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)'
+            {isEditingDepartement && (
+              <div className="edit-form" style={{
+                width: '90%',
+                maxWidth: '300px',
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)'
+              }}>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  handleUpdateDepartement(e.target.elements.newName.value);
                 }}>
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    handleUpdateDepartement(e.target.elements.newName.value);
-                  }}>
-                    <input
-                      name="newName"
-                      defaultValue={departements.find((d) => d.id === editingDepartementId)?.nom}
-                    />
-                    <button type="submit">Enregistrer</button>
-                  </form>
-                </div>
-              )}
+                  <input
+                    name="newName"
+                    defaultValue={departements.find((d) => d.id === editingDepartementId)?.nom}
+                  />
+                  <button type="submit">Enregistrer</button>
+                </form>
+              </div>
+            )}
 
-              <EmployeTable
-                departementId={selectedDepartementId}
-                departementName={selectedDepartementName}
-                onClose={() => setSelectedDepartementId(null)}
-                contextMenu={contextMenu}
-                handleAddEmployeClick={handleAddEmployeClick}
-                fetchDepartements={fetchDepartements}
-                isAddingEmploye={isAddingEmploye}
-                setIsAddingEmploye={setIsAddingEmploye}
-                includeSubDepartments={includeSubDepartments}
-                getSubDepartmentIds={getSubDepartmentIds}
-                departements={departements}
-                ref={employeTableRef}
-                globalSearch={searchQuery}
-                filtersVisible={filtersVisible}
-                handleFiltersToggle={handleFiltersToggle}
-              />
-            </div>
-            
+            <EmployeTable
+              departementId={selectedDepartementId}
+              departementName={selectedDepartementName}
+              onClose={() => setSelectedDepartementId(null)}
+              contextMenu={contextMenu}
+              handleAddEmployeClick={handleAddEmployeClick}
+              fetchDepartements={fetchDepartements}
+              isAddingEmploye={isAddingEmploye}
+              setIsAddingEmploye={setIsAddingEmploye}
+              includeSubDepartments={includeSubDepartments}
+              getSubDepartmentIds={getSubDepartmentIds}
+              departements={departements}
+              ref={employeTableRef}
+              globalSearch={searchQuery}
+              filtersVisible={filtersVisible}
+              handleFiltersToggle={handleFiltersToggle}
+            />
+          </div>
+
         </Box>
       </Box>
     </ThemeProvider>

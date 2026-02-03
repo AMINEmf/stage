@@ -7,6 +7,7 @@ import Navigation from './Acceuil/Navigation';
 
 import Dashboard from './Acceuil/Dashboard';
 import DepartementManager from './Zakaria/Employe/DepartementManager';
+import DepartementManager2 from './Zakaria/Employe/DepartementManager2';
 
 
 import EmpHistorique from './Zakaria/EmpHistorique.jsx';
@@ -37,6 +38,8 @@ const App = () => {
             <Route path="/login" element={<Login />} />
 
             <Route path="/employes" element={<DepartementManager />} />
+
+            <Route path="/employes2" element={<DepartementManager2 />} />
 
 
 

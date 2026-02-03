@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef,forwardRef, useImperativeHandle } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from "react";
 import axios from "axios";
 import { Button, Card, Tab, Tabs, Table, Modal, Form } from 'react-bootstrap';
 import { faEdit, faTrash, faFilePdf, faFileExcel, faPrint, faSliders, faChevronDown, faChevronUp, faSearch, faCalendarAlt, faClipboardCheck, faIdCard, faFilter, faClose } from "@fortawesome/free-solid-svg-icons";
@@ -22,7 +22,7 @@ import ExpandRTable from "./ExpandRTable";
 import { motion, AnimatePresence, color } from 'framer-motion';
 import { FaPlusCircle } from "react-icons/fa";
 import EmployeFichePrint from "./EmployeFichePrint";
-import {useOpen} from "../../Acceuil/OpenProvider";
+import { useOpen } from "../../Acceuil/OpenProvider";
 
 
 
@@ -39,7 +39,7 @@ const EmployeTable = forwardRef((props, ref) => {
     filtersVisible,
     handleFiltersToggle,
   } = props;
-  
+
   // Initial column visibility from localStorage
   const getInitialColumnVisibility = () => {
     const storedVisibility = localStorage.getItem('employeeColumnVisibility');
@@ -109,98 +109,98 @@ const EmployeTable = forwardRef((props, ref) => {
   const [hovered, setHovered] = useState(false);
 
   const [hoveredColonnes, setHoveredColonnes] = useState(false);
-const [hoveredPlanning, setHoveredPlanning] = useState(false);
-const [hoveredAdd, setHoveredAdd] = useState(false);
-const [showDropdownColonnes, setShowDropdownColonnes] = useState(false);
-const [showDropdownPlanning, setShowDropdownPlanning] = useState(false);
-/*  Régle compensation */
-const [showRegleDropdown, setShowRegleDropdown] = useState(false);
-const [reglesComp, setReglesComp] = useState([]);
-const [assignedRegles, setAssignedRegles] = useState([
-  { regle_id: '', date_debut: '', date_fin: '' }
-]);
+  const [hoveredPlanning, setHoveredPlanning] = useState(false);
+  const [hoveredAdd, setHoveredAdd] = useState(false);
+  const [showDropdownColonnes, setShowDropdownColonnes] = useState(false);
+  const [showDropdownPlanning, setShowDropdownPlanning] = useState(false);
+  /*  Régle compensation */
+  const [showRegleDropdown, setShowRegleDropdown] = useState(false);
+  const [reglesComp, setReglesComp] = useState([]);
+  const [assignedRegles, setAssignedRegles] = useState([
+    { regle_id: '', date_debut: '', date_fin: '' }
+  ]);
 
-const [items, setItems] = useState([
-  { date_debut: '', date_fin: '' }
-]);
-
-
-const [showRegleModal, setShowRegleModal] = useState(false);
-
-const [showImportDropdown, setShowImportDropdown] = useState(false);
-const [showImportModal, setShowImportModal] = useState(false);
-const [selectedFile, setSelectedFile] = useState(null);
-const [isExpanded, setIsExpanded] = useState(false);
-const  {dynamicStyles} = useOpen();
-const  {open} = useOpen();
+  const [items, setItems] = useState([
+    { date_debut: '', date_fin: '' }
+  ]);
 
 
+  const [showRegleModal, setShowRegleModal] = useState(false);
 
-// Print fiche employé
-const [showFicheModal, setShowFicheModal] = useState(false);
-const [selectedEmployeeForPrint, setSelectedEmployeeForPrint] = useState(null);
-
-// Filter options state
-const [filterOptions, setFilterOptions] = useState({
-  filters: [
-    {
-      key: 'sexe',
-      label: 'Sexe',
-      value: '',
-      placeholder: 'Sexe',
-      type: 'select'
-    },
-    {
-      key: 'pays',
-      label: 'Pays',
-      value: '',
-      placeholder: 'Pays',
-      type: 'select'
-    },
-    {
-      key: 'ville',
-      label: 'Ville',
-      value: '',
-      placeholder: 'Ville',
-      type: 'select'
-    },
-    {
-      key: 'salaire',
-      label: 'Salaire',
-      type: 'range',
-      min: '',
-      max: '',
-      placeholderMin: 'Min',
-      placeholderMax: 'Max'
-    },
-    {
-      key: 'age',
-      label: 'Âge',
-      type: 'range',
-      min: '',
-      max: '',
-      placeholderMin: 'Min',
-      placeholderMax: 'Max'
-    }
-  ]
-});
+  const [showImportDropdown, setShowImportDropdown] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { dynamicStyles } = useOpen();
+  const { open } = useOpen();
 
 
 
+  // Print fiche employé
+  const [showFicheModal, setShowFicheModal] = useState(false);
+  const [selectedEmployeeForPrint, setSelectedEmployeeForPrint] = useState(null);
 
-const allEmployeFields = [
-  'matricule', 'num_badge', 'nom', 'prenom', 'lieu_naiss', 'date_naiss', 'cin', 'cnss', 'sexe',
-  'situation_fm', 'nb_enfants', 'adresse', 'ville', 'pays', 'code_postal', 'tel', 'fax', 'email',
-  'fonction', 'nationalite', 'niveau', 'echelon', 'categorie', 'coeficients', 'imputation',
-  'date_entree', 'date_embauche', 'date_sortie', 'salaire_base', 'remarque',
-  'centreCout', 'departement_id', 'delivree_par', 'date_expiration', 'carte_sejour',
-  'motif_depart', 'dernier_jour_travaille', 'notification_rupture', 'engagement_procedure',
-  'signature_rupture_conventionnelle', 'transaction_en_cours', 'bulletin_modele',
-  'salaire_moyen', 'salaire_reference_annuel'
-];
+  // Filter options state
+  const [filterOptions, setFilterOptions] = useState({
+    filters: [
+      {
+        key: 'sexe',
+        label: 'Sexe',
+        value: '',
+        placeholder: 'Sexe',
+        type: 'select'
+      },
+      {
+        key: 'pays',
+        label: 'Pays',
+        value: '',
+        placeholder: 'Pays',
+        type: 'select'
+      },
+      {
+        key: 'ville',
+        label: 'Ville',
+        value: '',
+        placeholder: 'Ville',
+        type: 'select'
+      },
+      {
+        key: 'salaire',
+        label: 'Salaire',
+        type: 'range',
+        min: '',
+        max: '',
+        placeholderMin: 'Min',
+        placeholderMax: 'Max'
+      },
+      {
+        key: 'age',
+        label: 'Âge',
+        type: 'range',
+        min: '',
+        max: '',
+        placeholderMin: 'Min',
+        placeholderMax: 'Max'
+      }
+    ]
+  });
 
-const [selectedFields, setSelectedFields] = useState([]);
-const [fieldMappings, setFieldMappings] = useState({});
+
+
+
+  const allEmployeFields = [
+    'matricule', 'num_badge', 'nom', 'prenom', 'lieu_naiss', 'date_naiss', 'cin', 'cnss', 'sexe',
+    'situation_fm', 'nb_enfants', 'adresse', 'ville', 'pays', 'code_postal', 'tel', 'fax', 'email',
+    'fonction', 'nationalite', 'niveau', 'echelon', 'categorie', 'coeficients', 'imputation',
+    'date_entree', 'date_embauche', 'date_sortie', 'salaire_base', 'remarque',
+    'centreCout', 'departement_id', 'delivree_par', 'date_expiration', 'carte_sejour',
+    'motif_depart', 'dernier_jour_travaille', 'notification_rupture', 'engagement_procedure',
+    'signature_rupture_conventionnelle', 'transaction_en_cours', 'bulletin_modele',
+    'salaire_moyen', 'salaire_reference_annuel'
+  ];
+
+  const [selectedFields, setSelectedFields] = useState([]);
+  const [fieldMappings, setFieldMappings] = useState({});
 
 
 
@@ -221,8 +221,8 @@ const [fieldMappings, setFieldMappings] = useState({});
 
   // Définition de TOUTES les colonnes disponibles (avant filtrage par visibilité)
   const allColumns = useMemo(() => [
-    { 
-      key: "url_img", 
+    {
+      key: "url_img",
       label: "Photo",
       render: (item) => (
         item.url_img ? (
@@ -258,8 +258,8 @@ const [fieldMappings, setFieldMappings] = useState({});
     { key: "num_badge", label: "Num Badge" },
     { key: "nom", label: "Nom" },
     { key: "prenom", label: "Prenom" },
-    { 
-      key: "contrat", 
+    {
+      key: "contrat",
       label: "Contrat",
       render: (item, searchTerm, toggleRowExpansion) => (
         <button
@@ -350,7 +350,7 @@ const [fieldMappings, setFieldMappings] = useState({});
     alignItems: "center",
     justifyContent: "center",
   };
-  
+
 
 
 
@@ -358,7 +358,7 @@ const [fieldMappings, setFieldMappings] = useState({});
   const fetchCalendriers = async () => {
     try {
       const response = await axios.get('http://127.0.0.1:8000/api/calendrie');
-      setCalendriers(response.data.calendrie); 
+      setCalendriers(response.data.calendrie);
       console.log(' Données reçues calendriers :', response.data.calendrie);
 
     } catch (error) {
@@ -422,7 +422,7 @@ const [fieldMappings, setFieldMappings] = useState({});
 
 
   // const filteredEmployers = useMemo(() => {
-  
+
   //   let result = includeSubDepartments
   //     ? employeesWithContracts.filter((emp) => {
   //         const subIds = getSubDepartmentIds(departements, departementId);
@@ -431,8 +431,8 @@ const [fieldMappings, setFieldMappings] = useState({});
   //     : employeesWithContracts.filter((emp) => {
   //         return emp.departements.some((dept) => dept.id === departementId);
   //       });
-  
-  
+
+
   //   if (globalSearch.trim()) {
   //     const searchTermLower = globalSearch.toLowerCase().trim();
   //     result = result.filter((employer) => {
@@ -440,7 +440,7 @@ const [fieldMappings, setFieldMappings] = useState({});
   //         const value = employer[column.key];
   //         return value && value.toString().toLowerCase().includes(searchTermLower);
   //       });
-  
+
   //       const contractMatch =
   //         employer.contracts &&
   //         employer.contracts.some((contract) =>
@@ -449,12 +449,12 @@ const [fieldMappings, setFieldMappings] = useState({});
   //             return value && value.toString().toLowerCase().includes(searchTermLower);
   //           })
   //         );
-  
+
   //       return columnMatch || contractMatch;
   //     });
-  
+
   //   }
-  
+
   //   return result;
   // }, [
   //   employeesWithContracts,
@@ -466,7 +466,7 @@ const [fieldMappings, setFieldMappings] = useState({});
   //   allColumns,
   //   contratColumns
   // ]);
-  
+
 
 
 
@@ -474,28 +474,28 @@ const [fieldMappings, setFieldMappings] = useState({});
 
 
   const filteredEmployers = useMemo(() => {
-  
+
     let result = includeSubDepartments
       ? employeesWithContracts.filter((emp) => {
-          const subIds = getSubDepartmentIds(departements, departementId);
-  
-          return (
-            (emp.departements &&
-              emp.departements.length > 0 &&
-              emp.departements.some((dept) => subIds.includes(dept.id))) ||
-            subIds.includes(emp.departement_id)
-          );
-        })
+        const subIds = getSubDepartmentIds(departements, departementId);
+
+        return (
+          (emp.departements &&
+            emp.departements.length > 0 &&
+            emp.departements.some((dept) => subIds.includes(dept.id))) ||
+          subIds.includes(emp.departement_id)
+        );
+      })
       : employeesWithContracts.filter((emp) => {
-          return (
-            (emp.departements &&
-              emp.departements.length > 0 &&
-              emp.departements.some((dept) => dept.id === departementId)) ||
-            emp.departement_id === departementId
-          );
-        });
-  
-  
+        return (
+          (emp.departements &&
+            emp.departements.length > 0 &&
+            emp.departements.some((dept) => dept.id === departementId)) ||
+          emp.departement_id === departementId
+        );
+      });
+
+
     if (globalSearch.trim()) {
       const searchTermLower = globalSearch.toLowerCase().trim();
       result = result.filter((employer) => {
@@ -503,7 +503,7 @@ const [fieldMappings, setFieldMappings] = useState({});
           const value = employer[column.key];
           return value && value.toString().toLowerCase().includes(searchTermLower);
         });
-  
+
         const contractMatch =
           employer.contracts &&
           employer.contracts.some((contract) =>
@@ -512,11 +512,11 @@ const [fieldMappings, setFieldMappings] = useState({});
               return value && value.toString().toLowerCase().includes(searchTermLower);
             })
           );
-  
+
         return columnMatch || contractMatch;
       });
     }
-  
+
     return result;
   }, [
     employeesWithContracts,
@@ -528,7 +528,7 @@ const [fieldMappings, setFieldMappings] = useState({});
     allColumns,
     contratColumns
   ]);
-  
+
 
 
 
@@ -546,7 +546,7 @@ const [fieldMappings, setFieldMappings] = useState({});
 
   useEffect(() => {
     const savedColumnVisibility = localStorage.getItem('employeeColumnVisibility');
-    
+
     if (savedColumnVisibility) {
       setColumnVisibility(JSON.parse(savedColumnVisibility));
     } else {
@@ -558,7 +558,7 @@ const [fieldMappings, setFieldMappings] = useState({});
       localStorage.setItem('employeeColumnVisibility', JSON.stringify(defaultVisibility));
     }
   }, [allColumns]);
-  
+
   const toggleRowExpansion = useCallback((employeId) => {
     setExpandedRows(prev => ({
       ...prev,
@@ -622,20 +622,20 @@ const [fieldMappings, setFieldMappings] = useState({});
       setShowActions(false);
     }
   }, [showAddForm, setIsAddingEmploye]);
-  
+
   const handleEditEmployer = useCallback((employer) => {
     setSelectedEmployer(employer);
     setShowAddForm(true);
     setIsAddingEmploye(true);
     setShowActions(false);
   }, [setIsAddingEmploye]);
-     
+
   useEffect(() => {
     if (!showAddForm) {
       setShowActions(true);
     }
   }, [showAddForm]);
-  
+
 
   const handleCloseForm = useCallback(() => {
     setSelectedEmployer(null);
@@ -661,7 +661,7 @@ const [fieldMappings, setFieldMappings] = useState({});
     });
     doc.save(`employes_${departementName}_${new Date().toISOString()}.pdf`);
   }, [allColumns, columnVisibility, filteredEmployers, departementName]);
-  
+
 
 
 
@@ -682,7 +682,7 @@ const [fieldMappings, setFieldMappings] = useState({});
     XLSX.utils.book_append_sheet(wb, ws, "Employés");
     XLSX.writeFile(wb, `employes_${departementName}_${new Date().toISOString()}.xlsx`);
   }, [allColumns, columnVisibility, filteredEmployers, departementName]);
-  
+
   // Print handler
   const handlePrint = useCallback(() => {
     const printWindow = window.open("", "_blank");
@@ -690,7 +690,7 @@ const [fieldMappings, setFieldMappings] = useState({});
     const tableRows = filteredEmployers.map(emp =>
       allColumns.filter(col => columnVisibility[col.key]).map(col => emp[col.key])
     );
-  
+
     printWindow.document.write(`
       <html>
         <head>
@@ -735,8 +735,8 @@ body {
     printWindow.document.close();
     printWindow.print();
   }, [allColumns, columnVisibility, filteredEmployers, departementName]);
-  
-  
+
+
 
   useImperativeHandle(ref, () => ({
     exportToPDF,
@@ -786,13 +786,13 @@ body {
         await Promise.all(
           selectedEmployers.map(id => axios.delete(`http://127.0.0.1:8000/api/employes/${id}`))
         );
-        
+
         setEmployeesWithContracts(prev => {
           const updated = prev.filter(emp => !selectedEmployers.includes(emp.id));
           localStorage.setItem("employeesWithContracts", JSON.stringify(updated));
           return updated;
         });
-        
+
         setSelectedEmployers([]);
         Swal.fire("Supprimés!", "Les employés ont été supprimés.", "success");
       } catch (error) {
@@ -816,10 +816,10 @@ body {
   }, []);
 
 
-    // Handle global search change
-    const handleGlobalSearchChange = (e) => {
-      setGlobalSearch(e.target.value);
-      setPage(0);
+  // Handle global search change
+  const handleGlobalSearchChange = (e) => {
+    setGlobalSearch(e.target.value);
+    setPage(0);
   };
 
   const handleFilterChange = (key, value) => {
@@ -833,7 +833,7 @@ body {
       return { ...prev, filters: newFilters };
     });
   };
-  
+
   // Handle range filter change (for salary and age)
   const handleRangeFilterChange = (key, type, value) => {
     setFilterOptions(prev => {
@@ -846,7 +846,7 @@ body {
       return { ...prev, filters: newFilters };
     });
   };
-  
+
   // Function to calculate age from date of birth
   const calculateAge = (dateNaiss) => {
     if (!dateNaiss) return null;
@@ -854,14 +854,14 @@ body {
     const birthDate = new Date(dateNaiss);
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    
+
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-    
+
     return age;
   };
-  
+
   const applyFilters = (employees) => {
     return employees.filter(emp => {
       const villeFilter = filterOptions.filters.find(f => f.key === 'ville');
@@ -869,42 +869,42 @@ body {
       const sexeFilter = filterOptions.filters.find(f => f.key === 'sexe');
       const salaireFilter = filterOptions.filters.find(f => f.key === 'salaire');
       const ageFilter = filterOptions.filters.find(f => f.key === 'age');
-  
+
       const matchesVille = !villeFilter?.value || emp.ville?.toLowerCase() === villeFilter.value.toLowerCase();
       const matchesPays = !paysFilter?.value || emp.pays?.toLowerCase() === paysFilter.value.toLowerCase();
       const matchesSexe = !sexeFilter?.value || emp.sexe?.toLowerCase() === sexeFilter.value.toLowerCase();
-      
+
       // Salary filter
       const matchesSalaire = (() => {
         if (!salaireFilter?.min && !salaireFilter?.max) return true;
         const salary = parseFloat(emp.salaire_base) || 0;
         const minSalary = salaireFilter.min ? parseFloat(salaireFilter.min) : 0;
         const maxSalary = salaireFilter.max ? parseFloat(salaireFilter.max) : Infinity;
-        
+
         return salary >= minSalary && salary <= maxSalary;
       })();
-      
+
       // Age filter
       const matchesAge = (() => {
         if (!ageFilter?.min && !ageFilter?.max) return true;
         const age = calculateAge(emp.date_naiss);
         if (age === null) return false;
-        
+
         const minAge = ageFilter.min ? parseInt(ageFilter.min) : 0;
         const maxAge = ageFilter.max ? parseInt(ageFilter.max) : Infinity;
-        
+
         return age >= minAge && age <= maxAge;
       })();
-  
+
       return matchesVille && matchesPays && matchesSexe && matchesSalaire && matchesAge;
     });
   };
-  
+
   useEffect(() => {
     const getUniqueValues = (data, key) => {
       return [...new Set(data.map(emp => emp[key]).filter(Boolean))];
     };
-  
+
     setFilterOptions(prev => ({
       filters: prev.filters.map(filter => {
         if (filter.type === 'select') {
@@ -922,9 +922,9 @@ body {
       })
     }));
   }, [employeesWithContracts]);
-  
+
   const normalizeValue = (value) => String(value).toLowerCase().trim();
-  
+
   const filteredEmployees = applyFilters(
     filteredEmployers.filter(emp =>
       globalSearch
@@ -939,7 +939,7 @@ body {
         )
     )
   );
-  
+
 
 
 
@@ -957,7 +957,7 @@ body {
     updated[index][field] = value;
     setAssignedCalendriers(updated);
   };
-  
+
 
   const handleChangeCalendrier = (index, value) => {
     const updated = [...assignedCalendriers];
@@ -971,146 +971,146 @@ body {
       Swal.fire("Attention", "Veuillez sélectionner un ou plusieurs employés.", "warning");
       return;
     }
-  
+
     try {
       console.log("Début de l'affectation du planning...");
-  
+
       for (const employerId of selectedEmployers) {
         console.log(`Affectation pour employé ID: ${employerId}`);
-  
+
         for (const item of assignedCalendriers) {
           if (!item.calendrier_id || !item.date_debut || !item.date_fin) {
             console.warn(" Champs manquants pour un des plannings :", item);
             continue;
           }
-  
+
           const payload = {
             employe_id: employerId,
             calendrier_id: item.calendrier_id,
             date_debut: item.date_debut,
             date_fin: item.date_fin,
           };
-  
+
           console.log(" Envoi du planning :", payload);
-  
+
           await axios.post("http://127.0.0.1:8000/api/calendriers-employes", payload);
-  
+
           console.log(`Planning affecté à l'employé ${employerId}`);
         }
       }
-  
+
       Swal.fire("Succès", "Planning(s) affecté(s) avec succès !", "success");
-  
+
       setShowPlanningModal(false);
       setSelectedEmployers([]);
-  
+
       console.log("Tous les plannings ont été affectés avec succès.");
     } catch (error) {
       console.error(" Erreur lors de l'affectation du planning :", error);
       Swal.fire("Erreur", "Échec de l'affectation du planning", "error");
     }
   };
-  
 
 
 
-// <----------------- Affecter regle componsation-------------------------> 
+
+  // <----------------- Affecter regle componsation-------------------------> 
 
 
-const fetchRegles = async () => {
-  try {
-    const res = await axios.get(
-      'http://127.0.0.1:8000/api/regle-compensations'
-    );
-    setReglesComp(Array.isArray(res.data) ? res.data : res.data.data);
-    console.log("res.data regle", res.data)
-  } catch (err) {
-    console.error('Erreur fetch règles', err);
-  }
-};
-
-useEffect(() => { fetchRegles(); }, []);
-  
-
-const handleChangeRegleDate = (idx, field, value) => {
-  const copy = [...assignedRegles];
-  copy[idx][field] = value;
-  setAssignedRegles(copy);
-};
-
-const handleChangeRegle = (idx, regleId) => {
-  const copy = [...assignedRegles];
-  copy[idx].regle_id  = regleId;
-
-  const regle = reglesComp.find(r => r.id === Number(regleId));
-  copy[idx].frequence = regle ? regle.frequence_calcul : '';
-
-  setAssignedRegles(copy);
-};
-
-const handleAffecterRegle = async () => {
-  if (selectedEmployers.length === 0) {
-    Swal.fire("Attention", "Veuillez sélectionner un ou plusieurs employés.", "warning");
-    return;
-  }
-
-
-  try {
-    for (const empId of selectedEmployers) {
-      for (const it of assignedRegles) {
-        if (!it.regle_id || !it.date_debut || !it.date_fin) continue;
-
-        await axios.post(
-          'http://127.0.0.1:8000/api/regles-comp-employes',
-
-          {
-            employe_id: empId,
-            regle_compensation_id: it.regle_id,
-            date_debut: it.date_debut,
-            date_fin: it.date_fin
-          }
-        );
-      }
+  const fetchRegles = async () => {
+    try {
+      const res = await axios.get(
+        'http://127.0.0.1:8000/api/regle-compensations'
+      );
+      setReglesComp(Array.isArray(res.data) ? res.data : res.data.data);
+      console.log("res.data regle", res.data)
+    } catch (err) {
+      console.error('Erreur fetch règles', err);
     }
-
-    Swal.fire("Succès", "Règle(s) affectée(s) avec succès !", "success");
-
-    setShowRegleModal(false);
-    setSelectedEmployers([]);
-  } catch (err) {
-    console.error('Erreur affectation règle', err);
-    Swal.fire("Erreur", "Échec de l'affectation des règles", "error");
-  }
-};
-
-// <----------------- Insertion des données à partir du fichier excel -------------------------> 
-
-
-
-const handleExcelImport = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sheet);
-
-    axios.post('http://localhost:8000/api/employes', { data: json })
-      .then(() => {
-        Swal.fire('Succès', 'Employés importés avec succès', 'success');
-      })
-      .catch(error => {
-        console.error(error);
-        Swal.fire('Erreur', 'Erreur lors d importation', 'error');
-      });
   };
 
-  reader.readAsArrayBuffer(file);
-};
+  useEffect(() => { fetchRegles(); }, []);
+
+
+  const handleChangeRegleDate = (idx, field, value) => {
+    const copy = [...assignedRegles];
+    copy[idx][field] = value;
+    setAssignedRegles(copy);
+  };
+
+  const handleChangeRegle = (idx, regleId) => {
+    const copy = [...assignedRegles];
+    copy[idx].regle_id = regleId;
+
+    const regle = reglesComp.find(r => r.id === Number(regleId));
+    copy[idx].frequence = regle ? regle.frequence_calcul : '';
+
+    setAssignedRegles(copy);
+  };
+
+  const handleAffecterRegle = async () => {
+    if (selectedEmployers.length === 0) {
+      Swal.fire("Attention", "Veuillez sélectionner un ou plusieurs employés.", "warning");
+      return;
+    }
+
+
+    try {
+      for (const empId of selectedEmployers) {
+        for (const it of assignedRegles) {
+          if (!it.regle_id || !it.date_debut || !it.date_fin) continue;
+
+          await axios.post(
+            'http://127.0.0.1:8000/api/regles-comp-employes',
+
+            {
+              employe_id: empId,
+              regle_compensation_id: it.regle_id,
+              date_debut: it.date_debut,
+              date_fin: it.date_fin
+            }
+          );
+        }
+      }
+
+      Swal.fire("Succès", "Règle(s) affectée(s) avec succès !", "success");
+
+      setShowRegleModal(false);
+      setSelectedEmployers([]);
+    } catch (err) {
+      console.error('Erreur affectation règle', err);
+      Swal.fire("Erreur", "Échec de l'affectation des règles", "error");
+    }
+  };
+
+  // <----------------- Insertion des données à partir du fichier excel -------------------------> 
+
+
+
+  const handleExcelImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet);
+
+      axios.post('http://localhost:8000/api/employes', { data: json })
+        .then(() => {
+          Swal.fire('Succès', 'Employés importés avec succès', 'success');
+        })
+        .catch(error => {
+          console.error(error);
+          Swal.fire('Erreur', 'Erreur lors d importation', 'error');
+        });
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
 
 
 
@@ -1119,35 +1119,35 @@ const handleExcelImport = (event) => {
 
 
 
-const handleFileChange = (e) => {
-  setSelectedFile(e.target.files[0]);
-};
+  const handleFileChange = (e) => {
+    setSelectedFile(e.target.files[0]);
+  };
 
-const handleImportValidation = () => {
-  if (!selectedFile) {
-    alert("Veuillez sélectionner un fichier Excel.");
-    return;
-  }
+  const handleImportValidation = () => {
+    if (!selectedFile) {
+      alert("Veuillez sélectionner un fichier Excel.");
+      return;
+    }
 
-  const formData = new FormData();
-  formData.append("file", selectedFile);
-  formData.append("fieldMappings", JSON.stringify(fieldMappings));
-  formData.append("departement_id", departementId);
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("fieldMappings", JSON.stringify(fieldMappings));
+    formData.append("departement_id", departementId);
 
-  axios.post("http://127.0.0.1:8000/api/import-employes", formData)
-    .then(response => {
-      Swal.fire("Succès", "Importation terminée !", "success");
+    axios.post("http://127.0.0.1:8000/api/import-employes", formData)
+      .then(response => {
+        Swal.fire("Succès", "Importation terminée !", "success");
 
-      fetchEmployersWithContracts(); 
+        fetchEmployersWithContracts();
 
-      setShowImportModal(false);
-      setShowDropdown(false);
-    })
-    .catch(error => {
-      Swal.fire("Erreur", "Échec de l'importation", "error");
-      console.error(error);
-    });
-};
+        setShowImportModal(false);
+        setShowDropdown(false);
+      })
+      .catch(error => {
+        Swal.fire("Erreur", "Échec de l'importation", "error");
+        console.error(error);
+      });
+  };
 
 
 
@@ -1158,31 +1158,31 @@ const handleImportValidation = () => {
 
   const highlightText = useCallback((text, searchTerm) => {
     if (!text || !searchTerm) return text;
-    
+
     const textStr = String(text);
     const searchTermLower = searchTerm.toLowerCase();
-    
+
     if (!textStr.toLowerCase().includes(searchTermLower)) return textStr;
-    
+
     const parts = textStr.split(new RegExp(`(${searchTerm})`, 'gi'));
-    
-    return parts.map((part, i) => 
-      part.toLowerCase() === searchTermLower 
+
+    return parts.map((part, i) =>
+      part.toLowerCase() === searchTermLower
         ? <mark key={i} style={{ backgroundColor: 'yellow' }}>{part}</mark>
         : part
     );
   }, []);
-  
+
 
   // Fonction pour afficher les détails du contrat
   const renderExpandedRow = useCallback((employer) => {
     console.log("Employer reçu dans renderExpandedRow :", employer);
     console.log("Contrats :", employer.contrat);
-  
+
     return (
       <table className="w-full">
-        <thead  className="border-b">
-          <tr   style={{ backgroundColor:'red'}}>
+        <thead className="border-b">
+          <tr style={{ backgroundColor: 'red' }}>
             {contratColumns.map((col) => (
               <th key={col.key} className="border px-2 py-1 text-sm" >
                 {col.label}
@@ -1214,7 +1214,7 @@ const handleImportValidation = () => {
       </table>
     );
   }, [contratColumns]);
-  
+
 
 
 
@@ -1281,7 +1281,7 @@ const handleImportValidation = () => {
     updatedItems[index][field] = value;
     setItems(updatedItems);
   };
-   
+
 
 
 
@@ -1302,10 +1302,10 @@ const handleImportValidation = () => {
       date_fin: ''
     }];
     setAssignedRegles(initial);
-    setItems(initial); 
+    setItems(initial);
     setShowRegleModal(true);
   };
-      
+
 
 
 
@@ -1314,67 +1314,69 @@ const handleImportValidation = () => {
 
     <div style={{
       position: 'relative',
-      left: "-2%",
-      // top: "14.19%",
-      top : "0",
-      height: 'calc(100vh - 160px)',
+      top: "0",
+      height: 'calc(100vh - 120px)',
+      flex: 1,
+      minWidth: 0,
+      overflow: 'auto'
     }} className={`${isAddingEmploye ? "with-form" : "container_employee"}`}>
-      
-      
+      {/* Refreshing the key when adding/editing helps ensure state is fresh. */}
       <div className="mt-4"   >
         <div className="section-header mb-3">
-          <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
+          <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
             {/* Bloc titre */}
-            <div>
-              <span className="section-title mb-1">
-                <i className="fas fa-calendar-times me-2"></i>
+            <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+              <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
+                <i className="fas fa-users me-2"></i>
                 Détails Employé
               </span>
               {!showAddForm && (
-  <p className="section-description text-muted mb-0">
-    {filteredEmployees.length} employé
-    {filteredEmployees.length > 1 ? 's' : ''} actuellement affiché
-    {filteredEmployees.length > 1 ? 's' : ''}
-  </p>
-)}
+                <p className="section-description text-muted mb-0">
+                  {filteredEmployees.length} employé
+                  {filteredEmployees.length > 1 ? 's' : ''} actuellement affiché
+                  {filteredEmployees.length > 1 ? 's' : ''}
+                </p>
+              )}
 
 
             </div>
             {/* Bloc Dropdowns */}
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
 
-            <FontAwesomeIcon
-              onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
-              icon={filtersVisible ? faClose : faFilter}
-              color={filtersVisible ? 'green' : ''}
-            style={{
-              cursor: "pointer",
-              fontSize: "1.9rem",
-              color: "#2c767c",
-              marginTop: "1.3%",
-              marginRight: "8px",
-            }}
-          />
-
-
-
-                         {/* Bouton Ajouter */}
-            <Button
-  onClick={() => {
-    if (!departementId) return;
-    handleAddNewEmployee();
-  }}
-  className={`btn btn-outline-primary d-flex align-items-center ${!departementId ? "disabled-btn" : ""}`}
-  size="sm"
-              style={{   marginRight:'30px !important' ,
-                width: '160px',              }}
-            >
-              <FaPlusCircle className="me-2" />
-              Ajouter Employé
-            </Button>
+              <FontAwesomeIcon
+                onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
+                icon={filtersVisible ? faClose : faFilter}
+                color={filtersVisible ? 'green' : ''}
+                style={{
+                  cursor: "pointer",
+                  fontSize: "1.9rem",
+                  color: "#2c767c",
+                  marginTop: "1.3%",
+                  marginRight: "8px",
+                }}
+              />
 
 
-              <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen) } >
+
+              {/* Bouton Ajouter */}
+              <Button
+                onClick={() => {
+                  if (!departementId) return;
+                  handleAddNewEmployee();
+                }}
+                className={`btn btn-outline-primary d-flex align-items-center ${!departementId ? "disabled-btn" : ""}`}
+                size="sm"
+                style={{
+                  marginRight: '30px !important',
+                  width: '160px',
+                }}
+              >
+                <FaPlusCircle className="me-2" />
+                Ajouter Employé
+              </Button>
+
+
+              <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)} >
                 <Dropdown.Toggle
                   as="button"
                   id="dropdown-visibility"
@@ -1388,7 +1390,7 @@ const handleImportValidation = () => {
                 </Dropdown.Toggle>
                 <Dropdown.Menu as={CustomMenu} />
               </Dropdown>
-              
+
               <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
                 <Dropdown.Toggle
                   as="button"
@@ -1398,7 +1400,7 @@ const handleImportValidation = () => {
                   style={{
                     ...iconButtonStyle,
                     cursor: selectedEmployers.length === 0 ? "not-allowed" : "pointer",
-                    backgroundColor: selectedEmployers.length === 0 ? "#e5e7eb" : "#ffffff", 
+                    backgroundColor: selectedEmployers.length === 0 ? "#e5e7eb" : "#ffffff",
                     borderColor: selectedEmployers.length === 0 ? "#d1d5db" : "#ccc"
                   }}
                   disabled={selectedEmployers.length === 0}
@@ -1461,311 +1463,311 @@ const handleImportValidation = () => {
           </div>
         </div>
       </div>
-                                      {/* Section des filtres */}
-<AnimatePresence>
-  {filtersVisible && (
-    <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className="filters-container"
-      style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        gap: '12px', 
-        padding: '16px 20px',
-        minHeight: 0 
-      }}
-    >
-      {/* Ligne 1: Icône et titre */}
-      <div className="filters-icon-section" style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '8px',
-        justifyContent: 'center',
-        marginLeft:'-8px', 
-        marginRight:'14%',
-      }}>
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#4a90a4"
-          strokeWidth="2"
-          className="filters-icon"
-        >
-          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-        </svg>
-        <span className="filters-title">Filtres</span>
-      </div>
-
-      {/* Ligne 2: Tous les filtres */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '1px', 
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        marginLeft:'10.2%'
-      }}>
-        {filterOptions.filters.map((filter, index) => (
-          <div key={index} style={{
-  display: 'flex',
-  alignItems: 'center',
-  margin: 0,
-  marginRight: '46px' 
-}}>            <label className="filter-label" style={{ 
-              fontSize: '0.9rem', 
-              margin: 0, 
-              marginRight: '-44px',
-              whiteSpace: 'nowrap',
-              minWidth: 'auto',
-              fontWeight: 600,
-              color: '#2c3e50'
+      {/* Section des filtres */}
+      <AnimatePresence>
+        {filtersVisible && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="filters-container"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              padding: '16px 20px',
+              minHeight: 0
+            }}
+          >
+            {/* Ligne 1: Icône et titre */}
+            <div className="filters-icon-section" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              justifyContent: 'center',
+              marginLeft: '-8px',
+              marginRight: '14%',
             }}>
-              {filter.label}
-            </label>
-            
-            {filter.type === 'select' ? (
-              <select
-                value={filter.value}
-                onChange={(e) => handleFilterChange(filter.key, e.target.value)}
-                className="filter-input"
-                style={{ 
-                  minWidth: 80, 
-                  maxWidth: 110, 
-                  height: 30, 
-                  fontSize: '0.9rem', 
-                  padding: '2px 6px', 
-                  borderRadius: 6 
-                }}
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#4a90a4"
+                strokeWidth="2"
+                className="filters-icon"
               >
-                <option value="">{filter.placeholder}</option>
-                {filter.options?.map((option, optIndex) => (
-                  <option key={optIndex} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            ) : filter.type === 'range' ? (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '4px' 
-              }}>
-                <input
-                  type="number"
-                  value={filter.min}
-                  onChange={(e) => handleRangeFilterChange(filter.key, 'min', e.target.value)}
-                  placeholder={filter.placeholderMin}
-                  className="filter-input filter-range-input"
-                  style={{ 
-                    minWidth: 50, 
-                    maxWidth: 70, 
-                    height: 30, 
-                    fontSize: '0.9rem', 
-                    padding: '2px 4px', 
-                    borderRadius: 6 
-                  }}
-                />
-                <span className="filter-range-separator" style={{ 
-                  margin: '0 2px',
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+              </svg>
+              <span className="filters-title">Filtres</span>
+            </div>
+
+            {/* Ligne 2: Tous les filtres */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1px',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              width: '100%'
+            }}>
+              {filterOptions.filters.map((filter, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  margin: 0,
+                  marginRight: '46px'
+                }}>            <label className="filter-label" style={{
                   fontSize: '0.9rem',
-                  color: '#666'
+                  margin: 0,
+                  marginRight: '-44px',
+                  whiteSpace: 'nowrap',
+                  minWidth: 'auto',
+                  fontWeight: 600,
+                  color: '#2c3e50'
                 }}>
-                  -
-                </span>
-                <input
-                  type="number"
-                  value={filter.max}
-                  onChange={(e) => handleRangeFilterChange(filter.key, 'max', e.target.value)}
-                  placeholder={filter.placeholderMax}
-                  className="filter-input filter-range-input"
-                  style={{ 
-                    minWidth: 50, 
-                    maxWidth: 70, 
-                    height: 30, 
-                    fontSize: '0.9rem', 
-                    padding: '2px 4px', 
-                    borderRadius: 6 
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  )}
-</AnimatePresence>
+                    {filter.label}
+                  </label>
+
+                  {filter.type === 'select' ? (
+                    <select
+                      value={filter.value}
+                      onChange={(e) => handleFilterChange(filter.key, e.target.value)}
+                      className="filter-input"
+                      style={{
+                        minWidth: 80,
+                        maxWidth: 110,
+                        height: 30,
+                        fontSize: '0.9rem',
+                        padding: '2px 6px',
+                        borderRadius: 6
+                      }}
+                    >
+                      <option value="">{filter.placeholder}</option>
+                      {filter.options?.map((option, optIndex) => (
+                        <option key={optIndex} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : filter.type === 'range' ? (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <input
+                        type="number"
+                        value={filter.min}
+                        onChange={(e) => handleRangeFilterChange(filter.key, 'min', e.target.value)}
+                        placeholder={filter.placeholderMin}
+                        className="filter-input filter-range-input"
+                        style={{
+                          minWidth: 50,
+                          maxWidth: 70,
+                          height: 30,
+                          fontSize: '0.9rem',
+                          padding: '2px 4px',
+                          borderRadius: 6
+                        }}
+                      />
+                      <span className="filter-range-separator" style={{
+                        margin: '0 2px',
+                        fontSize: '0.9rem',
+                        color: '#666'
+                      }}>
+                        -
+                      </span>
+                      <input
+                        type="number"
+                        value={filter.max}
+                        onChange={(e) => handleRangeFilterChange(filter.key, 'max', e.target.value)}
+                        placeholder={filter.placeholderMax}
+                        className="filter-input filter-range-input"
+                        style={{
+                          minWidth: 50,
+                          maxWidth: 70,
+                          height: 30,
+                          fontSize: '0.9rem',
+                          padding: '2px 4px',
+                          borderRadius: 6
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
       {/* Modal pour l'affectation du planning */}
       <Modal
-  show={showPlanningModal}
-  onHide={() => setShowPlanningModal(false)}
-  dialogClassName="custom-modal"
-  centered
->
-  <Modal.Body className="d-flex flex-column align-items-center justify-content-center pt-0">
-    <div className="position-relative w-100" style={{ marginTop: '30px' }}>
-      {/* Titre flottant */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '-12px',
-          left: '20px',
-          backgroundColor: 'white',
-          padding: '0 12px',
-          color: '#00afaa',
-          fontWeight: 'bold',
-          fontSize: '1.1rem',
-          zIndex: 1,
-        }}
+        show={showPlanningModal}
+        onHide={() => setShowPlanningModal(false)}
+        dialogClassName="custom-modal"
+        centered
       >
-        Affecter un planning
-      </div>
+        <Modal.Body className="d-flex flex-column align-items-center justify-content-center pt-0">
+          <div className="position-relative w-100" style={{ marginTop: '30px' }}>
+            {/* Titre flottant */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '-12px',
+                left: '20px',
+                backgroundColor: 'white',
+                padding: '0 12px',
+                color: '#00afaa',
+                fontWeight: 'bold',
+                fontSize: '1.1rem',
+                zIndex: 1,
+              }}
+            >
+              Affecter un planning
+            </div>
 
-      {/* Contenu encadré */}
-      <div
-        style={{
-          border: '1px solid #e0e0e0',
-          borderRadius: '12px',
-          padding: '30px 25px 10px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-          backgroundColor: 'white',
-          maxHeight: '400px',
-          overflowY: 'auto',
-        }}
-      >
-        <Table className="custom-header" style={{ marginBottom: 0 }}>
-          <thead>
-            <tr style={{ textAlign: 'center' }}>
-              <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Planning</th>
-              <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Date début</th>
-              <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Date fin</th>
-              <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {assignedCalendriers.map((item, index) => (
-              <tr key={index}>
-                <td>
-                  <Form.Select
-                    value={item.calendrier_id}
-                    onChange={(e) => handleChangeCalendrier(index, e.target.value)}
-                    style={{
-                      height: 40,
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      fontSize: '0.9rem'
-                    }}
-                  >
-                    <option value="">-- Choisir --</option>
-                    {Array.isArray(calendriers) && calendriers.map((cal) => ( 
-  <option key={cal.id} value={cal.id}>
-    {cal.nom}
-  </option>
-))}
-                  </Form.Select>
-                </td>
-                <td>
-                  <Form.Control
-                    type="date"
-                    value={item.date_debut}
-                    onChange={(e) => handleChangeDate(index, "date_debut", e.target.value)}
-                    style={{
-                      height: 40,
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      fontSize: '0.9rem'
-                    }}
-                  />
-                </td>
-                <td>
-                  <Form.Control
-                    type="date"
-                    value={item.date_fin}
-                    onChange={(e) => handleChangeDate(index, "date_fin", e.target.value)}
-                    style={{
-                      height: 40,
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      fontSize: '0.9rem'
-                    }}
-                  />
-                </td>
-                <td>
-                  <FontAwesomeIcon
-                    onClick={() => {
-                      const newList = [...assignedCalendriers];
-                      newList.splice(index, 1);
-                      setAssignedCalendriers(newList.length ? newList : [{
-                        calendrier_id: '',
-                        date_debut: '',
-                        date_fin: ''
-                      }]);
-                    }}
-                    icon={faTrash}
-                    style={{
-                      color: "#ff4757",
-                      cursor: "pointer",
-                      fontSize: '1.1rem',
-                      transition: 'all 0.2s ease',
-                      marginLeft: '30px'
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+            {/* Contenu encadré */}
+            <div
+              style={{
+                border: '1px solid #e0e0e0',
+                borderRadius: '12px',
+                padding: '30px 25px 10px',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+                backgroundColor: 'white',
+                maxHeight: '400px',
+                overflowY: 'auto',
+              }}
+            >
+              <Table className="custom-header" style={{ marginBottom: 0 }}>
+                <thead>
+                  <tr style={{ textAlign: 'center' }}>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Planning</th>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Date début</th>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Date fin</th>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assignedCalendriers.map((item, index) => (
+                    <tr key={index}>
+                      <td>
+                        <Form.Select
+                          value={item.calendrier_id}
+                          onChange={(e) => handleChangeCalendrier(index, e.target.value)}
+                          style={{
+                            height: 40,
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '8px',
+                            fontSize: '0.9rem'
+                          }}
+                        >
+                          <option value="">-- Choisir --</option>
+                          {Array.isArray(calendriers) && calendriers.map((cal) => (
+                            <option key={cal.id} value={cal.id}>
+                              {cal.nom}
+                            </option>
+                          ))}
+                        </Form.Select>
+                      </td>
+                      <td>
+                        <Form.Control
+                          type="date"
+                          value={item.date_debut}
+                          onChange={(e) => handleChangeDate(index, "date_debut", e.target.value)}
+                          style={{
+                            height: 40,
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '8px',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <Form.Control
+                          type="date"
+                          value={item.date_fin}
+                          onChange={(e) => handleChangeDate(index, "date_fin", e.target.value)}
+                          style={{
+                            height: 40,
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '8px',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <FontAwesomeIcon
+                          onClick={() => {
+                            const newList = [...assignedCalendriers];
+                            newList.splice(index, 1);
+                            setAssignedCalendriers(newList.length ? newList : [{
+                              calendrier_id: '',
+                              date_debut: '',
+                              date_fin: ''
+                            }]);
+                          }}
+                          icon={faTrash}
+                          style={{
+                            color: "#ff4757",
+                            cursor: "pointer",
+                            fontSize: '1.1rem',
+                            transition: 'all 0.2s ease',
+                            marginLeft: '30px'
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
 
-        {/* Info nombre de plannings */}
-        <div className="mt-3 text-end">
-          <small className="text-muted">
-            {assignedCalendriers.length} planning(s) assigné(s)
-          </small>
-        </div>
-      </div>
-    </div>
-  </Modal.Body>
+              {/* Info nombre de plannings */}
+              <div className="mt-3 text-end">
+                <small className="text-muted">
+                  {assignedCalendriers.length} planning(s) assigné(s)
+                </small>
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
 
-  <Modal.Footer className="border-0 pt-0 d-flex justify-content-center">
-  <button
-      className="btn px-4 py-2"
-      style={{
-        backgroundColor: '#00afaa',
-        color: 'white',
-        border: 'none',
-        borderRadius: '8px',
-        fontWeight: '500',
-        transition: 'all 0.2s ease'
-      }}
-      onClick={handleAffecterPlanning}
-    >
-      <i className="fas fa-check me-2"></i>
-      Valider
-    </button>
+        <Modal.Footer className="border-0 pt-0 d-flex justify-content-center">
+          <button
+            className="btn px-4 py-2"
+            style={{
+              backgroundColor: '#00afaa',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+            onClick={handleAffecterPlanning}
+          >
+            <i className="fas fa-check me-2"></i>
+            Valider
+          </button>
 
-    <button
-      className="btn px-4 py-2 me-3"
-      style={{
-        backgroundColor: 'white',
-        color: '#00afaa',
-        border: '1px solid #00afaa',
-        borderRadius: '8px',
-        fontWeight: '500',
-        transition: 'all 0.2s ease'
-      }}
-      onClick={() => setShowPlanningModal(false)}
-    >
-      Annuler
-    </button>
-  </Modal.Footer>
-</Modal>
+          <button
+            className="btn px-4 py-2 me-3"
+            style={{
+              backgroundColor: 'white',
+              color: '#00afaa',
+              border: '1px solid #00afaa',
+              borderRadius: '8px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+            onClick={() => setShowPlanningModal(false)}
+          >
+            Annuler
+          </button>
+        </Modal.Footer>
+      </Modal>
       {/* Modal pour l'affectation de règle compensation */}
       <Modal
         show={showRegleModal}
@@ -1775,8 +1777,8 @@ const handleImportValidation = () => {
       >
         <Modal.Body className="d-flex flex-column align-items-center justify-content-center pt-0">
           {/* Conteneur pour l'affectation de règle */}
-          <div className="position-relative w-100" style={{ marginTop: '30px'}} >
-          {/* Titre flottant */}
+          <div className="position-relative w-100" style={{ marginTop: '30px' }} >
+            {/* Titre flottant */}
             <div
               style={{
                 position: 'absolute',
@@ -1805,7 +1807,7 @@ const handleImportValidation = () => {
                 overflowY: 'auto',
               }}
             >
-{/* <div className="d-flex justify-content mb-3">
+              {/* <div className="d-flex justify-content mb-3">
   <span
     style={{
       color: '#4b5563',
@@ -1827,12 +1829,12 @@ const handleImportValidation = () => {
 
               <Table className="custom-header" style={{ marginBottom: 0 }}>
                 <thead>
-                  <tr style={{  textAlign: 'center'}}>
-                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb',fontWeight: '600' }}>Règle</th>
-                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb',fontWeight: '600' }}>Fréquence</th>
-                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb',fontWeight: '600' }}>Date début</th>
-                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb',fontWeight: '600' }}>Date fin</th>
-                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb',fontWeight: '600' }}>Actions</th>
+                  <tr style={{ textAlign: 'center' }}>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Règle</th>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Fréquence</th>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Date début</th>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Date fin</th>
+                    <th style={{ color: '#4b5563', backgroundColor: '#f9fafb', fontWeight: '600' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1843,7 +1845,7 @@ const handleImportValidation = () => {
                         <Form.Select
                           value={it.regle_id}
                           onChange={e => handleChangeRegle(idx, e.target.value)}
-                          style={{ 
+                          style={{
                             height: 40,
                             border: '1px solid #e0e0e0',
                             borderRadius: '8px',
@@ -1865,7 +1867,7 @@ const handleImportValidation = () => {
                           plaintext
                           readOnly
                           value={it.frequence}
-                          style={{ 
+                          style={{
                             height: 40,
                             fontSize: '0.9rem',
                             border: '1px solid #e0e0e0',
@@ -1881,7 +1883,7 @@ const handleImportValidation = () => {
                           type="date"
                           value={items[idx].date_debut || ''}
                           onChange={(e) => handleChangeDateRegle(idx, 'date_debut', e.target.value)}
-                          style={{ 
+                          style={{
                             height: 40,
                             border: '1px solid #e0e0e0',
                             borderRadius: '8px',
@@ -1897,7 +1899,7 @@ const handleImportValidation = () => {
                           type="date"
                           value={items[idx].date_fin || ''}
                           onChange={(e) => handleChangeDateRegle(idx, 'date_fin', e.target.value)}
-                          style={{ 
+                          style={{
                             height: 40,
                             border: '1px solid #e0e0e0',
                             borderRadius: '8px',
@@ -1910,17 +1912,17 @@ const handleImportValidation = () => {
                       <td>
                         <FontAwesomeIcon
                           icon={faTrash}
-                          style={{ 
-                            color: '#ff4757', 
+                          style={{
+                            color: '#ff4757',
                             cursor: 'pointer',
                             fontSize: '1.1rem',
-                            transition: 'all 0.2s ease', 
+                            transition: 'all 0.2s ease',
                             marginLeft: '30px'
                           }}
                           onClick={() => {
                             const copy = [...assignedRegles];
                             copy.splice(idx, 1);
-                            setAssignedRegles(copy.length ? copy : [{ regle_id:'', frequence:'', date_debut:'', date_fin:'' }]);
+                            setAssignedRegles(copy.length ? copy : [{ regle_id: '', frequence: '', date_debut: '', date_fin: '' }]);
                           }}
                         />
                       </td>
@@ -1940,10 +1942,10 @@ const handleImportValidation = () => {
         </Modal.Body>
 
         <Modal.Footer className="border-0 pt-0 d-flex justify-content-center">
-        <button
+          <button
             className="btn px-4 py-2"
-            style={{ 
-              backgroundColor: '#00afaa', 
+            style={{
+              backgroundColor: '#00afaa',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
@@ -1958,9 +1960,9 @@ const handleImportValidation = () => {
 
           <button
             className="btn px-4 py-2 me-3"
-            style={{ 
-              backgroundColor: 'white', 
-              color: '#00afaa', 
+            style={{
+              backgroundColor: 'white',
+              color: '#00afaa',
               border: '1px solid #00afaa',
               borderRadius: '8px',
               fontWeight: '500',
@@ -2031,280 +2033,280 @@ const handleImportValidation = () => {
       {/* Modal pour insertion des données excel  */}
 
       <Modal
-  show={showImportModal}
-  onHide={() => setShowImportModal(false)}
-  dialogClassName="custom-modal-excel"
-  centered
+        show={showImportModal}
+        onHide={() => setShowImportModal(false)}
+        dialogClassName="custom-modal-excel"
+        centered
 
->
-{/* <Modal.Header closeButton>
+      >
+        {/* <Modal.Header closeButton>
     <Modal.Title>Importer des employés depuis Excel</Modal.Title>
   </Modal.Header> */}
-  
-  <Modal.Body className="d-flex flex-column align-items-center justify-content-center pt-0">
-  <Form.Group  className="mb-4 "        style={{
-      marginRight:'530px',
-      marginTop:'40px'
-      }}>
 
-  <div
-    className="import-file-container px-4 py-3"
-    style={{
-      border: '2px dashed #00afaa',
-      borderRadius: '8px',
-      backgroundColor: 'rgba(0, 175, 170, 0.05)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '16px',
-      marginTop: '15 px',
-      width:'182%', 
-      marginLeft:'none'
+        <Modal.Body className="d-flex flex-column align-items-center justify-content-center pt-0">
+          <Form.Group className="mb-4 " style={{
+            marginRight: '530px',
+            marginTop: '40px'
+          }}>
 
-    }}
-  >
-    <i
-      className="fas fa-cloud-upload-alt"
-      style={{ fontSize: '1.5rem', color: '#00afaa' }}
-    ></i>
-    <h6 className="mb-0" style={{ whiteSpace: 'nowrap' }}>
-      Déposez votre fichier :
-    </h6>
-    <Form.Control
-      type="file"
-      accept=".xlsx, .xls"
-      onChange={handleFileChange}
-      style={{ maxWidth: '400px' }}
-    />
-  </div>
-</Form.Group>
+            <div
+              className="import-file-container px-4 py-3"
+              style={{
+                border: '2px dashed #00afaa',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(0, 175, 170, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '16px',
+                marginTop: '15 px',
+                width: '182%',
+                marginLeft: 'none'
 
-    {/* Conteneur pour les champs à importer */}
-    <div className="position-relative mb-4 w-100">
-      {/* Titre flottant */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '-12px',
-          left: '20px',
-          backgroundColor: 'white',
-          padding: '0 12px',
-          color: '#00afaa',
-          fontWeight: 'bold',
-          fontSize: '1.1rem',
-          zIndex: 1
-        }}
-      >
-        Champs à importer
-      </div>
+              }}
+            >
+              <i
+                className="fas fa-cloud-upload-alt"
+                style={{ fontSize: '1.5rem', color: '#00afaa' }}
+              ></i>
+              <h6 className="mb-0" style={{ whiteSpace: 'nowrap' }}>
+                Déposez votre fichier :
+              </h6>
+              <Form.Control
+                type="file"
+                accept=".xlsx, .xls"
+                onChange={handleFileChange}
+                style={{ maxWidth: '400px' }}
+              />
+            </div>
+          </Form.Group>
 
-      {/* Contenu encadré */}
-      <div
-        style={{
-          border: '1px solid #e0e0e0',
-          borderRadius: '12px',
-          padding: '30px 25px 20px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-          backgroundColor: 'white',
-        }}
-      >
-        <div className="d-flex justify-content-between flex-wrap">
-          {/* Colonne 1 */}
-          <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
-            {allEmployeFields.slice(0, 11).map(field => (
-              <div className="d-flex align-items-center mb-2">
-  <Form.Check
-    type="checkbox"
-    id={`field-${field}`}
-    label={field}
-    className="me-2 custom-checkbox1"
-    checked={selectedFields.includes(field)}
-    onChange={(e) => {
-      if (e.target.checked) {
-        setSelectedFields([...selectedFields, field]);
-      } else {
-        setSelectedFields(selectedFields.filter((f) => f !== field));
-        const updatedMapping = { ...fieldMappings };
-        delete updatedMapping[field];
-        setFieldMappings(updatedMapping);
-      }
-    }}
-  />
-  
-  {selectedFields.includes(field) && (
-    <Form.Control
-      type="text"
-      placeholder="ex: A, B, M1..."
-      value={fieldMappings[field] || ''}
-      onChange={(e) =>
-        setFieldMappings({ ...fieldMappings, [field]: e.target.value })
-      }
-      style={{ width: '70px', fontSize: '0.8rem' }}
-    />
-  )}
-</div>
-            ))}
+          {/* Conteneur pour les champs à importer */}
+          <div className="position-relative mb-4 w-100">
+            {/* Titre flottant */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '-12px',
+                left: '20px',
+                backgroundColor: 'white',
+                padding: '0 12px',
+                color: '#00afaa',
+                fontWeight: 'bold',
+                fontSize: '1.1rem',
+                zIndex: 1
+              }}
+            >
+              Champs à importer
+            </div>
+
+            {/* Contenu encadré */}
+            <div
+              style={{
+                border: '1px solid #e0e0e0',
+                borderRadius: '12px',
+                padding: '30px 25px 20px',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+                backgroundColor: 'white',
+              }}
+            >
+              <div className="d-flex justify-content-between flex-wrap">
+                {/* Colonne 1 */}
+                <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
+                  {allEmployeFields.slice(0, 11).map(field => (
+                    <div className="d-flex align-items-center mb-2">
+                      <Form.Check
+                        type="checkbox"
+                        id={`field-${field}`}
+                        label={field}
+                        className="me-2 custom-checkbox1"
+                        checked={selectedFields.includes(field)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedFields([...selectedFields, field]);
+                          } else {
+                            setSelectedFields(selectedFields.filter((f) => f !== field));
+                            const updatedMapping = { ...fieldMappings };
+                            delete updatedMapping[field];
+                            setFieldMappings(updatedMapping);
+                          }
+                        }}
+                      />
+
+                      {selectedFields.includes(field) && (
+                        <Form.Control
+                          type="text"
+                          placeholder="ex: A, B, M1..."
+                          value={fieldMappings[field] || ''}
+                          onChange={(e) =>
+                            setFieldMappings({ ...fieldMappings, [field]: e.target.value })
+                          }
+                          style={{ width: '70px', fontSize: '0.8rem' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Colonne 2 */}
+                <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
+                  {allEmployeFields.slice(11, 22).map(field => (
+                    <div className="d-flex align-items-center mb-2">
+                      <Form.Check
+                        type="checkbox"
+                        id={`field-${field}`}
+                        label={field}
+                        className="me-2 custom-checkbox1"
+                        checked={selectedFields.includes(field)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedFields([...selectedFields, field]);
+                          } else {
+                            setSelectedFields(selectedFields.filter((f) => f !== field));
+                            const updatedMapping = { ...fieldMappings };
+                            delete updatedMapping[field];
+                            setFieldMappings(updatedMapping);
+                          }
+                        }}
+                      />
+
+                      {selectedFields.includes(field) && (
+                        <Form.Control
+                          type="text"
+                          placeholder="ex: A, B, M1..."
+                          value={fieldMappings[field] || ''}
+                          onChange={(e) =>
+                            setFieldMappings({ ...fieldMappings, [field]: e.target.value })
+                          }
+                          style={{ width: '70px', fontSize: '0.8rem' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Colonne 3 */}
+                <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
+                  {allEmployeFields.slice(22, 33).map(field => (
+                    <div className="d-flex align-items-center mb-2">
+                      <Form.Check
+                        type="checkbox"
+                        id={`field-${field}`}
+                        label={field}
+                        className="me-2 custom-checkbox1"
+                        checked={selectedFields.includes(field)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedFields([...selectedFields, field]);
+                          } else {
+                            setSelectedFields(selectedFields.filter((f) => f !== field));
+                            const updatedMapping = { ...fieldMappings };
+                            delete updatedMapping[field];
+                            setFieldMappings(updatedMapping);
+                          }
+                        }}
+                      />
+
+                      {selectedFields.includes(field) && (
+                        <Form.Control
+                          type="text"
+                          placeholder="ex: A, B, M1..."
+                          value={fieldMappings[field] || ''}
+                          onChange={(e) =>
+                            setFieldMappings({ ...fieldMappings, [field]: e.target.value })
+                          }
+                          style={{ width: '70px', fontSize: '0.8rem' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Colonne 4 */}
+                <div className="d-flex flex-column" style={{ minWidth: '120px' }}>
+                  {allEmployeFields.slice(33).map(field => (
+                    <div className="d-flex align-items-center mb-2">
+                      <Form.Check
+                        type="checkbox"
+                        id={`field-${field}`}
+                        label={field}
+                        className="me-2 custom-checkbox1"
+                        checked={selectedFields.includes(field)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedFields([...selectedFields, field]);
+                          } else {
+                            setSelectedFields(selectedFields.filter((f) => f !== field));
+                            const updatedMapping = { ...fieldMappings };
+                            delete updatedMapping[field];
+                            setFieldMappings(updatedMapping);
+                          }
+                        }}
+                      />
+
+                      {selectedFields.includes(field) && (
+                        <Form.Control
+                          type="text"
+                          placeholder="ex: A, B, M1..."
+                          value={fieldMappings[field] || ''}
+                          onChange={(e) =>
+                            setFieldMappings({ ...fieldMappings, [field]: e.target.value })
+                          }
+                          style={{ width: '70px', fontSize: '0.8rem' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Information sur les champs sélectionnés */}
+              <div className="mt-3 text-end">
+                <small className="text-muted">
+                  {selectedFields.length} champ(s) sélectionné(s)
+                </small>
+              </div>
+            </div>
           </div>
+        </Modal.Body>
 
-          {/* Colonne 2 */}
-          <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
-            {allEmployeFields.slice(11, 22).map(field => (
-              <div className="d-flex align-items-center mb-2">
-  <Form.Check
-    type="checkbox"
-    id={`field-${field}`}
-    label={field}
-    className="me-2 custom-checkbox1"
-    checked={selectedFields.includes(field)}
-    onChange={(e) => {
-      if (e.target.checked) {
-        setSelectedFields([...selectedFields, field]);
-      } else {
-        setSelectedFields(selectedFields.filter((f) => f !== field));
-        const updatedMapping = { ...fieldMappings };
-        delete updatedMapping[field];
-        setFieldMappings(updatedMapping);
-      }
-    }}
-  />
-  
-  {selectedFields.includes(field) && (
-    <Form.Control
-      type="text"
-      placeholder="ex: A, B, M1..."
-      value={fieldMappings[field] || ''}
-      onChange={(e) =>
-        setFieldMappings({ ...fieldMappings, [field]: e.target.value })
-      }
-      style={{ width: '70px', fontSize: '0.8rem' }}
-    />
-  )}
-</div>
-            ))}
-          </div>
-
-          {/* Colonne 3 */}
-          <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
-            {allEmployeFields.slice(22, 33).map(field => (
-              <div className="d-flex align-items-center mb-2">
-  <Form.Check
-    type="checkbox"
-    id={`field-${field}`}
-    label={field}
-    className="me-2 custom-checkbox1"
-    checked={selectedFields.includes(field)}
-    onChange={(e) => {
-      if (e.target.checked) {
-        setSelectedFields([...selectedFields, field]);
-      } else {
-        setSelectedFields(selectedFields.filter((f) => f !== field));
-        const updatedMapping = { ...fieldMappings };
-        delete updatedMapping[field];
-        setFieldMappings(updatedMapping);
-      }
-    }}
-  />
-  
-  {selectedFields.includes(field) && (
-    <Form.Control
-      type="text"
-      placeholder="ex: A, B, M1..."
-      value={fieldMappings[field] || ''}
-      onChange={(e) =>
-        setFieldMappings({ ...fieldMappings, [field]: e.target.value })
-      }
-      style={{ width: '70px', fontSize: '0.8rem' }}
-    />
-  )}
-</div>
-            ))}
-          </div>
-
-          {/* Colonne 4 */}
-          <div className="d-flex flex-column" style={{ minWidth: '120px' }}>
-            {allEmployeFields.slice(33).map(field => (
-              <div className="d-flex align-items-center mb-2">
-  <Form.Check
-    type="checkbox"
-    id={`field-${field}`}
-    label={field}
-    className="me-2 custom-checkbox1"
-    checked={selectedFields.includes(field)}
-    onChange={(e) => {
-      if (e.target.checked) {
-        setSelectedFields([...selectedFields, field]);
-      } else {
-        setSelectedFields(selectedFields.filter((f) => f !== field));
-        const updatedMapping = { ...fieldMappings };
-        delete updatedMapping[field];
-        setFieldMappings(updatedMapping);
-      }
-    }}
-  />
-  
-  {selectedFields.includes(field) && (
-    <Form.Control
-      type="text"
-      placeholder="ex: A, B, M1..."
-      value={fieldMappings[field] || ''}
-      onChange={(e) =>
-        setFieldMappings({ ...fieldMappings, [field]: e.target.value })
-      }
-      style={{ width: '70px', fontSize: '0.8rem' }}
-    />
-  )}
-</div>
-            ))}
-          </div>
-        </div>
-
-        {/* Information sur les champs sélectionnés */}
-        <div className="mt-3 text-end">
-          <small className="text-muted">
-            {selectedFields.length} champ(s) sélectionné(s)
-          </small>
-        </div>
-      </div>
-    </div>
-  </Modal.Body>
-  
-  <Modal.Footer className="border-0 pt-0 d-flex justify-content-center">
-    <button
-      className="btn px-4 py-2 me-3"
-      style={{ 
-        backgroundColor: 'white', 
-        color: '#00afaa', 
-        border: '1px solid #00afaa',
-        borderRadius: '8px',
-        fontWeight: '500',
-        transition: 'all 0.2s ease'
-      }}
-      onClick={() => {
-        setShowImportModal(false);
-        setShowDropdown(false);
-      }}
-    >
-      Annuler
-    </button>
-    <button
-      className="btn px-4 py-2"
-      style={{ 
-        backgroundColor: '#00afaa', 
-        color: 'white',
-        border: 'none',
-        borderRadius: '8px',
-        fontWeight: '500',
-        transition: 'all 0.2s ease'
-      }}
-      onClick={handleImportValidation}
-    >
-      <i className="fas fa-check me-2"></i>
-      Valider 
-    </button>
-  </Modal.Footer>
+        <Modal.Footer className="border-0 pt-0 d-flex justify-content-center">
+          <button
+            className="btn px-4 py-2 me-3"
+            style={{
+              backgroundColor: 'white',
+              color: '#00afaa',
+              border: '1px solid #00afaa',
+              borderRadius: '8px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+            onClick={() => {
+              setShowImportModal(false);
+              setShowDropdown(false);
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            className="btn px-4 py-2"
+            style={{
+              backgroundColor: '#00afaa',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+            onClick={handleImportValidation}
+          >
+            <i className="fas fa-check me-2"></i>
+            Valider
+          </button>
+        </Modal.Footer>
 
 
-  <style jsx>{`
+        <style jsx>{`
     .custom-checkbox1 .form-check-input:checked {
       background-color: #00afaa;
       border-color: #00afaa;
@@ -2334,7 +2336,7 @@ const handleImportValidation = () => {
   `}</style>
 
 
-</Modal>
+      </Modal>
 
 
 
