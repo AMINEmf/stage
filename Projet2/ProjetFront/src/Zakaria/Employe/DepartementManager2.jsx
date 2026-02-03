@@ -79,11 +79,16 @@ function DepartementManager2() {
   }, [setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, clearActions]);
 
 
-  const fetchDepartmentHierarchy = async () => {
+  const fetchDepartements = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
     try {
+      // Utilisation de l'endpoint hierarchy qui est plus complet et performant
       const response = await axios.get('http://127.0.0.1:8000/api/departements/hierarchy');
-      setDepartements(response.data);
-      localStorage.setItem('departmentHierarchy', JSON.stringify(response.data));
+      if (response.data && Array.isArray(response.data)) {
+        setDepartements(response.data);
+        localStorage.setItem('departmentHierarchy', JSON.stringify(response.data));
+      }
     } catch (error) {
       console.error("Error fetching department hierarchy:", error);
       if (error.response && error.response.status === 403) {
@@ -93,53 +98,25 @@ function DepartementManager2() {
           text: "Vous n'avez pas l'autorisation de voir la hiérarchie des départements.",
         });
       }
-    }
-  };
-
-
-
-  useEffect(() => {
-    const departmentsFromStorage = localStorage.getItem('departmentHierarchy');
-
-    if (departmentsFromStorage) {
-      setDepartements(JSON.parse(departmentsFromStorage));
-    }
-
-    fetchDepartmentHierarchy();
-  }, []);
-
-  const fetchDepartements = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await axios.get("http://127.0.0.1:8000/api/departements");
-      const departmentsTree = buildDepartementTree(response.data);
-      setDepartements(departmentsTree);
-      localStorage.setItem('departements', JSON.stringify(departmentsTree));
-    } catch (error) {
-      console.error("Error fetching departments:", error);
-      setError("An error occurred while fetching departments. Please try again.");
-      setDepartements([]);
-      if (error.response && error.response.status === 403) {
-        Swal.fire({
-          icon: "error",
-          title: "Accès refusé",
-          text: "Vous n'avez pas l'autorisation de voir la liste des départements.",
-        });
-      }
+      // On ne vide pas departements ici pour garder l'affichage du cache si possible
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const departementsFromStorage = localStorage.getItem('departements');
-
-    if (departementsFromStorage) {
-      setDepartements(JSON.parse(departementsFromStorage));
-      setIsLoading(false);
+    // 1. Charger immédiatement depuis le cache pour éviter le "disparition"
+    const departmentsFromStorage = localStorage.getItem('departmentHierarchy');
+    if (departmentsFromStorage) {
+      try {
+        setDepartements(JSON.parse(departmentsFromStorage));
+        setIsLoading(false);
+      } catch (e) {
+        console.error("Error parsing departments from storage", e);
+      }
     }
 
+    // 2. Lancer la mise à jour asynchrone
     fetchDepartements();
 
     document.addEventListener("click", handleClickOutside);

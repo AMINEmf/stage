@@ -14,6 +14,7 @@ import ExpandRTable from "./ExpandRTable";
 import AddAccident from "./AddAccident";
 import { motion, AnimatePresence } from 'framer-motion';
 import Swal from "sweetalert2";
+import "../Style.css";
 
 const theme = createTheme();
 
@@ -66,8 +67,8 @@ const columns = [
 
 const mapApiToUi = (api) => ({
   id: api.id,
-  employe: api.employe?.nom || api.nom_complet || "N/A",
-  matricule: api.employe?.matricule || api.matricule || "N/A",
+  employe: (typeof api.employe === 'string' ? api.employe : api.employe?.nom) || api.nom_complet || "N/A",
+  matricule: (typeof api.matricule === 'string' ? api.matricule : api.employe?.matricule) || "N/A",
   dateAccident: api.date_accident,
   heure: api.heure,
   lieu: api.lieu,
@@ -77,10 +78,11 @@ const mapApiToUi = (api) => ({
   dureeArret: api.duree_arret || 0,
   declarationCnss: api.declaration_cnss ? "oui" : "non",
   statut: api.statut_dossier || api.statut,
+  departement_id: api.departement_id
 });
 
 const mapUiToApi = (ui, deptId) => ({
-  departement_id: deptId,
+  departement_id: deptId || ui.departement_id || null,
   nom_complet: ui.employe,
   matricule: ui.matricule,
   date_accident: ui.dateAccident,
@@ -89,7 +91,7 @@ const mapUiToApi = (ui, deptId) => ({
   type_accident: ui.typeAccident,
   gravite: ui.gravite,
   arret_travail: ui.arretTravail === "oui",
-  duree_arret: parseInt(ui.dureeArret),
+  duree_arret: ui.dureeArret ? parseInt(ui.dureeArret) : 0,
   declaration_cnss: ui.declarationCnss === "oui",
   statut_dossier: ui.statut,
 });
@@ -157,10 +159,15 @@ const AccidentTable = forwardRef((props, ref) => {
     statut: "en cours",
   });
 
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
   const filtered = useMemo(() => {
     if (!departementId) return accidents;
     const ids = includeSubDepartments && getSubDepartmentIds ? getSubDepartmentIds(departements || [], departementId) : [departementId];
-    return accidents.filter((a) => ids.includes(a.departement_id));
+    // Ensure both are numbers for comparison
+    const numericIds = ids.map(Number);
+    return accidents.filter((a) => numericIds.includes(Number(a.departement_id)));
   }, [accidents, departementId, includeSubDepartments, getSubDepartmentIds, departements]);
 
   const searched = useMemo(() => {
@@ -170,6 +177,8 @@ const AccidentTable = forwardRef((props, ref) => {
       columns.some((c) => String(row[c.key] ?? "").toLowerCase().includes(term))
     );
   }, [filtered, globalSearch]);
+
+  const [editingAccident, setEditingAccident] = useState(null);
 
   const resetForm = useCallback(() => {
     setForm({
@@ -189,16 +198,19 @@ const AccidentTable = forwardRef((props, ref) => {
 
   const onSave = (newData) => {
     const payload = mapUiToApi(newData, departementId);
-    axios
-      .post("http://127.0.0.1:8000/api/accidents", payload, { withCredentials: true })
+    
+    const request = editingAccident
+      ? axios.put(`http://127.0.0.1:8000/api/accidents/${editingAccident.id}`, payload, { withCredentials: true })
+      : axios.post("http://127.0.0.1:8000/api/accidents", payload, { withCredentials: true });
+
+    request
       .then((res) => {
-        const created = mapApiToUi(res.data);
-        setAccidents((prev) => [...prev, created]);
+        loadAccidents();
         handleClose();
         Swal.fire({
           icon: 'success',
           title: 'Succès',
-          text: 'Accident enregistré avec succès',
+          text: editingAccident ? 'Accident modifié avec succès' : 'Accident enregistré avec succès',
         });
       })
       .catch((err) => {
@@ -207,18 +219,47 @@ const AccidentTable = forwardRef((props, ref) => {
       });
   };
 
+  const handleDelete = (id) => {
+      Swal.fire({
+        title: 'Êtes-vous sûr?',
+        text: "Vous ne pourrez pas revenir en arrière!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Oui, supprimer!'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          axios.delete(`http://127.0.0.1:8000/api/accidents/${id}`, { withCredentials: true })
+            .then(() => {
+              setAccidents(prev => prev.filter(a => a.id !== id));
+              Swal.fire('Supprimé!', 'Le dossier a été supprimé.', 'success');
+            })
+            .catch(err => {
+              console.error(err);
+              Swal.fire('Erreur', 'Impossible de supprimer.', 'error');
+            });
+        }
+      })
+  };
+
+  const handleEdit = (row) => {
+    setEditingAccident(row);
+    setIsAddingEmploye(true);
+  };
+
   const columns_config = useMemo(() => [
-    { id: 'employe', label: "Employé", visible: columnVisibility.employe },
-    { id: 'matricule', label: "Matricule", visible: columnVisibility.matricule },
-    { id: 'dateAccident', label: "Date accident", visible: columnVisibility.dateAccident },
-    { id: 'heure', label: "Heure", visible: columnVisibility.heure },
-    { id: 'lieu', label: "Lieu", visible: columnVisibility.lieu },
-    { id: 'typeAccident', label: "Type accident", visible: columnVisibility.typeAccident },
-    { id: 'gravite', label: "Gravité", visible: columnVisibility.gravite },
-    { id: 'arretTravail', label: "Arrêt travail", visible: columnVisibility.arretTravail },
-    { id: 'dureeArret', label: "Durée arrêt (j)", visible: columnVisibility.dureeArret },
-    { id: 'declarationCnss', label: "Déclaration CNSS", visible: columnVisibility.declarationCnss },
-    { id: 'statut', label: "Statut dossier", visible: columnVisibility.statut },
+    { key: 'employe', label: "Employé", visible: columnVisibility.employe },
+    { key: 'matricule', label: "Matricule", visible: columnVisibility.matricule },
+    { key: 'dateAccident', label: "Date accident", visible: columnVisibility.dateAccident },
+    { key: 'heure', label: "Heure", visible: columnVisibility.heure },
+    { key: 'lieu', label: "Lieu", visible: columnVisibility.lieu },
+    { key: 'typeAccident', label: "Type accident", visible: columnVisibility.typeAccident },
+    { key: 'gravite', label: "Gravité", visible: columnVisibility.gravite },
+    { key: 'arretTravail', label: "Arrêt travail", visible: columnVisibility.arretTravail },
+    { key: 'dureeArret', label: "Durée arrêt (j)", visible: columnVisibility.dureeArret },
+    { key: 'declarationCnss', label: "Déclaration CNSS", visible: columnVisibility.declarationCnss },
+    { key: 'statut', label: "Statut dossier", visible: columnVisibility.statut },
   ], [columnVisibility]);
 
   const table_columns = columns_config.filter(col => col.visible);
@@ -266,7 +307,10 @@ const AccidentTable = forwardRef((props, ref) => {
 
   useEffect(() => { loadAccidents(); }, [loadAccidents]);
 
-  const handleClose = () => setIsAddingEmploye(false);
+  const handleClose = () => {
+    setIsAddingEmploye(false);
+    setEditingAccident(null);
+  }
 
   // Column visibility menu
   const CustomMenu = forwardRef(({ children, style, className, 'aria-labelledby': labeledBy }, ref) => (
@@ -276,11 +320,11 @@ const AccidentTable = forwardRef((props, ref) => {
       <Form className='p-2'>
         {columns_config.map(col => (
           <Form.Check
-            key={col.id}
+            key={col.key}
             type="checkbox"
             label={col.label}
             checked={col.visible}
-            onChange={() => setColumnVisibility(prev => ({ ...prev, [col.id]: !prev[col.id] }))}
+            onChange={() => setColumnVisibility(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
             className='mb-2'
           />
         ))}
@@ -421,6 +465,15 @@ const AccidentTable = forwardRef((props, ref) => {
             handleCheckboxChange={handleCheckboxChange}
             selectAll={selectedAccidents.length === searched.length && searched.length > 0}
             onRowClick={(row) => console.log('Row clicked', row)}
+            page={page}
+            rowsPerPage={rowsPerPage}
+            handleChangePage={setPage}
+            handleChangeRowsPerPage={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            handleEdit={handleEdit}
+            handleDelete={handleDelete}
           />
         </div>
 
@@ -429,6 +482,7 @@ const AccidentTable = forwardRef((props, ref) => {
             onClose={handleClose}
             onSave={onSave}
             departementId={departementId}
+            initialData={editingAccident}
           />
         )}
         {/* End of main container */}
@@ -438,3 +492,4 @@ const AccidentTable = forwardRef((props, ref) => {
 });
 
 export default AccidentTable;
+

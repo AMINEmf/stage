@@ -6,15 +6,15 @@ import {
 } from "lucide-react";
 import "./AddAccident.css";
 
-const AddAccident = ({ onClose, onSave, departementId }) => {
-    const [form, setForm] = useState({
+const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
+    const [form, setForm] = useState(initialData || {
         employe: "",
         matricule: "",
         dateAccident: "",
         heure: "",
         lieu: "",
         typeAccident: "accident de travail",
-        gravite: "Léger",
+        gravite: "léger",
         arretTravail: "non",
         dureeArret: 0,
         declarationCnss: "non",
@@ -36,7 +36,7 @@ const AddAccident = ({ onClose, onSave, departementId }) => {
             <div className="form-header p-3 border-bottom d-flex justify-content-between align-items-center" style={{ backgroundColor: '#f8fafc' }}>
                 <h5 className="mb-0 fw-bold text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2c767c' }}>
                     <Activity size={20} />
-                    Nouvel Accident
+                    {initialData ? 'Modifier Accident' : 'Nouvel Accident'}
                 </h5>
                 <button
                     onClick={onClose}
@@ -138,9 +138,9 @@ const AddAccident = ({ onClose, onSave, departementId }) => {
                         <Form.Group className="mb-3">
                             <Form.Label className="small fw-bold">Gravité</Form.Label>
                             <Form.Select name="gravite" value={form.gravite} onChange={handleChange} className="custom-input">
-                                <option value="Léger">Léger</option>
-                                <option value="Moyen">Moyen</option>
-                                <option value="Grave">Grave</option>
+                                <option value="léger">Léger</option>
+                                <option value="moyen">Moyen</option>
+                                <option value="grave">Grave</option>
                             </Form.Select>
                         </Form.Group>
                         <Row>
