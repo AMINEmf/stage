@@ -465,6 +465,7 @@ use App\Http\Controllers\DepartementController;
 use App\Http\Controllers\EmployeController;
 use App\Http\Controllers\EmployeDepartementController;
 use App\Http\Controllers\ContratController;
+use App\Http\Controllers\CnssAffiliationController;
 
 
 use App\Http\Controllers\ContractTypeController;
@@ -1121,6 +1122,14 @@ Route::put('/contrats/{id}', [ContratController::class, 'update']);
 Route::delete('/contrats/{id}', [ContratController::class, 'destroy']);
 // Route::get('/employes/{employeId}/contrats', [ContratController::class, 'getContratsByEmploye']);
 Route::get('/employes/{id}/contrats', [ContratController::class, 'getContratsByEmploye']);
+
+// Routes CNSS Affiliations
+Route::get('/cnss/affiliations', [CnssAffiliationController::class, 'index']);
+Route::post('/cnss/affiliations', [CnssAffiliationController::class, 'store']);
+Route::get('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'show']);
+Route::put('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'update']);
+Route::delete('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'destroy']);
+Route::get('/employes/{employeId}/cnss/affiliations', [CnssAffiliationController::class, 'getByEmploye']);
 
 
 Route::get('/contract-types', [ContractTypeController::class, 'index']);

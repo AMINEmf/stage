@@ -373,6 +373,7 @@ const Navigation = () => {
   const [permissions, setPermissions] = useState([]);
   const [isCommandsOpen, setIsCommandsOpen] = useState(false);
   const [isEmployeesOpen, setIsEmployeesOpen] = useState(false);
+  const [isCnssOpen, setIsCnssOpen] = useState(false);
   const [isPlanificationOpen, setIsPlanificationOpen] = useState(false);
   const [isPlanificationPaieOpen, setIsPlanificationPaieOpen] = useState(false);
   const [isTraitementPaieOpen, setIsTraitementPaieOpen] = useState(false);
@@ -419,6 +420,10 @@ const Navigation = () => {
 
   const handleEmployeesClick = () => {
     setIsEmployeesOpen(!isEmployeesOpen);
+  };
+
+  const handleCnssClick = () => {
+    setIsCnssOpen(!isCnssOpen);
   };
 
   const handlePlanificationClick = () => {
@@ -834,6 +839,31 @@ const Navigation = () => {
     )}
 
     
+  </List>
+</Collapse>
+
+{/*-------------------------------- Menu Affiliations CNSS  -------------------------------------- */}
+  <ListItem
+    button
+    onClick={handleCnssClick}
+    sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+    style={{ color: "white", display: "flex" }}
+  >
+    <ListItemIcon >
+    <PeopleIcon style={{ fontSize: "1.6rem", color: "white" }} />
+    </ListItemIcon>
+    <ListItemText primary="Affiliations CNSS" />
+    {isCnssOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+  </ListItem>
+
+<Collapse in={isCnssOpen} timeout="auto" unmountOnExit>
+  <List component="div" disablePadding>
+    <SubMenuItem button component={Link} to="/cnss">
+      <ListItemIcon>
+        <ListIcon />
+      </ListItemIcon>
+      <ListItemText primary="Gestion des Affiliations" />
+    </SubMenuItem>
   </List>
 </Collapse>
 

@@ -7,8 +7,7 @@ import Navigation from './Acceuil/Navigation';
 
 import Dashboard from './Acceuil/Dashboard';
 import DepartementManager from './Zakaria/Employe/DepartementManager';
-
-
+import CNSS from './Zakaria/cnss';
 import EmpHistorique from './Zakaria/EmpHistorique.jsx';
 
 
@@ -37,8 +36,7 @@ const App = () => {
             <Route path="/login" element={<Login />} />
 
             <Route path="/employes" element={<DepartementManager />} />
-
-
+            <Route path="/cnss" element={<CNSS />} />
 
             <Route path="/emphistorique" element={<EmpHistorique />} />
 
