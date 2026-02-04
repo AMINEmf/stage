@@ -77,6 +77,7 @@ import FunctionsIcon from "@mui/icons-material/Functions";
 import SettingsIcon from "@mui/icons-material/Settings";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import AlarmIcon from "@mui/icons-material/Alarm";
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import { useOpen } from "./OpenProvider";
 
 
@@ -819,7 +820,6 @@ const Navigation = () => {
 
             <Collapse in={isEmployeesOpen} timeout="auto" unmountOnExit>
               <List component="div" disablePadding>
-
                 {(permissions.length === 0 || permissions.includes("view_all_employes")) && (
                   <SubMenuItem button component={Link} to="/employes">
                     <ListItemIcon>
@@ -828,18 +828,6 @@ const Navigation = () => {
                     <ListItemText primary="Gestion des Employés" />
                   </SubMenuItem>
                 )}
-
-                {(permissions.length === 0 || permissions.includes("view_all_employes")) && (
-                  <SubMenuItem button component={Link} to="/employes2">
-                    <ListItemIcon>
-                      <ListIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Accidents de travail" />
-                  </SubMenuItem>
-                )}
-
-
-
                 {(permissions.length === 0 || permissions.includes("view_all_employee_histories")) && (
                   <SubMenuItem button component={Link} to="/emphistorique">
                     <ListItemIcon>
@@ -848,10 +836,50 @@ const Navigation = () => {
                     <ListItemText primary="Historique" />
                   </SubMenuItem>
                 )}
-
-
               </List>
             </Collapse>
+
+            {/* Menu principal pour Accidents de travail */}
+            <ListItem
+              button
+              component={Link}
+              to="/employes2"
+              style={{ color: "white" }}
+              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+            >
+              <ListItemIcon>
+                <ReportProblemIcon style={{ fontSize: "1.6rem", color: "white" }} />
+              </ListItemIcon>
+              <ListItemText primary="Accidents de travail" />
+            </ListItem>
+
+            {/* Menu pour Affiliations CIMR */}
+            <ListItem
+              button
+              component={Link}
+              to="/cimr-affiliations"
+              style={{ color: "white" }}
+              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+            >
+              <ListItemIcon>
+                <AssignmentIndIcon style={{ fontSize: "1.6rem", color: "white" }} />
+              </ListItemIcon>
+              <ListItemText primary="Affiliations CIMR" />
+            </ListItem>
+
+            {/* Menu pour Déclarations CIMR */}
+            <ListItem
+              button
+              component={Link}
+              to="/cimr-declarations"
+              style={{ color: "white" }}
+              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+            >
+              <ListItemIcon>
+                <AssignmentIndIcon style={{ fontSize: "1.6rem", color: "white" }} />
+              </ListItemIcon>
+              <ListItemText primary="Déclarations CIMR" />
+            </ListItem>
 
 
 

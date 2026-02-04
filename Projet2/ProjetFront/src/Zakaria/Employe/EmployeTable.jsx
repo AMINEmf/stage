@@ -18,7 +18,7 @@ import Swal from "sweetalert2";
 import { TextField } from '@mui/material';
 import AddEmp from "./AddEmp";
 import "../Style.css";
-import ExpandRTable from "./ExpandRTable";
+import ExpandRTable from "../Shared/ExpandRTable";
 import { motion, AnimatePresence, color } from 'framer-motion';
 import { FaPlusCircle } from "react-icons/fa";
 import EmployeFichePrint from "./EmployeFichePrint";

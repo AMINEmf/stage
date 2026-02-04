@@ -1,0 +1,276 @@
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { Form, Button, Row, Col } from "react-bootstrap";
+import {
+    User, Calendar, Activity, Save, AlertTriangle,
+    FileText, Hash, DollarSign, Percent
+} from "lucide-react";
+import "../Accidents/AddAccident.css"; // Réutilisation du style
+
+const AddCimr = ({ onClose, onSave, departementId, initialData }) => {
+    const [employees, setEmployees] = useState([]);
+    const [existingAffiliations, setExistingAffiliations] = useState([]);
+    const [selectedEmpId, setSelectedEmpId] = useState("");
+
+    const [form, setForm] = useState(initialData || {
+        employe: "",
+        matricule: "",
+        dateAffiliation: "",
+        numeroCimr: "",
+        affilieCimr: "non",
+        salaireCotisable: 0,
+        tauxEmployeur: 0,
+        statut: "actif",
+        departement_id: departementId || ""
+    });
+
+    useEffect(() => {
+        // Fetch employees
+        const fetchEmployees = axios.get("http://127.0.0.1:8000/api/departements/employes", { withCredentials: true });
+        // Fetch existing affiliations to check for duplicates
+        const fetchAffiliations = axios.get("http://127.0.0.1:8000/api/cimr-affiliations", { withCredentials: true });
+
+        Promise.all([fetchEmployees, fetchAffiliations])
+            .then(([empRes, affRes]) => {
+                if (Array.isArray(empRes.data)) {
+                    setEmployees(empRes.data);
+                    if (initialData && initialData.matricule) {
+                        const found = empRes.data.find(e => e.matricule === initialData.matricule);
+                        if (found) setSelectedEmpId(found.id);
+                    }
+                }
+                if (Array.isArray(affRes.data)) {
+                    setExistingAffiliations(affRes.data);
+                }
+            })
+            .catch(err => console.error("Error fetching data", err));
+    }, [initialData]);
+
+    const handleEmployeeSelect = (e) => {
+        const empId = e.target.value;
+        setSelectedEmpId(empId);
+
+        if (empId) {
+            const emp = employees.find(ep => String(ep.id) === String(empId));
+            if (emp) {
+                // Check if already affiliated
+                const isAffiliated = existingAffiliations.some(a => String(a.matricule) === String(emp.matricule));
+
+                if (isAffiliated && !initialData) {
+                    Swal.fire({
+                        title: 'Déjà affilié',
+                        text: `L'employé ${emp.prenom} ${emp.nom} possède déjà une affiliation CIMR.`,
+                        icon: 'info',
+                        confirmButtonColor: '#2c767c'
+                    });
+                }
+
+                setForm(prev => ({
+                    ...prev,
+                    employe: `${emp.prenom} ${emp.nom}`,
+                    matricule: emp.matricule,
+                    departement_id: emp.departement_id || prev.departement_id
+                }));
+            }
+        } else {
+            setForm(prev => ({
+                ...prev,
+                employe: "",
+                matricule: ""
+            }));
+        }
+    };
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setForm((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave(form);
+    };
+
+    return (
+        <div className="add-accident-container shadow-lg">
+            <div className="form-header p-3 border-bottom d-flex justify-content-between align-items-center" style={{ backgroundColor: '#f8fafc' }}>
+                <h5 className="mb-0 fw-bold text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2c767c' }}>
+                    <Activity size={20} />
+                    {initialData ? 'Modifier Affiliation CIMR' : 'Nouvelle Affiliation CIMR'}
+                </h5>
+                <button
+                    onClick={onClose}
+                    className="btn-close-custom"
+                    aria-label="Fermer"
+                    style={{
+                        background: "transparent",
+                        border: "none",
+                        padding: "0 10px",
+                        fontSize: "2rem",
+                        color: "#4b5563",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                    }}
+                >
+                    &times;
+                </button>
+            </div>
+
+            <div className="form-body p-4 flex-grow-1 overflow-auto">
+                <Form onSubmit={handleSubmit}>
+                    <div className="form-section mb-4">
+                        <h6 className="section-title-custom mb-3">
+                            <User size={16} className="me-2" />
+                            Informations Employé
+                        </h6>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="small fw-bold">Sélectionner un employé</Form.Label>
+                            <Form.Select
+                                value={selectedEmpId}
+                                onChange={handleEmployeeSelect}
+                                className="custom-input mb-2"
+                                disabled={!!initialData} // Lock employee on edit usually
+                            >
+                                <option value="">-- Choisir --</option>
+                                {employees
+                                    .filter(emp => {
+                                        // In edit mode, we want to show the current employee even if they are in existingAffiliations
+                                        if (initialData && initialData.matricule === emp.matricule) return true;
+                                        // Otherwise, hide already affiliated employees
+                                        const isAffiliated = existingAffiliations.some(a => String(a.matricule) === String(emp.matricule));
+                                        return !isAffiliated;
+                                    })
+                                    .map(emp => (
+                                        <option key={emp.id} value={emp.id}>
+                                            {emp.nom} {emp.prenom} ({emp.matricule})
+                                        </option>
+                                    ))
+                                }
+                            </Form.Select>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="small fw-bold">Employé (Nom Complet)</Form.Label>
+                            <Form.Control
+                                name="employe"
+                                value={form.employe}
+                                onChange={handleChange}
+                                placeholder="Nom complet"
+                                className="custom-input"
+                                readOnly
+                            />
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="small fw-bold">Matricule</Form.Label>
+                            <Form.Control
+                                name="matricule"
+                                value={form.matricule}
+                                onChange={handleChange}
+                                placeholder="N° Matricule"
+                                className="custom-input"
+                                readOnly
+                            />
+                        </Form.Group>
+                    </div>
+
+                    <div className="form-section mb-4">
+                        <h6 className="section-title-custom mb-3">
+                            <FileText size={16} className="me-2" />
+                            Détails Affiliation
+                        </h6>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label className="small fw-bold">Affilié CIMR</Form.Label>
+                                    <Form.Select name="affilieCimr" value={form.affilieCimr} onChange={handleChange} className="custom-input">
+                                        <option value="non">Non</option>
+                                        <option value="oui">Oui</option>
+                                    </Form.Select>
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label className="small fw-bold">Numéro CIMR</Form.Label>
+                                    <Form.Control
+                                        type="text"
+                                        name="numeroCimr"
+                                        value={form.numeroCimr}
+                                        onChange={handleChange}
+                                        className="custom-input"
+                                        placeholder="Ex: 123456789"
+                                    />
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="small fw-bold">Date d'affiliation</Form.Label>
+                            <div className="input-group">
+                                <span className="input-group-text bg-light border-end-0">
+                                    <Calendar size={16} className="text-muted" />
+                                </span>
+                                <Form.Control
+                                    type="date"
+                                    name="dateAffiliation"
+                                    value={form.dateAffiliation}
+                                    onChange={handleChange}
+                                    className="custom-input border-start-0 ps-0"
+                                />
+                            </div>
+                        </Form.Group>
+                    </div>
+
+                    <div className="form-section mb-4">
+                        <h6 className="section-title-custom mb-3">
+                            <DollarSign size={16} className="me-2" />
+                            Cotisations & Statut
+                        </h6>
+                        <Row>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label className="small fw-bold">Salaire Cotisable</Form.Label>
+                                    <Form.Control
+                                        type="number"
+                                        name="salaireCotisable"
+                                        value={form.salaireCotisable}
+                                        onChange={handleChange}
+                                        className="custom-input"
+                                    />
+                                </Form.Group>
+                            </Col>
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label className="small fw-bold">Taux Employeur (%)</Form.Label>
+                                    <Form.Control
+                                        type="number"
+                                        name="tauxEmployeur"
+                                        value={form.tauxEmployeur}
+                                        onChange={handleChange}
+                                        className="custom-input"
+                                    />
+                                </Form.Group>
+                            </Col>
+                        </Row>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="small fw-bold">Statut</Form.Label>
+                            <Form.Select name="statut" value={form.statut} onChange={handleChange} className="custom-input">
+                                <option value="actif">Actif</option>
+                                <option value="suspendu">Suspendu</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </div>
+                </Form>
+            </div>
+
+            <div className="form-footer p-3 border-top d-flex justify-content-end gap-2" style={{ backgroundColor: '#f8fafc' }}>
+                <Button variant="light" onClick={onClose} className="px-4 fw-bold">Annuler</Button>
+                <Button variant="primary" onClick={handleSubmit} className="px-4 fw-bold d-flex align-items-center gap-2" style={{ backgroundColor: '#2c767c', border: 'none' }}>
+                    <Save size={18} />
+                    Enregistrer
+                </Button>
+            </div>
+        </div>
+    );
+};
+
+export default AddCimr;

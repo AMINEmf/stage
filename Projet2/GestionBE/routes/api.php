@@ -466,6 +466,8 @@ use App\Http\Controllers\EmployeController;
 use App\Http\Controllers\EmployeDepartementController;
 use App\Http\Controllers\ContratController;
 use App\Http\Controllers\AccidentController;
+use App\Http\Controllers\CimrAffiliationController;
+use App\Http\Controllers\CimrDeclarationController;
 
 
 use App\Http\Controllers\ContractTypeController;
@@ -599,6 +601,10 @@ Route::post("/login", [AuthController::class, 'login']);
 
 // Accidents public API (no auth)
 Route::apiResource('accidents', AccidentController::class);
+Route::apiResource('cimr-affiliations', CimrAffiliationController::class);
+Route::get('cimr-declarations/eligible-employees', [CimrDeclarationController::class, 'eligibleEmployees']);
+Route::post('cimr-declarations/delete-by-period', [CimrDeclarationController::class, 'destroyByPeriod']);
+Route::apiResource('cimr-declarations', CimrDeclarationController::class);
 Route::get('/departements/employes', [EmployeController::class, 'index']);
 
 

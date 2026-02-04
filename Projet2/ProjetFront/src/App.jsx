@@ -8,6 +8,8 @@ import Navigation from './Acceuil/Navigation';
 import Dashboard from './Acceuil/Dashboard';
 import DepartementManager from './Zakaria/Employe/DepartementManager';
 import DepartementManager2 from './Zakaria/Employe/DepartementManager2';
+import CimrManager from './Zakaria/CimrAffiliation/CimrManager';
+import CimrDeclarationManager from './Zakaria/CimrDeclaration/CimrDeclarationManager';
 
 
 import EmpHistorique from './Zakaria/EmpHistorique.jsx';
@@ -33,13 +35,16 @@ const App = () => {
         <HeaderProvider>
           {showNavigation && <Navigation />}
           <Routes>
-                        <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard />} />
 
             <Route path="/login" element={<Login />} />
 
             <Route path="/employes" element={<DepartementManager />} />
 
             <Route path="/employes2" element={<DepartementManager2 />} />
+
+            <Route path="/cimr-affiliations" element={<CimrManager />} />
+            <Route path="/cimr-declarations" element={<CimrDeclarationManager />} />
 
 
 
@@ -49,8 +54,8 @@ const App = () => {
 
 
 
-       
-            <Route path="/societes" element={<Societe/>}/>
+
+            <Route path="/societes" element={<Societe />} />
 
 
 

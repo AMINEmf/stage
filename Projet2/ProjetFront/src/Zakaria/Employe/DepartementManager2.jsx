@@ -3,7 +3,7 @@ import axios from "axios";
 import "./DepartementManager.css";
 import { MdOutlinePostAdd } from "react-icons/md";
 import "bootstrap/dist/css/bootstrap.min.css";
-import AccidentTable from "./AccidentTable";
+import AccidentTable from "../Accidents/AccidentTable";
 import { IoFolderOpenOutline } from "react-icons/io5";
 import { FaMinus } from "react-icons/fa6";
 import { FaPlus } from "react-icons/fa6";

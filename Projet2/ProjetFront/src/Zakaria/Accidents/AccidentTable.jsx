@@ -10,7 +10,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { useOpen } from "../../Acceuil/OpenProvider";
-import ExpandRTable from "./ExpandRTable";
+import ExpandRTable from "../Shared/ExpandRTable";
 import AddAccident from "./AddAccident";
 import { motion, AnimatePresence } from 'framer-motion';
 import Swal from "sweetalert2";

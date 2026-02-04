@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import { Form, Button, Row, Col } from "react-bootstrap";
 import {
     User, Calendar, MapPin, Activity, Save, X, Info, AlertTriangle,
@@ -7,6 +8,9 @@ import {
 import "./AddAccident.css";
 
 const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
+    const [employees, setEmployees] = useState([]);
+    const [selectedEmpId, setSelectedEmpId] = useState("");
+
     const [form, setForm] = useState(initialData || {
         employe: "",
         matricule: "",
@@ -19,7 +23,47 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
         dureeArret: 0,
         declarationCnss: "non",
         statut: "en cours",
+        departement_id: departementId || ""
     });
+
+    useEffect(() => {
+        axios.get("http://127.0.0.1:8000/api/departements/employes", { withCredentials: true })
+            .then(res => {
+                if(Array.isArray(res.data)) {
+                    setEmployees(res.data);
+                    // Attempt to find existing employee by matricule if editing
+                    if (initialData && initialData.matricule) {
+                        const found = res.data.find(e => e.matricule === initialData.matricule);
+                        if (found) setSelectedEmpId(found.id);
+                    }
+                }
+            })
+            .catch(err => console.error("Error fetching employees", err));
+    }, [initialData]);
+
+    const handleEmployeeSelect = (e) => {
+        const empId = e.target.value;
+        setSelectedEmpId(empId);
+        
+        if (empId) {
+            const emp = employees.find(ep => String(ep.id) === String(empId));
+            if (emp) {
+                setForm(prev => ({
+                    ...prev,
+                    employe: `${emp.prenom} ${emp.nom}`, // Or nom prenom depending on preference
+                    matricule: emp.matricule,
+                    departement_id: emp.departement_id || prev.departement_id
+                }));
+            }
+        } else {
+             // Reset?
+             setForm(prev => ({
+                ...prev,
+                employe: "",
+                matricule: ""
+            }));
+        }
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -66,13 +110,29 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
                             Informations Employé
                         </h6>
                         <Form.Group className="mb-3">
-                            <Form.Label className="small fw-bold">Employé</Form.Label>
+                            <Form.Label className="small fw-bold">Sélectionner un employé</Form.Label>
+                            <Form.Select
+                                value={selectedEmpId}
+                                onChange={handleEmployeeSelect}
+                                className="custom-input mb-2"
+                            >
+                                <option value="">-- Choisir --</option>
+                                {employees.map(emp => (
+                                    <option key={emp.id} value={emp.id}>
+                                        {emp.nom} {emp.prenom} ({emp.matricule})
+                                    </option>
+                                ))}
+                            </Form.Select>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="small fw-bold">Employé (Nom Complet)</Form.Label>
                             <Form.Control
                                 name="employe"
                                 value={form.employe}
                                 onChange={handleChange}
                                 placeholder="Nom complet"
                                 className="custom-input"
+                                readOnly
                             />
                         </Form.Group>
                         <Form.Group className="mb-3">
@@ -83,6 +143,7 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
                                 onChange={handleChange}
                                 placeholder="N° Matricule"
                                 className="custom-input"
+                                readOnly
                             />
                         </Form.Group>
                     </div>

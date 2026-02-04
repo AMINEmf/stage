@@ -24,7 +24,7 @@ import { Fab, Toolbar } from "@mui/material";
 import { BsShop } from "react-icons/bs";
 import { useOpen } from "../../Acceuil/OpenProvider.jsx";
 import { BiPlus } from "react-icons/bi";
-import ExpandRTable from "../Employe/ExpandRTable";
+import ExpandRTable from "../Shared/ExpandRTable";
 import PageHeader from "../../ComponentHistorique/PageHeader";
 import SocieteForm from './SocieteForm';
 import { FaUserPlus } from 'react-icons/fa';

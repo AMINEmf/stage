@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useOpen } from "../Acceuil/OpenProvider";
 import PageHeader from "../ComponentHistorique/PageHeader";
 import DepartmentPanel from "../ComponentHistorique/DepartementPanel";
-import ExpandRTable from "./Employe/ExpandRTable";
+import ExpandRTable from "./Shared/ExpandRTable";
 import Swal from "sweetalert2";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
