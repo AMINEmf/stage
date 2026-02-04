@@ -308,149 +308,190 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
 
     return (
         <ThemeProvider theme={theme}>
+            <style>
+                {`
+                    .with-split-view .add-accident-container {
+                        position: relative !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        box-shadow: none !important;
+                        animation: none !important;
+                    }
+                `}
+            </style>
             <div style={{
-                position: 'relative',
+                display: 'flex',
+                width: '100%',
                 height: 'calc(100vh - 120px)',
-                flex: 1,
-                overflow: 'auto',
-                width: isAddingEmploye ? '60% !important' : 'auto'
-            }} className={`${isAddingEmploye ? "with-form" : "container_employee"}`}>
-                <div className="mt-4">
-                    <div className="section-header mb-3">
-                        <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
-                            <div style={{ flex: '1 1 300px' }}>
-                                <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
-                                    <i className="fas fa-file-invoice-dollar me-2"></i>
-                                    Déclarations CIMR
-                                </span>
-                            </div>
-                            <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
-                                <FontAwesomeIcon
-                                    onClick={() => handleFiltersToggle ? handleFiltersToggle(!filtersVisible) : setFiltersVisibleLocal(!filtersVisibleLocal)}
-                                    icon={(handleFiltersToggle ? filtersVisible : filtersVisibleLocal) ? faClose : faFilter}
-                                    style={{
-                                        cursor: "pointer",
-                                        fontSize: "1.9rem",
-                                        color: "#2c767c",
-                                        transition: 'all 0.2s ease',
-                                        marginTop: "1.3%",
-                                        marginRight: "8px",
-                                    }}
-                                    title="Filtrer"
-                                />
+                overflow: 'hidden',
+                position: 'relative',
+                backgroundColor: '#fff'
+            }} className="with-split-view">
+                {/* Partie Gauche : Tableau */}
+                <div style={{
+                    flex: isAddingEmploye ? '0 0 55%' : '1 1 100%',
+                    height: '100%',
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    transition: 'all 0.3s ease-in-out',
+                    borderRight: isAddingEmploye ? '2px solid #eef2f5' : 'none',
+                    padding: '0 20px'
+                }}>
+                    <div className="mt-4">
+                        <div className="section-header mb-3">
+                            <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
+                                <div style={{ flex: '1 1 300px' }}>
+                                    <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
+                                        <i className="fas fa-file-invoice-dollar me-2"></i>
+                                        Déclarations CIMR
+                                    </span>
+                                </div>
+                                <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <FontAwesomeIcon
+                                        onClick={() => handleFiltersToggle ? handleFiltersToggle(!filtersVisible) : setFiltersVisibleLocal(!filtersVisibleLocal)}
+                                        icon={(handleFiltersToggle ? filtersVisible : filtersVisibleLocal) ? faClose : faFilter}
+                                        style={{
+                                            cursor: "pointer",
+                                            fontSize: "1.9rem",
+                                            color: "#2c767c",
+                                            transition: 'all 0.2s ease',
+                                            marginTop: "1.3%",
+                                            marginRight: "8px",
+                                        }}
+                                        title="Filtrer"
+                                    />
 
-                                <Button
-                                    onClick={() => {
-                                        setIsAddingEmploye(true);
-                                    }}
-                                    className="btn d-flex align-items-center"
-                                    size="sm"
-                                    style={{ width: '200px', backgroundColor: '#2c767c', color: 'white', border: 'none', height: '38px', marginRight: '8px' }}
-                                >
-                                    <FaPlusCircle className="me-2" />
-                                    Nouvelle Déclaration
-                                </Button>
+                                    <Button
+                                        onClick={() => {
+                                            setIsAddingEmploye(true);
+                                        }}
+                                        className="btn d-flex align-items-center"
+                                        size="sm"
+                                        style={{ width: '200px', backgroundColor: '#2c767c', color: 'white', border: 'none', height: '38px', marginRight: '8px' }}
+                                    >
+                                        <FaPlusCircle className="me-2" />
+                                        Nouvelle Déclaration
+                                    </Button>
 
-                                <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
-                                    <Dropdown.Toggle as="div" bsPrefix="custom-dropdown-toggle">
-                                        <div style={iconButtonStyle} title="Colonnes">
-                                            <FontAwesomeIcon icon={faSliders} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
+                                    <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
+                                        <Dropdown.Toggle as="div" bsPrefix="custom-dropdown-toggle">
+                                            <div style={iconButtonStyle} title="Colonnes">
+                                                <FontAwesomeIcon icon={faSliders} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
+                                            </div>
+                                        </Dropdown.Toggle>
+                                        <Dropdown.Menu as={CustomMenu} columns_config={columns_config} setColumnVisibility={setColumnVisibility} />
+                                    </Dropdown>
+
+                                    {!isAddingEmploye && (
+                                        <div className="d-flex">
+                                            <div style={iconButtonStyle} title="Calendrier">
+                                                <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
+                                            </div>
+                                            <div style={iconButtonStyle} title="Presse-papiers">
+                                                <FontAwesomeIcon icon={faClipboardCheck} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
+                                            </div>
+                                            <div style={iconButtonStyle} onClick={() => console.log("Export Excel")} title="Exporter Excel">
+                                                <FontAwesomeIcon icon={faFileExcel} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
+                                            </div>
                                         </div>
-                                    </Dropdown.Toggle>
-                                    <Dropdown.Menu as={CustomMenu} columns_config={columns_config} setColumnVisibility={setColumnVisibility} />
-                                </Dropdown>
-
-                                <div style={iconButtonStyle} title="Calendrier">
-                                    <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
-                                </div>
-                                <div style={iconButtonStyle} title="Presse-papiers">
-                                    <FontAwesomeIcon icon={faClipboardCheck} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
-                                </div>
-                                <div style={iconButtonStyle} onClick={() => console.log("Export Excel")} title="Exporter Excel">
-                                    <FontAwesomeIcon icon={faFileExcel} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
+                                    )}
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <ExpandRTable
-                        columns={table_columns}
-                        data={data}
-                        loading={loading}
-                        error={error}
-                        selectable={true}
-                        selectedItems={selectedItems}
-                        handleSelectAllChange={handleSelectAllChange}
-                        handleCheckboxChange={handleCheckboxChange}
-                        expandedRows={expandedRows}
-                        toggleRowExpansion={toggleRowExpansion}
-                        renderExpandedRow={(row) => (
-                            <div className="p-3 bg-light rounded shadow-sm border m-2">
-                                <h6 className="fw-bold mb-3" style={{ color: '#2c767c' }}>
-                                    Détails des Employés - {row.mois}/{row.annee}
-                                </h6>
-                                <table className="table table-sm table-hover mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Employé</th>
-                                            <th>Matricule</th>
-                                            <th className="text-end">Montant</th>
-                                            <th>Statut</th>
-                                            <th className="text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {(row.details || []).map((detail, idx) => (
-                                            <tr key={idx}>
-                                                <td>{detail.employe}</td>
-                                                <td>{detail.matricule}</td>
-                                                <td className="text-end">{parseFloat(detail.montant_cimr_employeur || 0).toLocaleString()} DH</td>
-                                                <td>{getStatusBadge(detail.statut)}</td>
-                                                <td className="text-center">
-                                                    <div className="d-flex gap-2 justify-content-center">
-                                                        <button
-                                                            className="btn btn-sm btn-link p-0 text-primary"
-                                                            onClick={() => handleEdit(detail)}
-                                                            title="Modifier"
-                                                        >
-                                                            <FontAwesomeIcon icon={faEdit} />
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-sm btn-link p-0 text-danger"
-                                                            onClick={() => handleDeleteIndividual(detail.id)}
-                                                            title="Supprimer"
-                                                        >
-                                                            <FontAwesomeIcon icon={faTrash} />
-                                                        </button>
-                                                    </div>
-                                                </td>
+                        <ExpandRTable
+                            columns={table_columns}
+                            data={data}
+                            loading={loading}
+                            error={error}
+                            selectable={true}
+                            selectedItems={selectedItems}
+                            handleSelectAllChange={handleSelectAllChange}
+                            handleCheckboxChange={handleCheckboxChange}
+                            expandedRows={expandedRows}
+                            toggleRowExpansion={toggleRowExpansion}
+                            renderExpandedRow={(row) => (
+                                <div className="p-3 bg-light rounded shadow-sm border m-2">
+                                    <h6 className="fw-bold mb-3" style={{ color: '#2c767c' }}>
+                                        Détails des Employés - {row.mois}/{row.annee}
+                                    </h6>
+                                    <table className="table table-sm table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Employé</th>
+                                                <th>Matricule</th>
+                                                <th className="text-end">Montant</th>
+                                                <th>Statut</th>
+                                                <th className="text-center">Actions</th>
                                             </tr>
-                                        ))}
-                                        <tr className="table-info fw-bold">
-                                            <td colSpan="2">TOTAL</td>
-                                            <td className="text-end">{parseFloat(row.total_montant || 0).toLocaleString()} DH</td>
-                                            <td></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                        page={page}
-                        rowsPerPage={rowsPerPage}
-                        handleChangePage={setPage}
-                        handleChangeRowsPerPage={(e) => {
-                            setRowsPerPage(parseInt(e.target.value, 10));
-                            setPage(0);
-                        }}
-                    />
+                                        </thead>
+                                        <tbody>
+                                            {(row.details || []).map((detail, idx) => (
+                                                <tr key={idx}>
+                                                    <td>{detail.employe}</td>
+                                                    <td>{detail.matricule}</td>
+                                                    <td className="text-end">{parseFloat(detail.montant_cimr_employeur || 0).toLocaleString()} DH</td>
+                                                    <td>{getStatusBadge(detail.statut)}</td>
+                                                    <td className="text-center">
+                                                        <div className="d-flex gap-2 justify-content-center">
+                                                            <button
+                                                                className="btn btn-sm btn-link p-0 text-primary"
+                                                                onClick={() => handleEdit(detail)}
+                                                                title="Modifier"
+                                                            >
+                                                                <FontAwesomeIcon icon={faEdit} />
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-sm btn-link p-0 text-danger"
+                                                                onClick={() => handleDeleteIndividual(detail.id)}
+                                                                title="Supprimer"
+                                                            >
+                                                                <FontAwesomeIcon icon={faTrash} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            <tr className="table-info fw-bold">
+                                                <td colSpan="2">TOTAL</td>
+                                                <td className="text-end">{parseFloat(row.total_montant || 0).toLocaleString()} DH</td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            page={page}
+                            rowsPerPage={rowsPerPage}
+                            handleChangePage={setPage}
+                            handleChangeRowsPerPage={(e) => {
+                                setRowsPerPage(parseInt(e.target.value, 10));
+                                setPage(0);
+                            }}
+                        />
+                    </div>
                 </div>
+
+                {/* Partie Droite : Formulaire */}
                 {isAddingEmploye && (
-                    <AddCimrDeclaration
-                        onClose={handleClose}
-                        onSave={onSave}
-                        departementId={departementId}
-                        initialData={editingItem}
-                    />
+                    <div style={{
+                        flex: '0 0 45%',
+                        height: '100%',
+                        overflowY: 'auto',
+                        backgroundColor: '#fdfdfd',
+                        boxShadow: '-4px 0 15px rgba(0,0,0,0.05)',
+                        animation: 'fadeInRight 0.4s ease-out'
+                    }}>
+                        <AddCimrDeclaration
+                            onClose={handleClose}
+                            onSave={onSave}
+                            departementId={departementId}
+                            initialData={editingItem}
+                        />
+                    </div>
                 )}
             </div>
         </ThemeProvider>
