@@ -1,17 +1,13 @@
-import Select from "react-select";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { Form, Button, Row, Col } from 'react-bootstrap';
-import { FileText, User, Calendar, Save } from 'lucide-react';
+import { Form, Button, Row, Col, InputGroup } from 'react-bootstrap';
+import { FileText, User, Calendar, Save, CheckSquare, Square, Search } from 'lucide-react';
 import "../Accidents/AddAccident.css";
 
 const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => {
     const [employees, setEmployees] = useState([]);
-    // selectedEmployees will store the full employee objects (as Select options)
     const [selectedEmployees, setSelectedEmployees] = useState([]);
-
-    // For single edit, we keep using form state mostly for other fields
-    // For bulk add, 'form' will hold shared values (month, year, amount, status)
+    const [searchTerm, setSearchTerm] = useState("");
 
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
@@ -36,9 +32,9 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
                 if (Array.isArray(res.data)) {
                     const emps = res.data.map(e => ({
                         ...e,
-                        label: `${e.employe || (e.nom + ' ' + e.prenom)} (${e.matricule})`,
+                        label: `${e.employe || (e.nom + ' ' + e.prenom)}`,
+                        displayLabel: `${e.employe || (e.nom + ' ' + e.prenom)} (${e.matricule})`,
                         value: e.id,
-                        // Use salaire_cotisable * taux_employeur if available (example logic)
                         montant: e.salaire_cotisable ? (e.salaire_cotisable * (e.taux_employeur / 100)).toFixed(2) : ""
                     }));
                     setEmployees(emps);
@@ -47,7 +43,6 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
                         const found = emps.find(e => e.matricule === initialData.matricule);
                         if (found) setSelectedEmployees([found]);
                     } else {
-                        // Automatically select all active employees for new declaration
                         setSelectedEmployees(emps);
                     }
                 }
@@ -55,21 +50,22 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
             .catch(err => console.error("Error fetching employees", err));
     }, [initialData]);
 
-    // Handle selection from react-dropdown-select
-    const handleMultiSelect = (selectedOptions) => {
-        setSelectedEmployees(selectedOptions || []);
+    const filteredEmployees = useMemo(() => {
+        if (!searchTerm.trim()) return employees;
+        const term = searchTerm.toLowerCase();
+        return employees.filter(e => e.displayLabel.toLowerCase().includes(term));
+    }, [employees, searchTerm]);
 
-        // If single selection (or edit mode simulation), update form details for display if needed
-        if (selectedOptions && selectedOptions.length === 1) {
-            const emp = selectedOptions[0];
-            setForm(prev => ({
-                ...prev,
-                employe: `${emp.prenom} ${emp.nom}`,
-                matricule: emp.matricule,
-                departement_id: emp.departement_id || prev.departement_id
-            }));
-        }
+    const toggleEmployee = (emp) => {
+        setSelectedEmployees(prev =>
+            prev.find(e => e.value === emp.value)
+                ? prev.filter(e => e.value !== emp.value)
+                : [...prev, emp]
+        );
     };
+
+    const handleSelectAll = () => setSelectedEmployees(filteredEmployees);
+    const handleDeselectAll = () => setSelectedEmployees([]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -80,33 +76,25 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
         e.preventDefault();
 
         if (selectedEmployees.length === 0) {
-            // Error handling or alert
             return;
         }
 
         if (initialData) {
-            // Edit mode: single item update using form state (which might have modified amount/status)
-            // Ensure we use the selected employee's details if changed (though usually edit locks employee)
             onSave(form);
         } else {
-            // Creation mode: Support bulk
-            // Create an array of declarations
             const declarations = selectedEmployees.map(emp => ({
-                ...form, // Shared values: mois, annee, statut
-                employe: emp.employe || `${emp.prenom} ${emp.nom}`,
+                ...form,
+                employe: emp.label,
                 matricule: emp.matricule,
                 departement_id: emp.departement_id || form.departement_id,
                 montant_cimr_employeur: form.montant_cimr_employeur || emp.montant || 0
             }));
-
-            // If only one, pass as single object to maintain backward compat if parent expects it, 
-            // OR parent should handle array. Let's make parent handle array.
             onSave(declarations);
         }
     };
 
     return (
-        <div className="add-accident-container shadow-lg">
+        <div className="add-accident-container shadow-lg" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="form-header p-3 border-bottom d-flex justify-content-between align-items-center" style={{ backgroundColor: '#f8fafc' }}>
                 <h5 className="mb-0 fw-bold text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2c767c' }}>
                     <FileText size={20} />
@@ -115,12 +103,7 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
                 <button
                     onClick={onClose}
                     className="btn-close-custom"
-                    style={{
-                        background: "transparent",
-                        border: "none",
-                        fontSize: "2rem",
-                        color: "#4b5563",
-                    }}
+                    style={{ background: "transparent", border: "none", fontSize: "2rem", color: "#4b5563" }}
                 >
                     &times;
                 </button>
@@ -131,46 +114,62 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
                     <div className="form-section mb-4">
                         <h6 className="section-title-custom mb-3">
                             <User size={16} className="me-2" />
-                            Informations Employé
+                            {initialData ? 'Informations Employé' : 'Sélectionner des employés'}
                         </h6>
-                        <Form.Group className="mb-3">
-                            <Form.Label className="small fw-bold">Sélectionner un ou plusieurs employés</Form.Label>
-                            <Select
-                                options={employees}
-                                value={selectedEmployees}
-                                onChange={handleMultiSelect}
-                                isMulti={!initialData} // Enable multi only for creation
-                                isDisabled={!!initialData} // Disable Select in Edit mode if desired, or allow changing
-                                placeholder="Rechercher des employés..."
-                                className="basic-multi-select"
-                                classNamePrefix="select"
-                            />
-                        </Form.Group>
 
-                        <Row>
-                            <Col md={6}>
-                                <Form.Group className="mb-3">
-                                    <Form.Label className="small fw-bold">Nom Complet</Form.Label>
-                                    <Form.Control
-                                        name="employe"
-                                        value={form.employe}
-                                        readOnly
-                                        className="custom-input bg-light"
-                                    />
-                                </Form.Group>
-                            </Col>
-                            <Col md={6}>
-                                <Form.Group className="mb-3">
-                                    <Form.Label className="small fw-bold">Matricule</Form.Label>
-                                    <Form.Control
-                                        name="matricule"
-                                        value={form.matricule}
-                                        readOnly
-                                        className="custom-input bg-light"
-                                    />
-                                </Form.Group>
-                            </Col>
-                        </Row>
+                        {!initialData ? (
+                            <div className="employee-selection-card border rounded p-3 bg-white">
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <InputGroup size="sm" style={{ maxWidth: '300px' }}>
+                                        <InputGroup.Text className="bg-white border-end-0">
+                                            <Search size={14} className="text-muted" />
+                                        </InputGroup.Text>
+                                        <Form.Control
+                                            placeholder="Rechercher..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="border-start-0"
+                                        />
+                                    </InputGroup>
+                                    <div className="d-flex gap-2">
+                                        <Button variant="outline-secondary" size="sm" onClick={handleSelectAll} className="small">Tout cocher</Button>
+                                        <Button variant="outline-secondary" size="sm" onClick={handleDeselectAll} className="small">Tout décocher</Button>
+                                    </div>
+                                </div>
+
+                                <div className="employee-list-scrollable border rounded p-2" style={{ maxHeight: '250px', overflowY: 'auto', backgroundColor: '#fdfdfd' }}>
+                                    {filteredEmployees.length > 0 ? (
+                                        filteredEmployees.map(emp => (
+                                            <div
+                                                key={emp.value}
+                                                className="d-flex align-items-center p-2 mb-1 rounded hover-bg-light"
+                                                style={{ cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                                onClick={() => toggleEmployee(emp)}
+                                            >
+                                                <div className="me-3">
+                                                    {selectedEmployees.find(e => e.value === emp.value)
+                                                        ? <CheckSquare size={20} color="#2c767c" fill="#2c767c22" />
+                                                        : <Square size={20} color="#cbd5e1" />
+                                                    }
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div className="fw-medium small" style={{ color: '#334155' }}>{emp.displayLabel}</div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center p-4 text-muted small">Aucun employé trouvé.</div>
+                                    )}
+                                </div>
+                                <div className="mt-2 small text-muted text-end">
+                                    {selectedEmployees.length} employé(s) sélectionné(s)
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-3 border rounded bg-light">
+                                <span className="fw-bold">{form.employe}</span> <span className="text-muted">({form.matricule})</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="form-section mb-4">

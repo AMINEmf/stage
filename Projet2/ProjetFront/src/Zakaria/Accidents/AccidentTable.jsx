@@ -96,10 +96,31 @@ const mapUiToApi = (ui, deptId) => ({
   statut_dossier: ui.statut,
 });
 
+// Column visibility menu
+const CustomMenu = forwardRef(({ children, style, className, 'aria-labelledby': labeledBy, columns_config, setColumnVisibility }, ref) => (
+  <div ref={ref} style={{ ...style, padding: '10px', minWidth: '200px' }} className={className} aria-labelledby={labeledBy}>
+    <h6 className='p-2 mb-0'>Colonnes visibles</h6>
+    <hr className='my-2' />
+    <Form className='p-2'>
+      {(columns_config || []).map(col => (
+        <Form.Check
+          key={col.key}
+          type="checkbox"
+          label={col.label}
+          checked={col.visible}
+          onChange={() => setColumnVisibility(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
+          className='mb-2'
+        />
+      ))}
+    </Form>
+  </div>
+));
+CustomMenu.displayName = 'CustomMenu';
+
 const AccidentTable = forwardRef((props, ref) => {
   const {
     departementId,
-    departementName = "",
+    departementName = "Tous",
     includeSubDepartments,
     getSubDepartmentIds,
     departements,
@@ -198,7 +219,7 @@ const AccidentTable = forwardRef((props, ref) => {
 
   const onSave = (newData) => {
     const payload = mapUiToApi(newData, departementId);
-    
+
     const request = editingAccident
       ? axios.put(`http://127.0.0.1:8000/api/accidents/${editingAccident.id}`, payload, { withCredentials: true })
       : axios.post("http://127.0.0.1:8000/api/accidents", payload, { withCredentials: true });
@@ -220,27 +241,27 @@ const AccidentTable = forwardRef((props, ref) => {
   };
 
   const handleDelete = (id) => {
-      Swal.fire({
-        title: 'Êtes-vous sûr?',
-        text: "Vous ne pourrez pas revenir en arrière!",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Oui, supprimer!'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          axios.delete(`http://127.0.0.1:8000/api/accidents/${id}`, { withCredentials: true })
-            .then(() => {
-              setAccidents(prev => prev.filter(a => a.id !== id));
-              Swal.fire('Supprimé!', 'Le dossier a été supprimé.', 'success');
-            })
-            .catch(err => {
-              console.error(err);
-              Swal.fire('Erreur', 'Impossible de supprimer.', 'error');
-            });
-        }
-      })
+    Swal.fire({
+      title: 'Êtes-vous sûr?',
+      text: "Vous ne pourrez pas revenir en arrière!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Oui, supprimer!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        axios.delete(`http://127.0.0.1:8000/api/accidents/${id}`, { withCredentials: true })
+          .then(() => {
+            setAccidents(prev => prev.filter(a => a.id !== id));
+            Swal.fire('Supprimé!', 'Le dossier a été supprimé.', 'success');
+          })
+          .catch(err => {
+            console.error(err);
+            Swal.fire('Erreur', 'Impossible de supprimer.', 'error');
+          });
+      }
+    })
   };
 
   const handleEdit = (row) => {
@@ -312,26 +333,87 @@ const AccidentTable = forwardRef((props, ref) => {
     setEditingAccident(null);
   }
 
-  // Column visibility menu
-  const CustomMenu = forwardRef(({ children, style, className, 'aria-labelledby': labeledBy }, ref) => (
-    <div ref={ref} style={{ ...style, padding: '10px', minWidth: '200px' }} className={className} aria-labelledby={labeledBy}>
-      <h6 className='p-2 mb-0'>Colonnes visibles</h6>
-      <hr className='my-2' />
-      <Form className='p-2'>
-        {columns_config.map(col => (
-          <Form.Check
-            key={col.key}
-            type="checkbox"
-            label={col.label}
-            checked={col.visible}
-            onChange={() => setColumnVisibility(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
-            className='mb-2'
-          />
-        ))}
-      </Form>
-    </div>
-  ));
-  CustomMenu.displayName = 'CustomMenu';
+  const exportToPDF = useCallback(() => {
+    const doc = new jsPDF();
+    const tableColumn = columns_config.filter(col => col.visible).map(col => col.label);
+    const tableRows = searched.map(row =>
+      columns_config.filter(col => col.visible).map(col => row[col.key])
+    );
+    doc.setFontSize(18);
+    doc.text(`Accidents de travail - ${departementName || "Tous"}`, 14, 22);
+    doc.setFontSize(11);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 30);
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 35,
+    });
+    doc.save(`accidents_${departementName || "tous"}_${new Date().toISOString()}.pdf`);
+  }, [columns_config, searched, departementName]);
+
+  const exportToExcel = useCallback(() => {
+    const ws = XLSX.utils.json_to_sheet(
+      searched.map(row => {
+        const item = {};
+        columns_config.forEach(col => {
+          if (col.visible) {
+            item[col.label] = row[col.key];
+          }
+        });
+        return item;
+      })
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Accidents");
+    XLSX.writeFile(wb, `accidents_${departementName || "tous"}_${new Date().toISOString()}.xlsx`);
+  }, [columns_config, searched, departementName]);
+
+  const handlePrint = useCallback(() => {
+    const printWindow = window.open("", "_blank");
+    const tableColumn = columns_config.filter(col => col.visible).map(col => col.label);
+    const tableRows = searched.map(row =>
+      columns_config.filter(col => col.visible).map(col => row[col.key])
+    );
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; }
+            table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f2f2f2; color: #2c767c; }
+            .header { margin-bottom: 20px; }
+            @page { margin: 1cm; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Accidents de travail - ${departementName || "Tous"}</h1>
+            <p>Date: ${new Date().toLocaleDateString()}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>${tableColumn.map(col => `<th>${col}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${tableRows.map(row => `
+                <tr>${row.map(cell => `<td>${cell || ""}</td>`).join("")}</tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  }, [columns_config, searched, departementName]);
+
+  useImperativeHandle(ref, () => ({
+    exportToPDF,
+    exportToExcel,
+    handlePrint
+  }), [exportToPDF, exportToExcel, handlePrint]);
 
   return (
     <ThemeProvider theme={theme}>
@@ -396,27 +478,11 @@ const AccidentTable = forwardRef((props, ref) => {
 
                 <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
                   <Dropdown.Toggle as="button" style={iconButtonStyle} title="Visibilité Colonnes">
-                    <FontAwesomeIcon icon={faSliders} style={{ width: 18, height: 18, color: "#4b5563" }} />
+                    <FontAwesomeIcon icon={faSliders} style={{ width: 18, height: 18, color: '#4b5563' }} />
                   </Dropdown.Toggle>
-                  <Dropdown.Menu as={CustomMenu} />
+                  <Dropdown.Menu as={CustomMenu} columns_config={columns_config} setColumnVisibility={setColumnVisibility} />
                 </Dropdown>
 
-                <button style={iconButtonStyle} title="Planning">
-                  <FontAwesomeIcon icon={faCalendarAlt} style={{ width: 18, height: 18, color: '#4b5563' }} />
-                </button>
-                <button style={iconButtonStyle} title="Règles">
-                  <FontAwesomeIcon icon={faClipboardCheck} style={{ width: 18, height: 18, color: '#4b5563' }} />
-                </button>
-
-                <Dropdown>
-                  <Dropdown.Toggle as="button" style={iconButtonStyle} title="Export">
-                    <FontAwesomeIcon icon={faFileExcel} style={{ width: 18, height: 18, color: '#4b5563' }} />
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu>
-                    <Dropdown.Item>Excel</Dropdown.Item>
-                    <Dropdown.Item>PDF</Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown>
               </div>
             </div>
           </div>

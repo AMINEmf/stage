@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo, forwardRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import * as XLSX from "xlsx";
 import axios from "axios";
 import { Button, Dropdown, Form, Badge } from "react-bootstrap";
 import { faEdit, faTrash, faFileExcel, faSliders, faCalendarAlt, faClipboardCheck, faFilter, faClose } from "@fortawesome/free-solid-svg-icons";
@@ -72,7 +75,8 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
         isAddingEmploye,
         setIsAddingEmploye,
         filtersVisible,
-        handleFiltersToggle
+        handleFiltersToggle,
+        departementName = "Tous"
     } = props;
 
     const { dynamicStyles } = useOpen();
@@ -289,6 +293,98 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
         setEditingItem(null);
     }
 
+    const exportToPDF = useCallback(() => {
+        const doc = new jsPDF();
+        const tableColumn = columns_config.filter(col => col.visible && col.key !== 'actions').map(col => col.label);
+        const tableRows = data.map(row =>
+            columns_config.filter(col => col.visible && col.key !== 'actions').map(col => {
+                if (col.key === 'periode') return `${row.mois}/${row.annee}`;
+                if (col.key === 'total_montant') return `${parseFloat(row.total_montant || 0).toLocaleString()} DH`;
+                return row[col.key];
+            })
+        );
+        doc.setFontSize(18);
+        doc.text(`Déclarations CIMR`, 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 30);
+        doc.autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 35,
+        });
+        doc.save(`declarations_cimr_${new Date().toISOString()}.pdf`);
+    }, [columns_config, data]);
+
+    const exportToExcel = useCallback(() => {
+        const ws = XLSX.utils.json_to_sheet(
+            data.map(row => {
+                const item = {};
+                columns_config.forEach(col => {
+                    if (col.visible && col.key !== 'actions') {
+                        if (col.key === 'periode') item[col.label] = `${row.mois}/${row.annee}`;
+                        else if (col.key === 'total_montant') item[col.label] = row.total_montant;
+                        else item[col.label] = row[col.key];
+                    }
+                });
+                return item;
+            })
+        );
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Déclarations");
+        XLSX.writeFile(wb, `declarations_cimr_${new Date().toISOString()}.xlsx`);
+    }, [columns_config, data]);
+
+    const handlePrint = useCallback(() => {
+        const printWindow = window.open("", "_blank");
+        const tableColumn = columns_config.filter(col => col.visible && col.key !== 'actions').map(col => col.label);
+        const tableRows = data.map(row =>
+            columns_config.filter(col => col.visible && col.key !== 'actions').map(col => {
+                if (col.key === 'periode') return `${row.mois}/${row.annee}`;
+                if (col.key === 'total_montant') return `${parseFloat(row.total_montant || 0).toLocaleString()} DH`;
+                return row[col.key];
+            })
+        );
+
+        printWindow.document.write(`
+          <html>
+            <head>
+              <style>
+                body { font-family: Arial, sans-serif; }
+                table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+                th { background-color: #f2f2f2; color: #2c767c; }
+                .header { margin-bottom: 20px; }
+                @page { margin: 1cm; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Déclarations CIMR</h1>
+                <p>Date: ${new Date().toLocaleDateString()}</p>
+              </div>
+              <table>
+                <thead>
+                  <tr>${tableColumn.map(col => `<th>${col}</th>`).join("")}</tr>
+                </thead>
+                <tbody>
+                  ${tableRows.map(row => `
+                    <tr>${row.map(cell => `<td>${cell || ""}</td>`).join("")}</tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }, [columns_config, data]);
+
+    useImperativeHandle(ref, () => ({
+        exportToPDF,
+        exportToExcel,
+        handlePrint
+    }), [exportToPDF, exportToExcel, handlePrint]);
+
     const iconButtonStyle = {
         backgroundColor: "#f9fafb",
         border: "1px solid #ccc",
@@ -384,19 +480,6 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                                         <Dropdown.Menu as={CustomMenu} columns_config={columns_config} setColumnVisibility={setColumnVisibility} />
                                     </Dropdown>
 
-                                    {!isAddingEmploye && (
-                                        <div className="d-flex">
-                                            <div style={iconButtonStyle} title="Calendrier">
-                                                <FontAwesomeIcon icon={faCalendarAlt} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
-                                            </div>
-                                            <div style={iconButtonStyle} title="Presse-papiers">
-                                                <FontAwesomeIcon icon={faClipboardCheck} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
-                                            </div>
-                                            <div style={iconButtonStyle} onClick={() => console.log("Export Excel")} title="Exporter Excel">
-                                                <FontAwesomeIcon icon={faFileExcel} style={{ fontSize: "1.2rem", color: "#2c767c" }} />
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>

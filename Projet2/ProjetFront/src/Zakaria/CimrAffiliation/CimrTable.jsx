@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo, forwardRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import * as XLSX from "xlsx";
 import axios from "axios";
 import { Button, Dropdown, Form } from "react-bootstrap";
 import { faEdit, faTrash, faFileExcel, faSliders, faCalendarAlt, faClipboardCheck, faFilter, faClose } from "@fortawesome/free-solid-svg-icons";
@@ -50,6 +53,27 @@ const mapUiToApi = (ui, deptId) => ({
     statut: ui.statut,
 });
 
+// Column visibility menu
+const CustomMenu = forwardRef(({ children, style, className, 'aria-labelledby': labeledBy, columns_config, setColumnVisibility }, ref) => (
+    <div ref={ref} style={{ ...style, padding: '10px', minWidth: '200px' }} className={className} aria-labelledby={labeledBy}>
+        <h6 className='p-2 mb-0'>Colonnes visibles</h6>
+        <hr className='my-2' />
+        <Form className='p-2'>
+            {(columns_config || []).map(col => (
+                <Form.Check
+                    key={col.key}
+                    type="checkbox"
+                    label={col.label}
+                    checked={col.visible}
+                    onChange={() => setColumnVisibility(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
+                    className='mb-2'
+                />
+            ))}
+        </Form>
+    </div>
+));
+CustomMenu.displayName = 'CustomMenu';
+
 const CimrTable = forwardRef((props, ref) => {
     const {
         departementId,
@@ -60,7 +84,8 @@ const CimrTable = forwardRef((props, ref) => {
         isAddingEmploye,
         setIsAddingEmploye,
         filtersVisible,
-        handleFiltersToggle
+        handleFiltersToggle,
+        departementName = "Tous"
     } = props;
 
     const { dynamicStyles } = useOpen();
@@ -228,25 +253,89 @@ const CimrTable = forwardRef((props, ref) => {
         setEditingItem(null);
     }
 
-    const CustomMenu = forwardRef(({ children, style, className, 'aria-labelledby': labeledBy }, ref) => (
-        <div ref={ref} style={{ ...style, padding: '10px', minWidth: '200px' }} className={className} aria-labelledby={labeledBy}>
-            <h6 className='p-2 mb-0'>Colonnes visibles</h6>
-            <hr className='my-2' />
-            <Form className='p-2'>
-                {columns_config.map(col => (
-                    <Form.Check
-                        key={col.key}
-                        type="checkbox"
-                        label={col.label}
-                        checked={col.visible}
-                        onChange={() => setColumnVisibility(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
-                        className='mb-2'
-                    />
-                ))}
-            </Form>
-        </div>
-    ));
-    CustomMenu.displayName = 'CustomMenu';
+    const exportToPDF = useCallback(() => {
+        const doc = new jsPDF();
+        const tableColumn = columns_config.filter(col => col.visible).map(col => col.label);
+        const tableRows = searched.map(row =>
+            columns_config.filter(col => col.visible).map(col => row[col.key])
+        );
+        doc.setFontSize(18);
+        doc.text(`Affiliations CIMR - ${departementName}`, 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 30);
+        doc.autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 35,
+        });
+        doc.save(`affiliations_cimr_${props.departementName || "tous"}_${new Date().toISOString()}.pdf`);
+    }, [columns_config, searched, props.departementName]);
+
+    const exportToExcel = useCallback(() => {
+        const ws = XLSX.utils.json_to_sheet(
+            searched.map(row => {
+                const item = {};
+                columns_config.forEach(col => {
+                    if (col.visible) {
+                        item[col.label] = row[col.key];
+                    }
+                });
+                return item;
+            })
+        );
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Affiliations");
+        XLSX.writeFile(wb, `affiliations_cimr_${departementName}_${new Date().toISOString()}.xlsx`);
+    }, [columns_config, searched, departementName]);
+
+    const handlePrint = useCallback(() => {
+        const printWindow = window.open("", "_blank");
+        const tableColumn = columns_config.filter(col => col.visible).map(col => col.label);
+        const tableRows = searched.map(row =>
+            columns_config.filter(col => col.visible).map(col => row[col.key])
+        );
+
+        printWindow.document.write(`
+          <html>
+            <head>
+              <style>
+                body { font-family: Arial, sans-serif; }
+                table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+                th { background-color: #f2f2f2; color: #2c767c; }
+                .header { margin-bottom: 20px; }
+                @page { margin: 1cm; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Affiliations CIMR - ${departementName}</h1>
+                <p>Date: ${new Date().toLocaleDateString()}</p>
+              </div>
+              <table>
+                <thead>
+                  <tr>${tableColumn.map(col => `<th>${col}</th>`).join("")}</tr>
+                </thead>
+                <tbody>
+                  ${tableRows.map(row => `
+                    <tr>${row.map(cell => `<td>${cell || ""}</td>`).join("")}</tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }, [columns_config, searched, departementName]);
+
+
+    useImperativeHandle(ref, () => ({
+        exportToPDF,
+        exportToExcel,
+        handlePrint
+    }), [exportToPDF, exportToExcel, handlePrint]);
+
 
     return (
         <ThemeProvider theme={theme}>
@@ -309,25 +398,9 @@ const CimrTable = forwardRef((props, ref) => {
                                     <Dropdown.Toggle as="button" style={iconButtonStyle} title="Visibilité Colonnes">
                                         <FontAwesomeIcon icon={faSliders} style={{ width: 18, height: 18, color: "#4b5563" }} />
                                     </Dropdown.Toggle>
-                                    <Dropdown.Menu as={CustomMenu} />
+                                    <Dropdown.Menu as={CustomMenu} columns_config={columns_config} setColumnVisibility={setColumnVisibility} />
                                 </Dropdown>
 
-                                <button style={iconButtonStyle} title="Planning">
-                                    <FontAwesomeIcon icon={faCalendarAlt} style={{ width: 18, height: 18, color: '#4b5563' }} />
-                                </button>
-                                <button style={iconButtonStyle} title="Règles">
-                                    <FontAwesomeIcon icon={faClipboardCheck} style={{ width: 18, height: 18, color: '#4b5563' }} />
-                                </button>
-
-                                <Dropdown>
-                                    <Dropdown.Toggle as="button" style={iconButtonStyle} title="Export">
-                                        <FontAwesomeIcon icon={faFileExcel} style={{ width: 18, height: 18, color: '#4b5563' }} />
-                                    </Dropdown.Toggle>
-                                    <Dropdown.Menu>
-                                        <Dropdown.Item>Excel</Dropdown.Item>
-                                        <Dropdown.Item>PDF</Dropdown.Item>
-                                    </Dropdown.Menu>
-                                </Dropdown>
                             </div>
                         </div>
                     </div>

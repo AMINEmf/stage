@@ -10,12 +10,19 @@ import { Box } from "@mui/material";
 
 function CimrDeclarationManager() {
     const [isAddingEmploye, setIsAddingEmploye] = useState(false);
-    const { setTitle } = useHeader();
+    const { setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, clearActions } = useHeader();
     const { dynamicStyles } = useOpen();
+    const tableRef = useRef(null);
 
     useEffect(() => {
         setTitle("Déclarations CIMR");
-    }, [setTitle]);
+        setOnPrint(() => () => { if (tableRef.current) tableRef.current.handlePrint(); });
+        setOnExportPDF(() => () => { if (tableRef.current) tableRef.current.exportToPDF(); });
+        setOnExportExcel(() => () => { if (tableRef.current) tableRef.current.exportToExcel(); });
+        return () => {
+            clearActions();
+        };
+    }, [setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, clearActions]);
 
     return (
         <ThemeProvider theme={createTheme()}>
@@ -23,6 +30,7 @@ function CimrDeclarationManager() {
                 <Box component="main" sx={{ flexGrow: 1, p: 0, mt: 12 }}>
                     <div style={{ padding: "0 20px" }}>
                         <CimrDeclarationTable
+                            ref={tableRef}
                             isAddingEmploye={isAddingEmploye}
                             setIsAddingEmploye={setIsAddingEmploye}
                         />

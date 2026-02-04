@@ -378,6 +378,7 @@ const Navigation = () => {
   const [isTraitementPaieOpen, setIsTraitementPaieOpen] = useState(false);
   const [isCongeOpen, setIsCongeOpen] = useState(false);
   const [isSocieteOpen, setIsSocieteOpen] = useState(false);
+  const [isCimrOpen, setIsCimrOpen] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
 
 
@@ -446,6 +447,10 @@ const Navigation = () => {
 
   const handleThemeClick = () => {
     setIsThemeOpen(!isThemeOpen);
+  };
+
+  const handleCimrClick = () => {
+    setIsCimrOpen(!isCimrOpen);
   };
 
 
@@ -853,33 +858,36 @@ const Navigation = () => {
               <ListItemText primary="Accidents de travail" />
             </ListItem>
 
-            {/* Menu pour Affiliations CIMR */}
+            {/* Menu Gestion CIMR */}
             <ListItem
               button
-              component={Link}
-              to="/cimr-affiliations"
-              style={{ color: "white" }}
+              onClick={handleCimrClick}
               sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+              style={{ color: "white", display: "flex" }}
             >
-              <ListItemIcon>
+              <ListItemIcon >
                 <AssignmentIndIcon style={{ fontSize: "1.6rem", color: "white" }} />
               </ListItemIcon>
-              <ListItemText primary="Affiliations CIMR" />
+              <ListItemText primary="Gestion CIMR" />
+              {isCimrOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
             </ListItem>
 
-            {/* Menu pour Déclarations CIMR */}
-            <ListItem
-              button
-              component={Link}
-              to="/cimr-declarations"
-              style={{ color: "white" }}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-            >
-              <ListItemIcon>
-                <AssignmentIndIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Déclarations CIMR" />
-            </ListItem>
+            <Collapse in={isCimrOpen} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding>
+                <SubMenuItem button component={Link} to="/cimr-affiliations">
+                  <ListItemIcon>
+                    <AssignmentIndIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Affiliations CIMR" />
+                </SubMenuItem>
+                <SubMenuItem button component={Link} to="/cimr-declarations">
+                  <ListItemIcon>
+                    <AssignmentIndIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Déclarations CIMR" />
+                </SubMenuItem>
+              </List>
+            </Collapse>
 
 
 
