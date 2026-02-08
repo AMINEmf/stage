@@ -1,0 +1,727 @@
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
+import axios from "axios";
+import { Button, Dropdown, Form } from "react-bootstrap";
+import { faClose, faEye, faFilter, faSliders } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import Swal from "sweetalert2";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import * as XLSX from "xlsx";
+import { FaPlusCircle } from "react-icons/fa";
+import { motion, AnimatePresence } from "framer-motion";
+import ExpandRTable from "../Employe/ExpandRTable";
+import AddDeclarationCNSS from "./AddDeclarationCNSS";
+import DeclarationDetails from "./DeclarationDetails";
+import "../Style.css";
+
+const monthLabelFromNumber = (monthValue) => {
+  const month = Number(monthValue);
+  const labels = [
+    "Janvier",
+    "Fevrier",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Aout",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Decembre",
+  ];
+
+  if (month < 1 || month > 12) return "-";
+  return labels[month - 1];
+};
+
+const formatCurrency = (value) => {
+  const parsedValue = Number(value ?? 0);
+  if (!Number.isFinite(parsedValue)) return "-";
+  return `${parsedValue.toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} MAD`;
+};
+
+const normalizeValue = (value) => (value == null ? "" : String(value).toLowerCase().trim());
+
+const DeclarationsTable = forwardRef((props, ref) => {
+  const { globalSearch, filtersVisible, handleFiltersToggle } = props;
+
+  const [declarations, setDeclarations] = useState([]);
+  const [drawerMode, setDrawerMode] = useState(null);
+  const [selectedDeclaration, setSelectedDeclaration] = useState(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [columnVisibility, setColumnVisibility] = useState({});
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [isTableLoading, setIsTableLoading] = useState(false);
+  const [filterOptions, setFilterOptions] = useState({
+    filters: [
+      {
+        key: "statut",
+        label: "Statut",
+        type: "select",
+        value: "",
+        options: [
+          { label: "En attente", value: "EN_ATTENTE" },
+          { label: "Declare", value: "DECLARE" },
+          { label: "Paye", value: "PAYE" },
+        ],
+        placeholder: "Tous",
+      },
+    ],
+  });
+
+  const allColumns = useMemo(
+    () => [
+      {
+        key: "mois",
+        label: "Mois",
+        render: (item) => <span>{monthLabelFromNumber(item.mois)}</span>,
+      },
+      { key: "annee", label: "Annee" },
+      {
+        key: "nombre_employes",
+        label: "Nombre d'employes declares",
+        render: (item) => <span>{item.nombre_employes ?? 0}</span>,
+      },
+      {
+        key: "masse_salariale",
+        label: "Masse salariale",
+        render: (item) => <span>{formatCurrency(item.masse_salariale)}</span>,
+      },
+      {
+        key: "montant_total",
+        label: "Montant CNSS",
+        render: (item) => <span>{formatCurrency(item.montant_total)}</span>,
+      },
+      {
+        key: "statut",
+        label: "Statut",
+        render: (item) => {
+          const statut = item.statut || "EN_ATTENTE";
+          const badgeClass =
+            statut === "PAYE" ? "bg-success" : statut === "DECLARE" ? "bg-primary" : "bg-secondary";
+          return <span className={`badge ${badgeClass}`}>{statut}</span>;
+        },
+      },
+    ],
+    []
+  );
+  const isFormDrawerOpen = drawerMode === "add" || drawerMode === "edit";
+  const isDetailsDrawerOpen = drawerMode === "view";
+  const isDrawerOpen = isFormDrawerOpen || isDetailsDrawerOpen;
+
+  const visibleColumns = useMemo(() => {
+    return allColumns.filter((column) => columnVisibility[column.key]);
+  }, [allColumns, columnVisibility]);
+
+  const fetchDeclarations = useCallback(async () => {
+    setIsTableLoading(true);
+    try {
+      const response = await axios.get("http://127.0.0.1:8000/api/cnss/declarations");
+      const declarationsData = Array.isArray(response.data) ? response.data : [];
+      setDeclarations(declarationsData);
+    } catch (error) {
+      console.error("Erreur lors de la recuperation des declarations CNSS:", error);
+      Swal.fire("Erreur", "Impossible de charger les declarations CNSS.", "error");
+      setDeclarations([]);
+    } finally {
+      setIsTableLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDeclarations();
+  }, [fetchDeclarations]);
+
+  useEffect(() => {
+    const savedColumnVisibility = localStorage.getItem("cnssDeclarationsColumnVisibility");
+
+    if (savedColumnVisibility) {
+      setColumnVisibility(JSON.parse(savedColumnVisibility));
+      return;
+    }
+
+    const defaultVisibility = {};
+    allColumns.forEach((column) => {
+      defaultVisibility[column.key] = true;
+    });
+    setColumnVisibility(defaultVisibility);
+    localStorage.setItem("cnssDeclarationsColumnVisibility", JSON.stringify(defaultVisibility));
+  }, [allColumns]);
+
+  const filteredDeclarationsBySearch = useMemo(() => {
+    const search = normalizeValue(globalSearch);
+
+    return declarations.filter((item) => {
+      if (!search) return true;
+      return (
+        normalizeValue(monthLabelFromNumber(item.mois)).includes(search) ||
+        normalizeValue(item.annee).includes(search) ||
+        normalizeValue(item.statut).includes(search) ||
+        normalizeValue(item.nombre_employes).includes(search)
+      );
+    });
+  }, [declarations, globalSearch]);
+
+  const filteredDeclarations = useMemo(() => {
+    const statutFilter = filterOptions.filters.find((filter) => filter.key === "statut");
+
+    return filteredDeclarationsBySearch.filter((item) => {
+      if (!statutFilter?.value) return true;
+      return normalizeValue(item.statut) === normalizeValue(statutFilter.value);
+    });
+  }, [filteredDeclarationsBySearch, filterOptions]);
+
+  const handleColumnsChange = useCallback((column) => {
+    setColumnVisibility((prev) => {
+      const updated = { ...prev, [column]: !prev[column] };
+      localStorage.setItem("cnssDeclarationsColumnVisibility", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const handleAddNewDeclaration = useCallback(() => {
+    if (drawerMode) return;
+    setSelectedDeclaration(null);
+    setDrawerMode("add");
+  }, [drawerMode]);
+
+  const handleCloseDrawer = useCallback(() => {
+    setDrawerMode(null);
+    setSelectedDeclaration(null);
+  }, []);
+
+  const handleDeclarationSaved = useCallback(async () => {
+    await fetchDeclarations();
+  }, [fetchDeclarations]);
+
+  const handleOpenDetails = useCallback((declaration) => {
+    setSelectedDeclaration(declaration);
+    setDrawerMode("view");
+  }, []);
+
+  const handleEditDeclaration = useCallback((declaration) => {
+    setSelectedDeclaration(declaration);
+    setDrawerMode("edit");
+  }, []);
+
+  const handleDeleteDeclaration = useCallback(
+    async (declarationId) => {
+      const result = await Swal.fire({
+        title: "Etes-vous sur ?",
+        text: "Cette declaration sera supprimee.",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#d33",
+        confirmButtonText: "Oui, supprimer",
+        cancelButtonText: "Annuler",
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        await axios.delete(`http://127.0.0.1:8000/api/cnss/declarations/${declarationId}`);
+        await fetchDeclarations();
+        Swal.fire("Supprime", "La declaration a ete supprimee.", "success");
+      } catch (error) {
+        console.error("Erreur lors de la suppression de la declaration:", error);
+        Swal.fire("Erreur", "Impossible de supprimer la declaration.", "error");
+      }
+    },
+    [fetchDeclarations]
+  );
+
+  const handleChangePage = useCallback((newPage) => {
+    setCurrentPage(newPage);
+  }, []);
+
+  const handleChangeRowsPerPage = useCallback((event) => {
+    setItemsPerPage(parseInt(event.target.value, 10));
+    setCurrentPage(0);
+  }, []);
+
+  const handleSelectAllChange = useCallback(
+    (checked) => {
+      if (checked) {
+        setSelectedItems(filteredDeclarations.map((item) => item.id));
+      } else {
+        setSelectedItems([]);
+      }
+    },
+    [filteredDeclarations]
+  );
+
+  const handleCheckboxChange = useCallback((id) => {
+    setSelectedItems((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((itemId) => itemId !== id);
+      }
+      return [...prev, id];
+    });
+  }, []);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedItems.length === 0) return;
+
+    const result = await Swal.fire({
+      title: "Etes-vous sur ?",
+      text: "Les declarations selectionnees seront supprimees.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Oui, supprimer",
+      cancelButtonText: "Annuler",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await Promise.all(
+        selectedItems.map((declarationId) =>
+          axios.delete(`http://127.0.0.1:8000/api/cnss/declarations/${declarationId}`)
+        )
+      );
+      setSelectedItems([]);
+      await fetchDeclarations();
+      Swal.fire("Supprime", "Les declarations ont ete supprimees.", "success");
+    } catch (error) {
+      console.error("Erreur lors de la suppression des declarations:", error);
+      Swal.fire("Erreur", "Impossible de supprimer les declarations selectionnees.", "error");
+    }
+  }, [fetchDeclarations, selectedItems]);
+
+  const handleFilterChange = useCallback((key, value) => {
+    setFilterOptions((prev) => ({
+      ...prev,
+      filters: prev.filters.map((filter) => (filter.key === key ? { ...filter, value } : filter)),
+    }));
+  }, []);
+
+  const highlightText = useCallback((text, searchTerm) => {
+    if (!text || !searchTerm) return text;
+
+    const textStr = String(text);
+    const searchTermLower = searchTerm.toLowerCase();
+
+    if (!textStr.toLowerCase().includes(searchTermLower)) return textStr;
+
+    const parts = textStr.split(new RegExp(`(${searchTerm})`, "gi"));
+    return parts.map((part, index) =>
+      part.toLowerCase() === searchTermLower ? (
+        <mark key={`${part}-${index}`} style={{ backgroundColor: "yellow" }}>
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  }, []);
+
+  const exportToPDF = useCallback(() => {
+    const doc = new jsPDF();
+    const tableColumns = allColumns.filter((column) => columnVisibility[column.key]).map((column) => column.label);
+    const tableRows = filteredDeclarations.map((item) =>
+      allColumns
+        .filter((column) => columnVisibility[column.key])
+        .map((column) => {
+          if (column.key === "mois") return monthLabelFromNumber(item.mois);
+          if (column.key === "montant_total" || column.key === "masse_salariale") {
+            return formatCurrency(item[column.key]);
+          }
+          return item[column.key];
+        })
+    );
+
+    doc.setFontSize(18);
+    doc.text("Declarations CNSS", 14, 22);
+    doc.setFontSize(11);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 30);
+    doc.autoTable({
+      head: [tableColumns],
+      body: tableRows,
+      startY: 35,
+    });
+    doc.save("cnss_declarations.pdf");
+  }, [allColumns, columnVisibility, filteredDeclarations]);
+
+  const exportToExcel = useCallback(() => {
+    const worksheetData = filteredDeclarations.map((item) => {
+      const row = {};
+      allColumns.forEach((column) => {
+        if (!columnVisibility[column.key]) return;
+        if (column.key === "mois") {
+          row[column.label] = monthLabelFromNumber(item.mois);
+        } else if (column.key === "montant_total" || column.key === "masse_salariale") {
+          row[column.label] = formatCurrency(item[column.key]);
+        } else {
+          row[column.label] = item[column.key];
+        }
+      });
+      return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(worksheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Declarations CNSS");
+    XLSX.writeFile(wb, "cnss_declarations.xlsx");
+  }, [allColumns, columnVisibility, filteredDeclarations]);
+
+  const handlePrint = useCallback(() => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const tableColumns = allColumns.filter((column) => columnVisibility[column.key]).map((column) => column.label);
+    const tableRows = filteredDeclarations.map((item) =>
+      allColumns
+        .filter((column) => columnVisibility[column.key])
+        .map((column) => {
+          if (column.key === "mois") return monthLabelFromNumber(item.mois);
+          if (column.key === "montant_total" || column.key === "masse_salariale") {
+            return formatCurrency(item[column.key]);
+          }
+          return item[column.key];
+        })
+    );
+
+    const tableHtml = `
+      <html>
+        <head>
+          <title>Declarations CNSS</title>
+          <style>
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+          </style>
+        </head>
+        <body>
+          <h1>Declarations CNSS</h1>
+          <table>
+            <thead>
+              <tr>${tableColumns.map((column) => `<th>${column}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${tableRows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(tableHtml);
+    printWindow.document.close();
+    printWindow.print();
+  }, [allColumns, columnVisibility, filteredDeclarations]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      exportToPDF,
+      exportToExcel,
+      handlePrint,
+    }),
+    [exportToPDF, exportToExcel, handlePrint]
+  );
+
+  const iconButtonStyle = {
+    backgroundColor: "#f9fafb",
+    border: "1px solid #ccc",
+    borderRadius: "5px",
+    padding: "13px 16px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+
+  const CustomMenu = React.forwardRef(({ className, "aria-labelledby": labeledBy }, customRef) => (
+    <div
+      ref={customRef}
+      className={className}
+      aria-labelledby={labeledBy}
+      style={{
+        padding: "10px",
+        backgroundColor: "white",
+        border: "1px solid #ccc",
+        borderRadius: "5px",
+        maxHeight: "400px",
+        overflowY: "auto",
+      }}
+    >
+      <Form onClick={(event) => event.stopPropagation()}>
+        {allColumns.map((column) => (
+          <Form.Check
+            key={column.key}
+            type="checkbox"
+            id={`declaration-column-${column.key}`}
+            label={column.label}
+            checked={columnVisibility[column.key]}
+            onChange={() => handleColumnsChange(column.key)}
+          />
+        ))}
+      </Form>
+    </div>
+  ));
+
+  return (
+    <div className="with-split-view" style={{
+      display: 'flex',
+      width: '100%',
+      height: 'calc(100vh - 120px)',
+      overflow: 'hidden'
+    }}>
+      <style>
+        {`
+        .with-split-view .addemp-overlay, 
+        .with-split-view .add-cnss-container, 
+        .with-split-view .add-accident-container,
+        .with-split-view .side-panel-container {
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            box-shadow: none !important;
+            animation: none !important;
+            border-radius: 0 !important;
+        }
+        `}
+      </style>
+
+      {/* Colonne de Gauche : Tableau */}
+      <div style={{
+        flex: isDrawerOpen ? '0 0 55%' : '1 1 100%',
+        overflowY: 'auto',
+        overflowX: 'auto',
+        borderRight: isDrawerOpen ? '2px solid #eef2f5' : 'none',
+        transition: 'flex 0.3s ease-in-out',
+        padding: '0 20px'
+      }}>
+        <div className="mt-4">
+          <div className="section-header mb-3">
+            <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
+              <div>
+                <span className="section-title mb-1">
+                  <i className="fas fa-id-card me-2"></i>
+                  Declarations CNSS
+                </span>
+                {!isFormDrawerOpen && (
+                  <p className="section-description text-muted mb-0">
+                    {filteredDeclarations.length} declaration{filteredDeclarations.length > 1 ? "s" : ""} affichee
+                    {filteredDeclarations.length > 1 ? "s" : ""}
+                  </p>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                {!isDrawerOpen && (
+                  <>
+                    <FontAwesomeIcon
+                      onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
+                      icon={filtersVisible ? faClose : faFilter}
+                      color={filtersVisible ? "green" : ""}
+                      style={{
+                        cursor: "pointer",
+                        fontSize: "1.9rem",
+                        color: "#2c767c",
+                        marginTop: "1.3%",
+                        marginRight: "8px",
+                      }}
+                    />
+
+                    <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
+                      <Dropdown.Toggle
+                        as="button"
+                        id="dropdown-visibility-declarations"
+                        title="Visibilite Colonnes"
+                        style={iconButtonStyle}
+                      >
+                        <FontAwesomeIcon icon={faSliders} style={{ width: 18, height: 18, color: "#4b5563" }} />
+                      </Dropdown.Toggle>
+                      <Dropdown.Menu as={CustomMenu} />
+                    </Dropdown>
+                  </>
+                )}
+
+                <Button
+                  onClick={handleAddNewDeclaration}
+                  className="btn btn-outline-primary d-flex align-items-center"
+                  size="sm"
+                  style={{ width: "170px" }}
+                >
+                  <FaPlusCircle className="me-2" />
+                  Ajouter une declaration CNSS
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {filtersVisible && !isDrawerOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="filters-container"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                padding: "16px 20px",
+                minHeight: 0,
+              }}
+            >
+              <div
+                className="filters-icon-section"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  justifyContent: "center",
+                  marginLeft: "-8px",
+                  marginRight: "14%",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4a90a4" strokeWidth="2">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                <span className="filters-title">Filtres</span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1px",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  marginLeft: "10.2%",
+                }}
+              >
+                {filterOptions.filters.map((filter) => (
+                  <div key={filter.key} style={{ display: "flex", alignItems: "center", margin: 0, marginRight: "46px" }}>
+                    <label
+                      className="filter-label"
+                      style={{
+                        fontSize: "0.9rem",
+                        margin: 0,
+                        marginRight: "-44px",
+                        whiteSpace: "nowrap",
+                        minWidth: "auto",
+                        fontWeight: 600,
+                        color: "#2c3e50",
+                      }}
+                    >
+                      {filter.label}
+                    </label>
+
+                    <select
+                      value={filter.value}
+                      onChange={(event) => handleFilterChange(filter.key, event.target.value)}
+                      className="filter-input"
+                      style={{
+                        minWidth: 110,
+                        maxWidth: 130,
+                        height: 30,
+                        fontSize: "0.9rem",
+                        padding: "2px 6px",
+                        borderRadius: 6,
+                      }}
+                    >
+                      <option value="">{filter.placeholder}</option>
+                      {filter.options?.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <ExpandRTable
+          columns={visibleColumns}
+          data={filteredDeclarations}
+          loading={isTableLoading}
+          loadingText="Chargement des declarations CNSS..."
+          searchTerm={normalizeValue(globalSearch)}
+          highlightText={highlightText}
+          selectAll={selectedItems.length === filteredDeclarations.length && filteredDeclarations.length > 0}
+          selectedItems={selectedItems}
+          handleSelectAllChange={handleSelectAllChange}
+          handleCheckboxChange={handleCheckboxChange}
+          handleEdit={handleEditDeclaration}
+          handleDelete={handleDeleteDeclaration}
+          handleDeleteSelected={handleDeleteSelected}
+          rowsPerPage={itemsPerPage}
+          page={currentPage}
+          handleChangePage={handleChangePage}
+          handleChangeRowsPerPage={handleChangeRowsPerPage}
+          expandedRows={[]}
+          toggleRowExpansion={() => { }}
+          renderExpandedRow={() => null}
+          renderCustomActions={(item) => (
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenDetails(item);
+              }}
+              aria-label="Voir details"
+              title="Voir details"
+              style={{
+                border: "none",
+                backgroundColor: "transparent",
+                cursor: "pointer",
+              }}
+            >
+              <FontAwesomeIcon icon={faEye} style={{ color: "#007bff", fontSize: "14px" }} />
+            </button>
+          )}
+        />
+      </div>
+
+      {/* Colonne de Droite : Formulaire */}
+      {isDrawerOpen && (
+        <div style={{
+          flex: '0 0 45%',
+          overflowY: 'auto',
+          backgroundColor: '#fdfdfd',
+          boxShadow: '-4px 0 15px rgba(0,0,0,0.05)',
+          position: 'relative'
+        }}>
+          {isFormDrawerOpen && (
+            <AddDeclarationCNSS
+              toggleDeclarationForm={handleCloseDrawer}
+              onDeclarationSaved={handleDeclarationSaved}
+              selectedDeclaration={selectedDeclaration}
+            />
+          )}
+
+          {isDetailsDrawerOpen && selectedDeclaration && (
+            <DeclarationDetails declaration={selectedDeclaration} onClose={handleCloseDrawer} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+export default DeclarationsTable;

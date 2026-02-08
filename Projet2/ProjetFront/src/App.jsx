@@ -8,6 +8,9 @@ import Navigation from './Acceuil/Navigation';
 import Dashboard from './Acceuil/Dashboard';
 import DepartementManager from './Zakaria/Employe/DepartementManager';
 import CNSS from './Zakaria/cnss';
+import CNSSDashboard from './Zakaria/cnss/CNSSDashboard';
+import DeclarationsCNSS from './Zakaria/cnss/DeclarationsCNSS';
+import DossierCNSS from './Zakaria/cnss/DossierCNSS';
 import EmpHistorique from './Zakaria/EmpHistorique.jsx';
 
 
@@ -31,12 +34,15 @@ const App = () => {
         <HeaderProvider>
           {showNavigation && <Navigation />}
           <Routes>
-                        <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard />} />
 
             <Route path="/login" element={<Login />} />
 
             <Route path="/employes" element={<DepartementManager />} />
             <Route path="/cnss" element={<CNSS />} />
+            <Route path="/cnss/dashboard" element={<CNSSDashboard />} />
+            <Route path="/cnss/declarations" element={<DeclarationsCNSS />} />
+            <Route path="/cnss/dossiers" element={<DossierCNSS />} />
 
             <Route path="/emphistorique" element={<EmpHistorique />} />
 
@@ -44,8 +50,8 @@ const App = () => {
 
 
 
-       
-            <Route path="/societes" element={<Societe/>}/>
+
+            <Route path="/societes" element={<Societe />} />
 
 
 

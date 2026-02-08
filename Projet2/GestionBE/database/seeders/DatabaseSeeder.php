@@ -26,6 +26,11 @@ class DatabaseSeeder extends Seeder
         
         ClientSeeder::class]);
 
+        $this->call([
+            DeclarationsCnssSeeder::class,
+            DetailsDeclarationCnssSeeder::class,
+        ]);
+
        
     
 

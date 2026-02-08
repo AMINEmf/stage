@@ -41,6 +41,8 @@ const ExpandRTable = ({
   expansionType = 'default',
   supportPDF = false,
   getRowStyle,
+  loading = false,
+  loadingText = 'Chargement...',
   canEdit = true,
   canDelete = true,
   canBulkDelete = true,
@@ -310,10 +312,21 @@ const ExpandRTable = ({
             </TableHead>
 
             <TableBody>
-              {filteredItems
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((item, index) => {
-                  return (
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length + (hasActions ? 1 : 0) + 1}
+                    align="center"
+                    sx={{ padding: '24px', color: '#6b7280' }}
+                  >
+                    {loadingText}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredItems
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((item, index) => {
+                    return (
                     <React.Fragment key={item.id || `row-${Math.random()}`}>
                       <TableRow
                         onClick={() => toggleRowExpansion && toggleRowExpansion(item.id)}
@@ -515,10 +528,11 @@ const ExpandRTable = ({
                         </TableRow>
                       )}
                     </React.Fragment>
-                  );
-                })}
+                    );
+                  })
+              )}
                 
-              {filteredItems.length === 0 && (
+              {!loading && filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell 
                     colSpan={columns.length + (hasActions ? 1 : 0) + 1}

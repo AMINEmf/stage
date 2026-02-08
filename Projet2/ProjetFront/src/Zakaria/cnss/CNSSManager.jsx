@@ -85,14 +85,6 @@ function CNSSManager() {
       console.log('CNSS: Departments fetched:', response.data);
       setDepartements(response.data);
       localStorage.setItem('departmentHierarchy', JSON.stringify(response.data));
-      
-      // Auto-select first department
-      if (response.data && response.data.length > 0) {
-        const firstDept = response.data[0];
-        console.log('CNSS: Auto-selecting first department:', firstDept.id, firstDept.nom);
-        setSelectedDepartementId(firstDept.id);
-        setSelectedDepartementName(firstDept.nom);
-      }
     } catch (error) {
       console.error("CNSS: Error fetching department hierarchy:", error);
       if (error.response && error.response.status === 403) {
@@ -114,12 +106,6 @@ function CNSSManager() {
       const cached = JSON.parse(departmentsFromStorage);
       console.log('CNSS: Loading departments from cache:', cached);
       setDepartements(cached);
-      
-      // Auto-select first department from cache
-      if (cached && cached.length > 0) {
-        setSelectedDepartementId(cached[0].id);
-        setSelectedDepartementName(cached[0].nom);
-      }
     }
 
     fetchDepartmentHierarchy();
@@ -333,8 +319,14 @@ function CNSSManager() {
   };
 
   const handleAddCNSSClick = (id) => {
+    if (!id) {
+      return;
+    }
+
+    const targetDepartement = findDepartement(departements, id);
     setIsAddingCNSS(true);
     setSelectedDepartementId(id);
+    setSelectedDepartementName(targetDepartement?.nom || null);
     setContextMenu({ visible: false, x: 0, y: 0 });
   };
 

@@ -68,6 +68,21 @@ public function contrat()
         return $this->hasMany(Contrat::class);
     }
 
+    public function cnssAffiliations()
+    {
+        return $this->hasMany(CnssAffiliation::class, 'employe_id');
+    }
+
+    public function cnssDocuments()
+    {
+        return $this->hasMany(CnssDocument::class, 'employe_id');
+    }
+
+    public function cnssOperations()
+    {
+        return $this->hasMany(CnssOperation::class, 'employe_id');
+    }
+
 
     public function calendriersEmployes()
     {
@@ -142,5 +157,3 @@ protected static function booted()
 
 
 }
-
-
