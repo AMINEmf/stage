@@ -481,14 +481,19 @@ const DossierCNSSTable = forwardRef((props, ref) => {
                         }}
                       />
                       <Button
-                        onClick={handleOpenAddOperation}
+                        onClick={() => {
+                          if (!canOpenAddOperation) return;
+                          handleOpenAddOperation();
+                        }}
                         className={`btn btn-outline-primary d-flex align-items-center ${!canOpenAddOperation ? "disabled-btn" : ""}`}
-                        disabled={!canOpenAddOperation}
                         size="sm"
-                        style={{ marginRight: "30px !important", width: "160px" }}
+                        style={{
+                          marginRight: '30px !important',
+                          width: '160px',
+                        }}
                       >
                         <FaPlusCircle className="me-2" />
-                        Ajouter une Opération
+                        Ajouter une opération
                       </Button>
 
                       <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>

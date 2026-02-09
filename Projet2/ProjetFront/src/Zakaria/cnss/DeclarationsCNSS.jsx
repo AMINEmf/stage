@@ -40,16 +40,14 @@ function DeclarationsCNSS() {
 
   return (
     <ThemeProvider theme={createTheme()}>
-      <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-        <Box component="main" sx={{ flexGrow: 1, p: 0, mt: 12, minHeight: "calc(100vh - 160px)" }}>
-          <div className="departement_home1">
-            <DeclarationsTable
-              ref={declarationsTableRef}
-              globalSearch={searchQuery}
-              filtersVisible={filtersVisible}
-              handleFiltersToggle={handleFiltersToggle}
-            />
-          </div>
+      <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#f5f5f5", height: "100vh", display: "flex", flexDirection: "column" }}>
+        <Box component="main" sx={{ flexGrow: 1, p: 0, mt: 12, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <DeclarationsTable
+            ref={declarationsTableRef}
+            globalSearch={searchQuery}
+            filtersVisible={filtersVisible}
+            handleFiltersToggle={handleFiltersToggle}
+          />
         </Box>
       </Box>
     </ThemeProvider>

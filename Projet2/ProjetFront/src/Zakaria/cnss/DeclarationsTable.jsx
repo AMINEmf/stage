@@ -68,6 +68,41 @@ const DeclarationsTable = forwardRef((props, ref) => {
   const [filterOptions, setFilterOptions] = useState({
     filters: [
       {
+        key: "mois",
+        label: "Mois",
+        type: "select",
+        value: "",
+        options: [
+          { label: "Janvier", value: "1" },
+          { label: "Fevrier", value: "2" },
+          { label: "Mars", value: "3" },
+          { label: "Avril", value: "4" },
+          { label: "Mai", value: "5" },
+          { label: "Juin", value: "6" },
+          { label: "Juillet", value: "7" },
+          { label: "Aout", value: "8" },
+          { label: "Septembre", value: "9" },
+          { label: "Octobre", value: "10" },
+          { label: "Novembre", value: "11" },
+          { label: "Decembre", value: "12" },
+        ],
+        placeholder: "Tous",
+      },
+      {
+        key: "annee",
+        label: "Annee",
+        type: "select",
+        value: "",
+        options: [
+          { label: "2024", value: "2024" },
+          { label: "2025", value: "2025" },
+          { label: "2026", value: "2026" },
+          { label: "2027", value: "2027" },
+          { label: "2028", value: "2028" },
+        ],
+        placeholder: "Toutes",
+      },
+      {
         key: "statut",
         label: "Statut",
         type: "select",
@@ -176,11 +211,27 @@ const DeclarationsTable = forwardRef((props, ref) => {
   }, [declarations, globalSearch]);
 
   const filteredDeclarations = useMemo(() => {
+    const moisFilter = filterOptions.filters.find((filter) => filter.key === "mois");
+    const anneeFilter = filterOptions.filters.find((filter) => filter.key === "annee");
     const statutFilter = filterOptions.filters.find((filter) => filter.key === "statut");
 
     return filteredDeclarationsBySearch.filter((item) => {
-      if (!statutFilter?.value) return true;
-      return normalizeValue(item.statut) === normalizeValue(statutFilter.value);
+      // Filtre par mois
+      if (moisFilter?.value && String(item.mois) !== String(moisFilter.value)) {
+        return false;
+      }
+      
+      // Filtre par année
+      if (anneeFilter?.value && String(item.annee) !== String(anneeFilter.value)) {
+        return false;
+      }
+      
+      // Filtre par statut
+      if (statutFilter?.value && normalizeValue(item.statut) !== normalizeValue(statutFilter.value)) {
+        return false;
+      }
+      
+      return true;
     });
   }, [filteredDeclarationsBySearch, filterOptions]);
 
@@ -477,14 +528,8 @@ const DeclarationsTable = forwardRef((props, ref) => {
   ));
 
   return (
-    <div className="with-split-view" style={{
-      display: 'flex',
-      width: '100%',
-      height: 'calc(100vh - 120px)',
-      overflow: 'hidden'
-    }}>
-      <style>
-        {`
+    <>
+      <style jsx>{`
         .with-split-view .addemp-overlay, 
         .with-split-view .add-cnss-container, 
         .with-split-view .add-accident-container,
@@ -498,18 +543,71 @@ const DeclarationsTable = forwardRef((props, ref) => {
             animation: none !important;
             border-radius: 0 !important;
         }
-        `}
-      </style>
+        
+        /* Styles de section header */
+        .section-header {
+            border-bottom: none;
+            padding-bottom: 15px;
+            margin: 0.5% 1% 1%;
+        }
 
-      {/* Colonne de Gauche : Tableau */}
-      <div style={{
-        flex: isDrawerOpen ? '0 0 55%' : '1 1 100%',
-        overflowY: 'auto',
-        overflowX: 'auto',
-        borderRight: isDrawerOpen ? '2px solid #eef2f5' : 'none',
-        transition: 'flex 0.3s ease-in-out',
-        padding: '0 20px'
+        .section-title {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            font-size: 19px;
+        }
+
+        .section-title i {
+            color: rgba(8, 179, 173, 0.02);
+            background: #3a8a90;
+            padding: 6px;
+            border-radius: 60%;
+            margin-right: 10px;
+        }
+
+        .section-description {
+            color: #6c757d;
+            font-size: 16px;
+            margin-bottom: 0;
+        }
+
+        .btn-primary {
+            background-color: #3a8a90;
+            border-color: #3a8a90;
+            color: white;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            transition: background-color 0.15s ease-in-out;
+        }
+
+        .content-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #4b5563;
+            margin-bottom: 5px;
+        }
+      `}</style>
+
+      <div className="with-split-view" style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden'
       }}>
+        {/* Colonne de Gauche : Tableau */}
+        <div style={{
+          flex: isDrawerOpen ? '0 0 55%' : '1 1 100%',
+          overflowY: 'auto',
+          overflowX: 'auto',
+          borderRight: isDrawerOpen ? '2px solid #eef2f5' : 'none',
+          transition: 'flex 0.3s ease-in-out',
+          padding: '0 20px',
+          backgroundColor: 'white'
+        }}>
         <div className="mt-4">
           <div className="section-header mb-3">
             <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
@@ -703,9 +801,10 @@ const DeclarationsTable = forwardRef((props, ref) => {
         <div style={{
           flex: '0 0 45%',
           overflowY: 'auto',
-          backgroundColor: '#fdfdfd',
+          backgroundColor: '#ffffff',
           boxShadow: '-4px 0 15px rgba(0,0,0,0.05)',
-          position: 'relative'
+          position: 'relative',
+          height: '100%'
         }}>
           {isFormDrawerOpen && (
             <AddDeclarationCNSS
@@ -720,7 +819,8 @@ const DeclarationsTable = forwardRef((props, ref) => {
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 });
 

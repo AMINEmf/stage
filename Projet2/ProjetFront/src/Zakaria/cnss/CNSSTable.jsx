@@ -23,7 +23,20 @@ import { motion, AnimatePresence, color } from 'framer-motion';
 import { FaPlusCircle } from "react-icons/fa";
 import {useOpen} from "../../Acceuil/OpenProvider";
 
-
+// Format date from ISO to DD/MM/YYYY
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '-';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch (error) {
+    return '-';
+  }
+};
 
 const CNSSTable = forwardRef((props, ref) => {
   const {
@@ -53,7 +66,7 @@ const CNSSTable = forwardRef((props, ref) => {
   const [filterOptions, setFilterOptions] = useState({
     filters: [
       { key: 'statut', label: 'Statut', type: 'select', value: '', options: [{ label: 'Actif', value: 'Actif' }, { label: 'Inactif', value: 'Inactif' }], placeholder: 'Tous' },
-      { key: 'salaire', label: 'Salaire', type: 'range', min: '', max: '', placeholderMin: 'Min', placeholderMax: 'Max' }
+      { key: 'periode', label: 'Période d\'affiliation', type: 'dateRange', dateDebut: '', dateFin: '', placeholderDebut: 'Date début', placeholderFin: 'Date fin' }
     ]
   });
   const [showImportDropdown, setShowImportDropdown] = useState(false);
@@ -115,14 +128,14 @@ const CNSSTable = forwardRef((props, ref) => {
       key: "date_debut", 
       label: "Date affiliation",
       render: (item) => (
-        <span>{item.date_debut || item.date_affiliation || '-'}</span>
+        <span>{formatDate(item.date_debut || item.date_affiliation)}</span>
       )
     },
     { 
       key: "date_fin", 
       label: "Date fin",
       render: (item) => (
-        <span>{item.date_fin || '-'}</span>
+        <span>{formatDate(item.date_fin)}</span>
       )
     },
     { 
@@ -369,21 +382,30 @@ const CNSSTable = forwardRef((props, ref) => {
   const applyFilters = (cnssData) => {
     return cnssData.filter(cnss => {
       const statutFilter = filterOptions.filters.find(f => f.key === 'statut');
-      const salaireFilter = filterOptions.filters.find(f => f.key === 'salaire');
+      const periodeFilter = filterOptions.filters.find(f => f.key === 'periode');
 
       const matchesStatut = !statutFilter?.value || cnss.statut?.toLowerCase() === statutFilter.value.toLowerCase();
       
-      // Salary filter
-      const matchesSalaire = (() => {
-        if (!salaireFilter?.min && !salaireFilter?.max) return true;
-        const salary = parseFloat(getEmployeeSalaryValue(cnss)) || 0;
-        const minSalary = salaireFilter.min ? parseFloat(salaireFilter.min) : 0;
-        const maxSalary = salaireFilter.max ? parseFloat(salaireFilter.max) : Infinity;
+      // Date period filter
+      const matchesPeriode = (() => {
+        if (!periodeFilter?.dateDebut && !periodeFilter?.dateFin) return true;
+        const affiliationDate = new Date(cnss.date_debut || cnss.date_affiliation);
+        if (isNaN(affiliationDate.getTime())) return true;
         
-        return salary >= minSalary && salary <= maxSalary;
+        if (periodeFilter.dateDebut) {
+          const startDate = new Date(periodeFilter.dateDebut);
+          if (affiliationDate < startDate) return false;
+        }
+        
+        if (periodeFilter.dateFin) {
+          const endDate = new Date(periodeFilter.dateFin);
+          if (affiliationDate > endDate) return false;
+        }
+        
+        return true;
       })();
 
-      return matchesStatut && matchesSalaire;
+      return matchesStatut && matchesPeriode;
     });
   };
   
@@ -654,11 +676,11 @@ const CNSSTable = forwardRef((props, ref) => {
     });
   };
   
-  // Handle range filter change (for salary and age)
+  // Handle range filter change (for dates)
   const handleRangeFilterChange = (key, type, value) => {
     setFilterOptions(prev => {
       const newFilters = prev.filters.map(filter => {
-        if (filter.key === key && filter.type === 'range') {
+        if (filter.key === key && (filter.type === 'range' || filter.type === 'dateRange')) {
           return { ...filter, [type]: value };
         }
         return filter;
@@ -777,12 +799,16 @@ const CNSSTable = forwardRef((props, ref) => {
 
                          {/* Bouton Ajouter */}
             <Button
-  onClick={handleAddNewCnss}
-  className={`btn btn-outline-primary d-flex align-items-center ${!hasSelectedDepartement ? "disabled-btn" : ""}`}
-  disabled={!hasSelectedDepartement}
-  size="sm"
-              style={{   marginRight:'30px !important' ,
-                width: '160px',              }}
+              onClick={() => {
+                if (!hasSelectedDepartement) return;
+                handleAddNewCnss();
+              }}
+              className={`btn btn-outline-primary d-flex align-items-center ${!hasSelectedDepartement ? "disabled-btn" : ""}`}
+              size="sm"
+              style={{
+                marginRight: '30px !important',
+                width: '160px',
+              }}
             >
               <FaPlusCircle className="me-2" />
               Ajouter une affiliation CNSS
@@ -912,21 +938,21 @@ const CNSSTable = forwardRef((props, ref) => {
                   </option>
                 ))}
               </select>
-            ) : filter.type === 'range' ? (
+            ) : filter.type === 'dateRange' ? (
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: '4px' 
               }}>
                 <input
-                  type="number"
-                  value={filter.min}
-                  onChange={(e) => handleRangeFilterChange(filter.key, 'min', e.target.value)}
-                  placeholder={filter.placeholderMin}
+                  type="date"
+                  value={filter.dateDebut}
+                  onChange={(e) => handleRangeFilterChange(filter.key, 'dateDebut', e.target.value)}
+                  placeholder={filter.placeholderDebut}
                   className="filter-input filter-range-input"
                   style={{ 
-                    minWidth: 50, 
-                    maxWidth: 70, 
+                    minWidth: 110, 
+                    maxWidth: 130, 
                     height: 30, 
                     fontSize: '0.9rem', 
                     padding: '2px 4px', 
@@ -941,14 +967,14 @@ const CNSSTable = forwardRef((props, ref) => {
                   -
                 </span>
                 <input
-                  type="number"
-                  value={filter.max}
-                  onChange={(e) => handleRangeFilterChange(filter.key, 'max', e.target.value)}
-                  placeholder={filter.placeholderMax}
+                  type="date"
+                  value={filter.dateFin}
+                  onChange={(e) => handleRangeFilterChange(filter.key, 'dateFin', e.target.value)}
+                  placeholder={filter.placeholderFin}
                   className="filter-input filter-range-input"
                   style={{ 
-                    minWidth: 50, 
-                    maxWidth: 70, 
+                    minWidth: 110, 
+                    maxWidth: 130, 
                     height: 30, 
                     fontSize: '0.9rem', 
                     padding: '2px 4px', 

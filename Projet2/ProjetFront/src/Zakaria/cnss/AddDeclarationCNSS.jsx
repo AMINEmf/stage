@@ -192,21 +192,24 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
     <>
       <style>
         {`
-
           .side-panel-container {
-            position: fixed !important;
-            top: 9.4%; 
-            left: 60%; 
-            width: 41%;
-            height: calc(100vh - 160px) !important;
-            animation: slideInAccident 0.3s ease-out;
             background: white;
-            z-index: 1000;
             display: flex;
             flex-direction: column;
-            box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-            border-radius: 8px 0 0 8px; /* Slight rounding on left */
+            height: 100%;
           }
+          
+          .with-split-view .side-panel-container {
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            box-shadow: none !important;
+            animation: none !important;
+            border-radius: 0 !important;
+          }
+          
           @keyframes slideInAccident {
             from { transform: translateX(100%); }
             to { transform: translateX(0); }
