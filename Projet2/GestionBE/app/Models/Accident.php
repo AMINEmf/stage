@@ -14,7 +14,7 @@ class Accident extends Model
         'matricule',
         'date_accident',
         'heure',
-        'lieu',
+        'accident_lieu_id',
         'type_accident',
         'gravite',
         'arret_travail',
@@ -23,4 +23,9 @@ class Accident extends Model
         'statut',
         'departement_id',
     ];
+
+    public function lieu()
+    {
+        return $this->belongsTo(AccidentLieu::class, 'accident_lieu_id');
+    }
 }

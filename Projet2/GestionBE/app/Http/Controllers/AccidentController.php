@@ -10,7 +10,7 @@ class AccidentController extends Controller
 {
     public function index()
     {
-        return Accident::orderByDesc('date_accident')->get();
+        return Accident::with('lieu')->orderByDesc('date_accident')->get();
     }
 
     public function store(Request $request)
@@ -28,8 +28,8 @@ class AccidentController extends Controller
             'matricule' => ['required', 'string', 'max:255'],
             'date_accident' => ['required', 'date'],
             'heure' => ['required'],
-            'lieu' => ['required', 'string', 'max:255'],
-            'type_accident' => ['required', 'string', 'max:255'],
+            'accident_lieu_id' => ['required', 'exists:accident_lieux,id'],
+            'type_accident' => ['nullable', 'string', 'max:255'],
             'gravite' => ['required', Rule::in(['léger', 'moyen', 'grave'])],
             'arret_travail' => ['boolean'],
             'duree_arret' => ['integer', 'min:0'],
@@ -38,14 +38,18 @@ class AccidentController extends Controller
             'departement_id' => ['nullable', 'exists:departements,id'],
         ]);
 
+        if (empty($validated['type_accident'])) {
+            $validated['type_accident'] = 'accident de travail';
+        }
+
         $accident = Accident::create($validated);
 
-        return response()->json($accident, 201);
+        return response()->json($accident->load('lieu'), 201);
     }
 
     public function show(Accident $accident)
     {
-        return $accident;
+        return $accident->load('lieu');
     }
 
     public function update(Request $request, Accident $accident)
@@ -63,8 +67,8 @@ class AccidentController extends Controller
             'matricule' => ['sometimes', 'required', 'string', 'max:255'],
             'date_accident' => ['sometimes', 'required', 'date'],
             'heure' => ['sometimes', 'required'],
-            'lieu' => ['sometimes', 'required', 'string', 'max:255'],
-            'type_accident' => ['sometimes', 'required', 'string', 'max:255'],
+            'accident_lieu_id' => ['sometimes', 'required', 'exists:accident_lieux,id'],
+            'type_accident' => ['sometimes', 'nullable', 'string', 'max:255'],
             'gravite' => ['sometimes', 'required', Rule::in(['léger', 'moyen', 'grave'])],
             'arret_travail' => ['sometimes', 'boolean'],
             'duree_arret' => ['sometimes', 'integer', 'min:0'],
@@ -75,7 +79,7 @@ class AccidentController extends Controller
 
         $accident->update($validated);
 
-        return response()->json($accident);
+        return response()->json($accident->load('lieu'));
     }
 
     public function destroy(Accident $accident)

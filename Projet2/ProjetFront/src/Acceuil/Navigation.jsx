@@ -46,6 +46,7 @@ import ShoppingBasketIcon from "@mui/icons-material/ShoppingBasket";
 import DeliveryDiningIcon from "@mui/icons-material/DeliveryDining";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import StarHalfIcon from "@mui/icons-material/StarHalf";
 import { Link } from "react-router-dom";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -874,6 +875,12 @@ const Navigation = () => {
 
             <Collapse in={isCimrOpen} timeout="auto" unmountOnExit>
               <List component="div" disablePadding>
+                <SubMenuItem button component={Link} to="/cimr-dashboard">
+                  <ListItemIcon>
+                    <DashboardIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Dashboard CIMR" />
+                </SubMenuItem>
                 <SubMenuItem button component={Link} to="/cimr-affiliations">
                   <ListItemIcon>
                     <AssignmentIndIcon />

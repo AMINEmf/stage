@@ -83,7 +83,11 @@ function DepartementManager() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await axios.get('http://127.0.0.1:8000/api/departements/hierarchy');
+      const token = localStorage.getItem("API_TOKEN");
+      const response = await axios.get('http://127.0.0.1:8000/api/departements/hierarchy', {
+        withCredentials: true,
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (response.data && Array.isArray(response.data)) {
         setDepartements(response.data);
         localStorage.setItem('departmentHierarchy', JSON.stringify(response.data));
@@ -209,7 +213,7 @@ function DepartementManager() {
         confirmButtonText: 'OK',
       });
 
-      fetchDepartmentHierarchy();
+      fetchDepartements();
     } catch (error) {
       console.error("Error adding sub-department:", error);
 
@@ -541,7 +545,7 @@ function DepartementManager() {
           'success'
         );
 
-        fetchDepartmentHierarchy();
+        fetchDepartements();
       } catch (error) {
         console.error("Erreur lors de la suppression du département:", error);
         Swal.fire(

@@ -57,7 +57,6 @@ const columns = [
   { key: "dateAccident", label: "Date accident" },
   { key: "heure", label: "Heure" },
   { key: "lieu", label: "Lieu" },
-  { key: "typeAccident", label: "Type accident" },
   { key: "gravite", label: "Gravité" },
   { key: "arretTravail", label: "Arrêt travail" },
   { key: "dureeArret", label: "Durée arrêt (j)" },
@@ -71,8 +70,8 @@ const mapApiToUi = (api) => ({
   matricule: (typeof api.matricule === 'string' ? api.matricule : api.employe?.matricule) || "N/A",
   dateAccident: api.date_accident,
   heure: api.heure,
-  lieu: api.lieu,
-  typeAccident: api.type_accident,
+  lieu: api.lieu ? api.lieu.nom : (api.lieu_nom || "N/A"), // Handle object or legacy string if needed
+  accident_lieu_id: api.accident_lieu_id, // For edit mode
   gravite: api.gravite,
   arretTravail: api.arret_travail ? "oui" : "non",
   dureeArret: api.duree_arret || 0,
@@ -87,8 +86,8 @@ const mapUiToApi = (ui, deptId) => ({
   matricule: ui.matricule,
   date_accident: ui.dateAccident,
   heure: ui.heure,
-  lieu: ui.lieu,
-  type_accident: ui.typeAccident,
+  accident_lieu_id: ui.accident_lieu_id,
+  type_accident: "accident de travail",
   gravite: ui.gravite,
   arret_travail: ui.arretTravail === "oui",
   duree_arret: ui.dureeArret ? parseInt(ui.dureeArret) : 0,
@@ -138,13 +137,23 @@ const AccidentTable = forwardRef((props, ref) => {
   const [error, setError] = useState("");
   const [selectedAccidents, setSelectedAccidents] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+
+  // States pour les filtres
+  const [filterEmploye, setFilterEmploye] = useState("");
+  const [filterStatut, setFilterStatut] = useState("");
+  const [filterDate, setFilterDate] = useState("");
+  const [filterLieu, setFilterLieu] = useState("");
+  const [filterGravite, setFilterGravite] = useState("");
+  const [filterArretTravail, setFilterArretTravail] = useState("");
+
+
+
   const [columnVisibility, setColumnVisibility] = useState({
     employe: true,
     matricule: true,
     dateAccident: true,
     heure: true,
     lieu: true,
-    typeAccident: true,
     gravite: true,
     arretTravail: true,
     dureeArret: true,
@@ -172,7 +181,6 @@ const AccidentTable = forwardRef((props, ref) => {
     dateAccident: "",
     heure: "",
     lieu: "",
-    typeAccident: "",
     gravite: "léger",
     arretTravail: "non",
     dureeArret: 0,
@@ -184,7 +192,7 @@ const AccidentTable = forwardRef((props, ref) => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   const filtered = useMemo(() => {
-    if (!departementId) return accidents;
+    if (!departementId) return [];
     const ids = includeSubDepartments && getSubDepartmentIds ? getSubDepartmentIds(departements || [], departementId) : [departementId];
     // Ensure both are numbers for comparison
     const numericIds = ids.map(Number);
@@ -192,12 +200,64 @@ const AccidentTable = forwardRef((props, ref) => {
   }, [accidents, departementId, includeSubDepartments, getSubDepartmentIds, departements]);
 
   const searched = useMemo(() => {
-    if (!globalSearch.trim()) return filtered;
-    const term = globalSearch.toLowerCase();
-    return filtered.filter((row) =>
-      columns.some((c) => String(row[c.key] ?? "").toLowerCase().includes(term))
-    );
-  }, [filtered, globalSearch]);
+    let result = filtered;
+
+    // Filtre global
+    if (globalSearch.trim()) {
+      const term = globalSearch.toLowerCase();
+      // Colonnes à exclure de la recherche : Date accident, Lieu, Type accident, Gravité, Arrêt travail, Statut
+      const excludedKeys = ['dateAccident', 'lieu', 'gravite', 'arretTravail', 'statut'];
+      const searchableColumns = columns.filter(c => !excludedKeys.includes(c.key));
+
+      result = result.filter((row) =>
+        searchableColumns.some((c) => String(row[c.key] ?? "").toLowerCase().includes(term))
+      );
+    }
+
+    // Filtre par employé
+    if (filterEmploye.trim()) {
+      result = result.filter(row =>
+        (row.employe || "").toLowerCase().includes(filterEmploye.toLowerCase())
+      );
+    }
+
+    // Filtre par statut
+    if (filterStatut.trim()) {
+      result = result.filter(row =>
+        (row.statut || "").toLowerCase() === filterStatut.toLowerCase()
+      );
+    }
+
+    // Filtre par date
+    if (filterDate.trim()) {
+      result = result.filter(row =>
+        (row.dateAccident || "").includes(filterDate)
+      );
+    }
+
+    // Filtre par lieu
+    if (filterLieu.trim()) {
+      result = result.filter(row =>
+        (row.lieu || "").toLowerCase().includes(filterLieu.toLowerCase())
+      );
+    }
+
+    // Filtre par gravité
+    if (filterGravite.trim()) {
+      result = result.filter(row =>
+        (row.gravite || "").toLowerCase() === filterGravite.toLowerCase()
+      );
+    }
+
+    // Filtre par arrêt travail
+    if (filterArretTravail.trim()) {
+      result = result.filter(row =>
+        (row.arretTravail || "").toLowerCase() === filterArretTravail.toLowerCase()
+      );
+    }
+
+    return result;
+  }, [filtered, globalSearch, filterEmploye, filterStatut, filterDate, filterLieu, filterGravite, filterArretTravail]);
 
   const [editingAccident, setEditingAccident] = useState(null);
 
@@ -208,7 +268,6 @@ const AccidentTable = forwardRef((props, ref) => {
       dateAccident: "",
       heure: "",
       lieu: "",
-      typeAccident: "",
       gravite: "léger",
       arretTravail: "non",
       dureeArret: 0,
@@ -219,6 +278,7 @@ const AccidentTable = forwardRef((props, ref) => {
 
   const onSave = (newData) => {
     const payload = mapUiToApi(newData, departementId);
+    console.log("Payload envoyé:", payload);
 
     const request = editingAccident
       ? axios.put(`http://127.0.0.1:8000/api/accidents/${editingAccident.id}`, payload, { withCredentials: true })
@@ -235,8 +295,14 @@ const AccidentTable = forwardRef((props, ref) => {
         });
       })
       .catch((err) => {
-        console.error(err);
-        setError("Impossible d'enregistrer l'accident.");
+        console.error("Erreur enregistrement:", err.response?.data);
+        const validationErrors = err.response?.data?.errors;
+        if (validationErrors) {
+          const messages = Object.values(validationErrors).flat().join('\n');
+          Swal.fire({ icon: 'error', title: 'Erreur de validation', text: messages });
+        } else {
+          Swal.fire({ icon: 'error', title: 'Erreur', text: err.response?.data?.message || "Impossible d'enregistrer l'accident." });
+        }
       });
   };
 
@@ -264,6 +330,35 @@ const AccidentTable = forwardRef((props, ref) => {
     })
   };
 
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedAccidents.length === 0) return;
+
+    const result = await Swal.fire({
+      title: "Êtes-vous sûr?",
+      text: `Vous allez supprimer ${selectedAccidents.length} accident(s)!`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Oui, supprimer!",
+      cancelButtonText: "Annuler",
+    });
+    if (result.isConfirmed) {
+      try {
+        await Promise.all(
+          selectedAccidents.map(id => axios.delete(`http://127.0.0.1:8000/api/accidents/${id}`, { withCredentials: true }))
+        );
+
+        setAccidents(prev => prev.filter(a => !selectedAccidents.includes(a.id)));
+        setSelectedAccidents([]);
+        Swal.fire("Supprimés!", "Les accidents ont été supprimés.", "success");
+      } catch (error) {
+        console.error("Error deleting selected accidents:", error);
+        Swal.fire("Erreur!", "Une erreur est survenue lors de la suppression.", "error");
+      }
+    }
+  }, [selectedAccidents]);
+
   const handleEdit = (row) => {
     setEditingAccident(row);
     setIsAddingEmploye(true);
@@ -275,7 +370,6 @@ const AccidentTable = forwardRef((props, ref) => {
     { key: 'dateAccident', label: "Date accident", visible: columnVisibility.dateAccident },
     { key: 'heure', label: "Heure", visible: columnVisibility.heure },
     { key: 'lieu', label: "Lieu", visible: columnVisibility.lieu },
-    { key: 'typeAccident', label: "Type accident", visible: columnVisibility.typeAccident },
     { key: 'gravite', label: "Gravité", visible: columnVisibility.gravite },
     { key: 'arretTravail', label: "Arrêt travail", visible: columnVisibility.arretTravail },
     { key: 'dureeArret', label: "Durée arrêt (j)", visible: columnVisibility.dureeArret },
@@ -498,23 +592,78 @@ const AccidentTable = forwardRef((props, ref) => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '24px',
+                  gap: '16px',
                   padding: '12px 20px',
                   backgroundColor: '#f8fafc',
                   borderRadius: '8px',
-                  border: '1px solid #e2e8f0'
+                  border: '1px solid #e2e8f0',
+                  flexWrap: 'wrap'
                 }}
               >
                 <div className="d-flex align-items-center gap-2">
-                  <Form.Label className="mb-0 fw-bold text-muted small">Employé:</Form.Label>
-                  <Form.Control size="sm" type="text" placeholder="Rechercher..." style={{ width: '150px' }} />
+                  <Form.Label className="mb-0 fw-bold text-muted small">Date:</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    type="date"
+                    style={{ width: '130px' }}
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                  />
                 </div>
+
+                <div className="d-flex align-items-center gap-2">
+                  <Form.Label className="mb-0 fw-bold text-muted small">Lieu:</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    type="text"
+                    placeholder="Lieu..."
+                    style={{ width: '150px' }}
+                    value={filterLieu}
+                    onChange={(e) => setFilterLieu(e.target.value)}
+                  />
+                </div>
+
+                <div className="d-flex align-items-center gap-2">
+                  <Form.Label className="mb-0 fw-bold text-muted small">Gravité:</Form.Label>
+                  <Form.Select
+                    size="sm"
+                    style={{ width: '120px' }}
+                    value={filterGravite}
+                    onChange={(e) => setFilterGravite(e.target.value)}
+                  >
+                    <option value="">Tous</option>
+                    <option value="léger">Léger</option>
+                    <option value="grave">Grave</option>
+                    <option value="mortel">Mortel</option>
+                  </Form.Select>
+                </div>
+
+                <div className="d-flex align-items-center gap-2">
+                  <Form.Label className="mb-0 fw-bold text-muted small">Arrêt:</Form.Label>
+                  <Form.Select
+                    size="sm"
+                    style={{ width: '100px' }}
+                    value={filterArretTravail}
+                    onChange={(e) => setFilterArretTravail(e.target.value)}
+                  >
+                    <option value="">Tous</option>
+                    <option value="oui">Oui</option>
+                    <option value="non">Non</option>
+                  </Form.Select>
+                </div>
+
                 <div className="d-flex align-items-center gap-2">
                   <Form.Label className="mb-0 fw-bold text-muted small">Statut:</Form.Label>
-                  <Form.Select size="sm" style={{ width: '120px' }}>
+                  <Form.Select
+                    size="sm"
+                    style={{ width: '130px' }}
+                    value={filterStatut}
+                    onChange={(e) => setFilterStatut(e.target.value)}
+                  >
                     <option value="">Tous</option>
                     <option value="en cours">En cours</option>
                     <option value="déclaré">Déclaré</option>
+                    <option value="clôturé">Clôturé</option>
                   </Form.Select>
                 </div>
               </motion.div>
@@ -540,6 +689,7 @@ const AccidentTable = forwardRef((props, ref) => {
             }}
             handleEdit={handleEdit}
             handleDelete={handleDelete}
+            handleDeleteSelected={handleDeleteSelected}
           />
         </div>
 

@@ -1,23 +1,25 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Form, Button, Row, Col } from "react-bootstrap";
+import { Form, Button, Row, Col, Modal, InputGroup } from "react-bootstrap";
 import {
     User, Calendar, MapPin, Activity, Save, X, Info, AlertTriangle,
-    Clock, FileText
+    Clock, FileText, Plus
 } from "lucide-react";
 import "./AddAccident.css";
 
 const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
     const [employees, setEmployees] = useState([]);
     const [selectedEmpId, setSelectedEmpId] = useState("");
+    const [lieux, setLieux] = useState([]);
+    const [showLieuModal, setShowLieuModal] = useState(false);
+    const [newLieu, setNewLieu] = useState("");
 
     const [form, setForm] = useState(initialData || {
         employe: "",
         matricule: "",
         dateAccident: "",
         heure: "",
-        lieu: "",
-        typeAccident: "accident de travail",
+        accident_lieu_id: "",
         gravite: "léger",
         arretTravail: "non",
         dureeArret: 0,
@@ -26,25 +28,45 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
         departement_id: departementId || ""
     });
 
+    const fetchLieux = () => {
+        axios.get("http://127.0.0.1:8000/api/accident-lieux", { withCredentials: true })
+            .then(res => setLieux(Array.isArray(res.data) ? res.data : []))
+            .catch(err => console.error("Error fetching lieux", err));
+    };
+
     useEffect(() => {
         axios.get("http://127.0.0.1:8000/api/departements/employes", { withCredentials: true })
             .then(res => {
-                if(Array.isArray(res.data)) {
-                    setEmployees(res.data);
+                if (Array.isArray(res.data)) {
+                    // Filtrer les employés par département sélectionné
+                    const filtered = departementId
+                        ? res.data.filter(emp => {
+                            // Vérifier via le champ departement_id direct
+                            if (String(emp.departement_id) === String(departementId)) return true;
+                            // Vérifier via la relation departements (pivot)
+                            if (emp.departements && Array.isArray(emp.departements)) {
+                                return emp.departements.some(d => String(d.id) === String(departementId));
+                            }
+                            return false;
+                        })
+                        : res.data;
+                    setEmployees(filtered);
                     // Attempt to find existing employee by matricule if editing
                     if (initialData && initialData.matricule) {
-                        const found = res.data.find(e => e.matricule === initialData.matricule);
+                        const found = filtered.find(e => e.matricule === initialData.matricule);
                         if (found) setSelectedEmpId(found.id);
                     }
                 }
             })
             .catch(err => console.error("Error fetching employees", err));
-    }, [initialData]);
+
+        fetchLieux();
+    }, [initialData, departementId]);
 
     const handleEmployeeSelect = (e) => {
         const empId = e.target.value;
         setSelectedEmpId(empId);
-        
+
         if (empId) {
             const emp = employees.find(ep => String(ep.id) === String(empId));
             if (emp) {
@@ -56,8 +78,8 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
                 }));
             }
         } else {
-             // Reset?
-             setForm(prev => ({
+            // Reset?
+            setForm(prev => ({
                 ...prev,
                 employe: "",
                 matricule: ""
@@ -68,6 +90,18 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleAddLieu = () => {
+        if (!newLieu.trim()) return;
+        axios.post("http://127.0.0.1:8000/api/accident-lieux", { nom: newLieu }, { withCredentials: true })
+            .then(res => {
+                setLieux(prev => [...prev, res.data]);
+                setForm(prev => ({ ...prev, accident_lieu_id: res.data.id }));
+                setShowLieuModal(false);
+                setNewLieu("");
+            })
+            .catch(err => console.error("Error adding lieu", err));
     };
 
     const handleSubmit = (e) => {
@@ -181,15 +215,27 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
                         </Row>
                         <Form.Group className="mb-3">
                             <Form.Label className="small fw-bold">Lieu</Form.Label>
-                            <Form.Control
-                                name="lieu"
-                                value={form.lieu}
-                                onChange={handleChange}
-                                placeholder="Lieu de l'évènement"
-                                className="custom-input"
-                            />
-                        </Form.Group>
-                    </div>
+                            <InputGroup>
+                                <Form.Select
+                                    name="accident_lieu_id"
+                                    value={form.accident_lieu_id}
+                                    onChange={handleChange}
+                                    className="custom-input"
+                                >
+                                    <option value="">-- Choisir un lieu --</option>
+                                    {lieux.map(l => (
+                                        <option key={l.id} value={l.id}>{l.nom}</option>
+                                    ))}
+                                </Form.Select>
+                                <Button
+                                    variant="outline-secondary"
+                                    onClick={() => setShowLieuModal(true)}
+                                    style={{ borderLeft: 'none', backgroundColor: '#f8fafc' }}
+                                >
+                                    <Plus size={18} color="#2c767c" />
+                                </Button>
+                            </InputGroup>
+                        </Form.Group>                    </div>
 
                     <div className="form-section mb-4">
                         <h6 className="section-title-custom mb-3">
@@ -238,6 +284,29 @@ const AddAccident = ({ onClose, onSave, departementId, initialData }) => {
                     Enregistrer
                 </Button>
             </div>
+
+            {/* Modal pour ajouter un lieu */}
+            <Modal show={showLieuModal} onHide={() => setShowLieuModal(false)} centered size="sm">
+                <Modal.Header closeButton style={{ backgroundColor: '#f8fafc' }}>
+                    <Modal.Title style={{ fontSize: '1rem', color: '#2c767c' }}>Ajouter un lieu</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form.Group>
+                        <Form.Label className="small fw-bold">Nom du lieu</Form.Label>
+                        <Form.Control
+                            type="text"
+                            value={newLieu}
+                            onChange={(e) => setNewLieu(e.target.value)}
+                            placeholder="Ex: Atelier A, Bureau..."
+                            autoFocus
+                        />
+                    </Form.Group>
+                </Modal.Body>
+                <Modal.Footer style={{ backgroundColor: '#f8fafc' }}>
+                    <Button variant="light" size="sm" onClick={() => setShowLieuModal(false)}>Annuler</Button>
+                    <Button variant="primary" size="sm" onClick={handleAddLieu} style={{ backgroundColor: '#2c767c', border: 'none' }}>Ajouter</Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

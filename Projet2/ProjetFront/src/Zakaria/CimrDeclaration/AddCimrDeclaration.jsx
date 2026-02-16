@@ -12,15 +12,30 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
 
-    const [form, setForm] = useState(initialData || {
-        employe: "",
-        matricule: "",
-        mois: currentMonth,
-        annee: currentYear,
-        montant_cimr_employeur: "",
-        statut: "a_declarer",
-        departement_id: departementId || ""
+    const [form, setForm] = useState({
+        employe: initialData?.employe || "",
+        matricule: initialData?.matricule || "",
+        mois: initialData?.mois || currentMonth,
+        annee: initialData?.annee || currentYear,
+        montant_cimr_employeur: initialData?.montant_cimr_employeur || initialData?.montant || "",
+        statut: initialData?.statut || "a_declarer",
+        departement_id: initialData?.departement_id || departementId || ""
     });
+
+    useEffect(() => {
+        if (initialData) {
+            setForm({
+                ...initialData,
+                employe: initialData.employe || "",
+                matricule: initialData.matricule || "",
+                mois: initialData.mois || currentMonth,
+                annee: initialData.annee || currentYear,
+                montant_cimr_employeur: initialData.montant_cimr_employeur ?? initialData.montant ?? "",
+                statut: initialData.statut || "a_declarer",
+                departement_id: initialData.departement_id || departementId || ""
+            });
+        }
+    }, [initialData, currentMonth, currentYear, departementId]);
 
     useEffect(() => {
         const endpoint = initialData
@@ -35,12 +50,12 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
                         label: `${e.employe || (e.nom + ' ' + e.prenom)}`,
                         displayLabel: `${e.employe || (e.nom + ' ' + e.prenom)} (${e.matricule})`,
                         value: e.id,
-                        montant: e.salaire_cotisable ? (e.salaire_cotisable * (e.taux_employeur / 100)).toFixed(2) : ""
+                        montant: e.montant_cotisation || 0
                     }));
                     setEmployees(emps);
 
                     if (initialData) {
-                        const found = emps.find(e => e.matricule === initialData.matricule);
+                        const found = emps.find(e => String(e.matricule) === String(initialData.matricule));
                         if (found) setSelectedEmployees([found]);
                     } else {
                         setSelectedEmployees(emps);
@@ -49,6 +64,21 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
             })
             .catch(err => console.error("Error fetching employees", err));
     }, [initialData]);
+
+    // Update total amount based on selection
+    useEffect(() => {
+        if (!initialData) {
+            const total = selectedEmployees.reduce((sum, emp) => {
+                const val = parseFloat(emp.montant) || 0;
+                return sum + val;
+            }, 0);
+
+            setForm(prev => ({
+                ...prev,
+                montant_cimr_employeur: total.toFixed(2)
+            }));
+        }
+    }, [selectedEmployees, initialData]);
 
     const filteredEmployees = useMemo(() => {
         if (!searchTerm.trim()) return employees;
@@ -64,8 +94,18 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
         );
     };
 
-    const handleSelectAll = () => setSelectedEmployees(filteredEmployees);
-    const handleDeselectAll = () => setSelectedEmployees([]);
+    const handleSelectAll = () => {
+        setSelectedEmployees(prev => {
+            const prevIds = new Set(prev.map(e => e.value));
+            const newToAdd = filteredEmployees.filter(e => !prevIds.has(e.value));
+            return [...prev, ...newToAdd];
+        });
+    };
+
+    const handleDeselectAll = () => {
+        const filteredIds = new Set(filteredEmployees.map(e => e.value));
+        setSelectedEmployees(prev => prev.filter(e => !filteredIds.has(e.value)));
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -87,7 +127,7 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData }) => 
                 employe: emp.label,
                 matricule: emp.matricule,
                 departement_id: emp.departement_id || form.departement_id,
-                montant_cimr_employeur: form.montant_cimr_employeur || emp.montant || 0
+                montant_cimr_employeur: emp.montant || 0
             }));
             onSave(declarations);
         }

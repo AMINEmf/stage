@@ -25,6 +25,7 @@ const columns = [
     { key: "dateAffiliation", label: "Date Affiliation" },
     { key: "salaireCotisable", label: "Salaire Cotisable" },
     { key: "tauxEmployeur", label: "Taux Employeur" },
+    { key: "montantCotisation", label: "Montant" },
     { key: "statut", label: "Statut" },
 ];
 
@@ -37,6 +38,7 @@ const mapApiToUi = (api) => ({
     dateAffiliation: api.date_affiliation,
     salaireCotisable: api.salaire_cotisable,
     tauxEmployeur: api.taux_employeur,
+    montantCotisation: api.montant_cotisation,
     statut: api.statut,
     departement_id: api.departement_id
 });
@@ -50,6 +52,7 @@ const mapUiToApi = (ui, deptId) => ({
     date_affiliation: ui.dateAffiliation || null,
     salaire_cotisable: ui.salaireCotisable !== "" ? ui.salaireCotisable : null,
     taux_employeur: ui.tauxEmployeur !== "" ? ui.tauxEmployeur : null,
+    montant_cotisation: ui.montantCotisation !== "" ? ui.montantCotisation : null,
     statut: ui.statut,
 });
 
@@ -95,6 +98,11 @@ const CimrTable = forwardRef((props, ref) => {
     const [error, setError] = useState("");
     const [selectedItems, setSelectedItems] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
+
+    // States pour les filtres
+    const [filterEmploye, setFilterEmploye] = useState("");
+    const [filterStatut, setFilterStatut] = useState("");
+
     const [columnVisibility, setColumnVisibility] = useState({
         employe: true,
         matricule: true,
@@ -103,6 +111,7 @@ const CimrTable = forwardRef((props, ref) => {
         dateAffiliation: true,
         salaireCotisable: true,
         tauxEmployeur: true,
+        montantCotisation: true,
         statut: true,
     });
 
@@ -126,22 +135,40 @@ const CimrTable = forwardRef((props, ref) => {
     const [editingItem, setEditingItem] = useState(null);
 
     const filtered = useMemo(() => {
-        if (!departementId) return affiliations;
+        if (!departementId) return [];
         const ids = includeSubDepartments && getSubDepartmentIds ? getSubDepartmentIds(departements || [], departementId) : [departementId];
         const numericIds = ids.map(Number);
         return affiliations.filter((a) => numericIds.includes(Number(a.departement_id)));
     }, [affiliations, departementId, includeSubDepartments, getSubDepartmentIds, departements]);
 
     const searched = useMemo(() => {
-        if (!globalSearch.trim()) return filtered;
-        const term = globalSearch.toLowerCase();
-        return filtered.filter((row) =>
-            columns.some((c) => String(row[c.key] ?? "").toLowerCase().includes(term))
-        );
-    }, [filtered, globalSearch]);
+        let result = filtered;
+
+        if (globalSearch.trim()) {
+            const term = globalSearch.toLowerCase();
+            result = result.filter((row) =>
+                columns.some((c) => String(row[c.key] ?? "").toLowerCase().includes(term))
+            );
+        }
+
+        if (filterEmploye.trim()) {
+            result = result.filter(row =>
+                (row.employe || "").toLowerCase().includes(filterEmploye.toLowerCase())
+            );
+        }
+
+        if (filterStatut.trim()) {
+            result = result.filter(row =>
+                (row.statut || "").toLowerCase() === filterStatut.toLowerCase()
+            );
+        }
+
+        return result;
+    }, [filtered, globalSearch, filterEmploye, filterStatut]);
 
     const onSave = (newData) => {
         const payload = mapUiToApi(newData, departementId);
+        console.log("Payload CIMR envoyé:", payload);
 
         const request = editingItem
             ? axios.put(`http://127.0.0.1:8000/api/cimr-affiliations/${editingItem.id}`, payload, { withCredentials: true })
@@ -159,7 +186,13 @@ const CimrTable = forwardRef((props, ref) => {
             })
             .catch((err) => {
                 console.error(err);
-                setError("Impossible d'enregistrer l'affiliation.");
+                const errors = err.response?.data?.errors;
+                const serverMsg = err.response?.data?.message;
+                let messages = serverMsg || "Impossible d'enregistrer l'affiliation.";
+                if (errors) {
+                    messages = Object.values(errors).flat().join('\n');
+                }
+                Swal.fire({ icon: 'error', title: 'Erreur', text: messages });
             });
     };
 
@@ -187,6 +220,35 @@ const CimrTable = forwardRef((props, ref) => {
         })
     };
 
+    const handleDeleteSelected = useCallback(async () => {
+        if (selectedItems.length === 0) return;
+
+        const result = await Swal.fire({
+            title: "Êtes-vous sûr?",
+            text: `Vous allez supprimer ${selectedItems.length} affiliation(s)!`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#3085d6",
+            cancelButtonColor: "#d33",
+            confirmButtonText: "Oui, supprimer!",
+            cancelButtonText: "Annuler",
+        });
+        if (result.isConfirmed) {
+            try {
+                await Promise.all(
+                    selectedItems.map(id => axios.delete(`http://127.0.0.1:8000/api/cimr-affiliations/${id}`, { withCredentials: true }))
+                );
+
+                setAffiliations(prev => prev.filter(a => !selectedItems.includes(a.id)));
+                setSelectedItems([]);
+                Swal.fire("Supprimés!", "Les affiliations ont été supprimées.", "success");
+            } catch (error) {
+                console.error("Error deleting selected affiliations:", error);
+                Swal.fire("Erreur!", "Une erreur est survenue lors de la suppression.", "error");
+            }
+        }
+    }, [selectedItems]);
+
     const handleEdit = (row) => {
         setEditingItem(row);
         setIsAddingEmploye(true);
@@ -200,6 +262,7 @@ const CimrTable = forwardRef((props, ref) => {
         { key: 'dateAffiliation', label: "Date Affiliation", visible: columnVisibility.dateAffiliation },
         { key: 'salaireCotisable', label: "Salaire Cotisable", visible: columnVisibility.salaireCotisable },
         { key: 'tauxEmployeur', label: "Taux Employeur", visible: columnVisibility.tauxEmployeur },
+        { key: 'montantCotisation', label: "Montant", visible: columnVisibility.montantCotisation },
         { key: 'statut', label: "Statut", visible: columnVisibility.statut },
     ], [columnVisibility]);
 
@@ -425,11 +488,23 @@ const CimrTable = forwardRef((props, ref) => {
                             >
                                 <div className="d-flex align-items-center gap-2">
                                     <Form.Label className="mb-0 fw-bold text-muted small">Employé:</Form.Label>
-                                    <Form.Control size="sm" type="text" placeholder="Rechercher..." style={{ width: '150px' }} />
+                                    <Form.Control
+                                        size="sm"
+                                        type="text"
+                                        placeholder="Rechercher..."
+                                        style={{ width: '150px' }}
+                                        value={filterEmploye}
+                                        onChange={(e) => setFilterEmploye(e.target.value)}
+                                    />
                                 </div>
                                 <div className="d-flex align-items-center gap-2">
                                     <Form.Label className="mb-0 fw-bold text-muted small">Statut:</Form.Label>
-                                    <Form.Select size="sm" style={{ width: '120px' }}>
+                                    <Form.Select
+                                        size="sm"
+                                        style={{ width: '120px' }}
+                                        value={filterStatut}
+                                        onChange={(e) => setFilterStatut(e.target.value)}
+                                    >
                                         <option value="">Tous</option>
                                         <option value="actif">Actif</option>
                                         <option value="suspendu">Suspendu</option>
@@ -458,6 +533,7 @@ const CimrTable = forwardRef((props, ref) => {
                         }}
                         handleEdit={handleEdit}
                         handleDelete={handleDelete}
+                        handleDeleteSelected={handleDeleteSelected}
                     />
                 </div>
 

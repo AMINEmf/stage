@@ -24,6 +24,7 @@ class CimrAffiliationController extends Controller
             'date_affiliation' => ['nullable', 'date'],
             'salaire_cotisable' => ['nullable', 'numeric'],
             'taux_employeur' => ['nullable', 'numeric'],
+            'montant_cotisation' => ['nullable', 'numeric'],
             'statut' => ['required', Rule::in(['actif', 'suspendu'])],
         ]);
 
@@ -48,6 +49,7 @@ class CimrAffiliationController extends Controller
             'date_affiliation' => ['sometimes', 'nullable', 'date'],
             'salaire_cotisable' => ['sometimes', 'nullable', 'numeric'],
             'taux_employeur' => ['sometimes', 'nullable', 'numeric'],
+            'montant_cotisation' => ['sometimes', 'nullable', 'numeric'],
             'statut' => ['sometimes', 'required', Rule::in(['actif', 'suspendu'])],
         ]);
 

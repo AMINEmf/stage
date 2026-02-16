@@ -4,13 +4,14 @@ import "jspdf-autotable";
 import * as XLSX from "xlsx";
 import axios from "axios";
 import { Button, Dropdown, Form, Badge } from "react-bootstrap";
-import { faEdit, faTrash, faFileExcel, faSliders, faCalendarAlt, faClipboardCheck, faFilter, faClose } from "@fortawesome/free-solid-svg-icons";
+import { faEdit, faTrash, faFileExcel, faSliders, faCalendarAlt, faClipboardCheck, faFilter, faClose, faInfoCircle } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { FaPlusCircle } from "react-icons/fa";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useOpen } from "../../Acceuil/OpenProvider";
 import ExpandRTable from "../Shared/ExpandRTable";
 import AddCimrDeclaration from "./AddCimrDeclaration";
+import { motion, AnimatePresence } from 'framer-motion';
 import Swal from "sweetalert2";
 import "../Style.css";
 
@@ -39,9 +40,11 @@ const mapUiToApi = (ui, deptId) => ({
     departement_id: deptId || ui.departement_id || null,
     employe: ui.employe,
     matricule: ui.matricule,
-    mois: parseInt(ui.mois),
-    annee: parseInt(ui.annee),
-    montant_cimr_employeur: ui.montant_cimr_employeur !== "" ? ui.montant_cimr_employeur : null,
+    mois: ui.mois ? parseInt(ui.mois) : null,
+    annee: ui.annee ? parseInt(ui.annee) : null,
+    montant_cimr_employeur: (ui.montant_cimr_employeur !== undefined && ui.montant_cimr_employeur !== "" && ui.montant_cimr_employeur !== null)
+        ? parseFloat(ui.montant_cimr_employeur)
+        : null,
     statut: ui.statut,
 });
 
@@ -85,12 +88,17 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [selectedItems, setSelectedItems] = useState([]);
-    const [expandedRows, setExpandedRows] = useState({});
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [editingItem, setEditingItem] = useState(null);
+    const [sideDetailRow, setSideDetailRow] = useState(null);
     const [showDropdown, setShowDropdown] = useState(false);
     const [filtersVisibleLocal, setFiltersVisibleLocal] = useState(false);
+
+    // States pour les filtres
+    const [filterAnnee, setFilterAnnee] = useState("");
+    const [filterNbEmploye, setFilterNbEmploye] = useState("");
+    const [filterStatut, setFilterStatut] = useState("");
 
     const loadData = useCallback(() => {
         setLoading(true);
@@ -98,7 +106,7 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
             .then((res) => {
                 const mapped = (res.data || []).map(item => ({
                     ...item,
-                    id: `${item.mois}-${item.annee}`
+                    id: `${item.mois}-${item.annee}-${item.statut}`
                 }));
                 setData(mapped);
                 setLoading(false);
@@ -119,18 +127,28 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
         }
     };
 
-    const toggleRowExpansion = async (rowId) => {
+
+    const handleShowSideDetails = async (row) => {
+        setEditingItem(null);
+        setSideDetailRow(row);
+        setIsAddingEmploye(false);
+        const details = await fetchDetailsIfNeeded(row.id, row.mois, row.annee);
+        if (details) {
+            setSideDetailRow(prev => prev ? { ...prev, details } : null);
+        }
+    };
+
+    const fetchDetailsIfNeeded = async (rowId, mois, annee) => {
         const row = data.find(r => r.id === rowId);
-        if (!row) return;
+        if (row && row.details) return row.details;
 
-        setExpandedRows(prev => ({ ...prev, [rowId]: !prev[rowId] }));
-
-        if (!row.details && !expandedRows[rowId]) {
-            const details = await fetchDetails(row.mois, row.annee);
+        const details = await fetchDetails(mois, annee);
+        if (rowId) {
             setData(prev => prev.map(r =>
                 (r.id === rowId) ? { ...r, details } : r
             ));
         }
+        return details;
     };
 
     const [columnVisibility, setColumnVisibility] = useState({
@@ -185,6 +203,59 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
         });
     };
 
+    const handleDeleteSelected = useCallback(async () => {
+        if (selectedItems.length === 0) return;
+
+        const result = await Swal.fire({
+            title: "Êtes-vous sûr?",
+            text: `Vous allez supprimer ${selectedItems.length} période(s) de déclaration!`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#d33",
+            cancelButtonColor: "#3085d6",
+            confirmButtonText: "Oui, tout supprimer!",
+            cancelButtonText: "Annuler",
+        });
+        if (result.isConfirmed) {
+            try {
+                // Since selectedItems contains 'mois-annee' strings (e.g. '1-2024')
+                const promises = selectedItems.map(item => {
+                    const [mois, annee, statut] = item.split('-');
+                    return axios.post("http://127.0.0.1:8000/api/cimr-declarations/delete-by-period", {
+                        mois: parseInt(mois),
+                        annee: parseInt(annee),
+                        statut: statut
+                    }, { withCredentials: true });
+                });
+
+                await Promise.all(promises);
+
+                setData(prev => prev.filter(a => !selectedItems.includes(a.id)));
+                setSelectedItems([]);
+                Swal.fire("Supprimés!", "Les périodes sélectionnées ont été supprimées.", "success");
+            } catch (error) {
+                console.error("Error deleting selected declarations:", error);
+                Swal.fire("Erreur!", "Une erreur est survenue lors de la suppression.", "error");
+            }
+        }
+    }, [selectedItems]);
+
+    const filteredData = useMemo(() => {
+        return data.filter(item => {
+            const searchLower = (globalSearch || "").toLowerCase();
+            const matchesGlobal =
+                (item.annee && item.annee.toString().includes(searchLower)) ||
+                (item.mois && item.mois.toString().includes(searchLower)) ||
+                (item.statut && item.statut.toLowerCase().includes(searchLower));
+
+            const matchesAnnee = filterAnnee ? item.annee.toString().includes(filterAnnee) : true;
+            const matchesNbEmploye = filterNbEmploye ? (parseInt(item.employee_count || 0) >= parseInt(filterNbEmploye)) : true;
+            const matchesStatut = filterStatut ? (item.statut === filterStatut) : true;
+
+            return matchesGlobal && matchesAnnee && matchesNbEmploye && matchesStatut;
+        });
+    }, [data, globalSearch, filterAnnee, filterNbEmploye, filterStatut]);
+
     const handleEdit = (item) => {
         setEditingItem(item);
         setIsAddingEmploye(true);
@@ -222,6 +293,13 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
             render: (row) => (
                 <div className="d-flex gap-2 justify-content-center">
                     <button
+                        className="btn btn-sm btn-outline-info"
+                        onClick={(e) => { e.stopPropagation(); handleShowSideDetails(row); }}
+                        title="Voir détails sur le côté"
+                    >
+                        <FontAwesomeIcon icon={faInfoCircle} />
+                    </button>
+                    <button
                         className="btn btn-sm btn-outline-danger"
                         onClick={(e) => { e.stopPropagation(); handleDeletePeriod(row); }}
                         title="Supprimer la période"
@@ -245,16 +323,6 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
     const handleCheckboxChange = (id) => {
         setSelectedItems(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
     };
-
-    const mapUiToApi = (ui, deptId) => ({
-        employe: ui.employe,
-        matricule: ui.matricule,
-        departement_id: deptId || null,
-        mois: ui.mois,
-        annee: ui.annee,
-        montant_cimr_employeur: ui.montant_cimr_employeur,
-        statut: ui.statut
-    });
 
     const onSave = (newData) => {
         if (Array.isArray(newData)) {
@@ -291,6 +359,7 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
     const handleClose = () => {
         setIsAddingEmploye(false);
         setEditingItem(null);
+        setSideDetailRow(null);
     }
 
     const exportToPDF = useCallback(() => {
@@ -427,12 +496,12 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
             }} className="with-split-view">
                 {/* Partie Gauche : Tableau */}
                 <div style={{
-                    flex: isAddingEmploye ? '0 0 55%' : '1 1 100%',
+                    flex: (isAddingEmploye || sideDetailRow) ? '0 0 55%' : '1 1 100%',
                     height: '100%',
                     overflowY: 'auto',
                     overflowX: 'hidden',
                     transition: 'all 0.3s ease-in-out',
-                    borderRight: isAddingEmploye ? '2px solid #eef2f5' : 'none',
+                    borderRight: (isAddingEmploye || sideDetailRow) ? '2px solid #eef2f5' : 'none',
                     padding: '0 20px'
                 }}>
                     <div className="mt-4">
@@ -461,6 +530,8 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
 
                                     <Button
                                         onClick={() => {
+                                            setEditingItem(null);
+                                            setSideDetailRow(null);
                                             setIsAddingEmploye(true);
                                         }}
                                         className="btn d-flex align-items-center"
@@ -484,69 +555,74 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                             </div>
                         </div>
 
+                        <AnimatePresence>
+                            {(handleFiltersToggle ? filtersVisible : filtersVisibleLocal) && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -20 }}
+                                    transition={{ duration: 0.3 }}
+                                    className="filters-container mb-3"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '24px',
+                                        padding: '12px 20px',
+                                        backgroundColor: '#f8fafc',
+                                        borderRadius: '8px',
+                                        border: '1px solid #e2e8f0'
+                                    }}
+                                >
+                                    <div className="d-flex align-items-center gap-2">
+                                        <Form.Label className="mb-0 fw-bold text-muted small">Année:</Form.Label>
+                                        <Form.Control
+                                            size="sm"
+                                            type="text"
+                                            placeholder="202X"
+                                            style={{ width: '100px' }}
+                                            value={filterAnnee}
+                                            onChange={(e) => setFilterAnnee(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <Form.Label className="mb-0 fw-bold text-muted small">Nb Employés min:</Form.Label>
+                                        <Form.Control
+                                            size="sm"
+                                            type="number"
+                                            placeholder="0"
+                                            style={{ width: '100px' }}
+                                            value={filterNbEmploye}
+                                            onChange={(e) => setFilterNbEmploye(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <Form.Label className="mb-0 fw-bold text-muted small">Statut:</Form.Label>
+                                        <Form.Select
+                                            size="sm"
+                                            style={{ width: '130px' }}
+                                            value={filterStatut}
+                                            onChange={(e) => setFilterStatut(e.target.value)}
+                                        >
+                                            <option value="">Tous</option>
+                                            <option value="paye">Payé</option>
+                                            <option value="declare">Déclaré</option>
+                                            <option value="a_declarer">À Déclarer</option>
+                                        </Form.Select>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         <ExpandRTable
                             columns={table_columns}
-                            data={data}
+                            data={filteredData}
                             loading={loading}
                             error={error}
                             selectable={true}
                             selectedItems={selectedItems}
                             handleSelectAllChange={handleSelectAllChange}
                             handleCheckboxChange={handleCheckboxChange}
-                            expandedRows={expandedRows}
-                            toggleRowExpansion={toggleRowExpansion}
-                            renderExpandedRow={(row) => (
-                                <div className="p-3 bg-light rounded shadow-sm border m-2">
-                                    <h6 className="fw-bold mb-3" style={{ color: '#2c767c' }}>
-                                        Détails des Employés - {row.mois}/{row.annee}
-                                    </h6>
-                                    <table className="table table-sm table-hover mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Employé</th>
-                                                <th>Matricule</th>
-                                                <th className="text-end">Montant</th>
-                                                <th>Statut</th>
-                                                <th className="text-center">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(row.details || []).map((detail, idx) => (
-                                                <tr key={idx}>
-                                                    <td>{detail.employe}</td>
-                                                    <td>{detail.matricule}</td>
-                                                    <td className="text-end">{parseFloat(detail.montant_cimr_employeur || 0).toLocaleString()} DH</td>
-                                                    <td>{getStatusBadge(detail.statut)}</td>
-                                                    <td className="text-center">
-                                                        <div className="d-flex gap-2 justify-content-center">
-                                                            <button
-                                                                className="btn btn-sm btn-link p-0 text-primary"
-                                                                onClick={() => handleEdit(detail)}
-                                                                title="Modifier"
-                                                            >
-                                                                <FontAwesomeIcon icon={faEdit} />
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-sm btn-link p-0 text-danger"
-                                                                onClick={() => handleDeleteIndividual(detail.id)}
-                                                                title="Supprimer"
-                                                            >
-                                                                <FontAwesomeIcon icon={faTrash} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            <tr className="table-info fw-bold">
-                                                <td colSpan="2">TOTAL</td>
-                                                <td className="text-end">{parseFloat(row.total_montant || 0).toLocaleString()} DH</td>
-                                                <td></td>
-                                                <td></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                            handleDeleteSelected={handleDeleteSelected}
                             page={page}
                             rowsPerPage={rowsPerPage}
                             handleChangePage={setPage}
@@ -558,8 +634,8 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                     </div>
                 </div>
 
-                {/* Partie Droite : Formulaire */}
-                {isAddingEmploye && (
+                {/* Partie Droite : Formulaire ou Détails */}
+                {(isAddingEmploye || sideDetailRow) && (
                     <div style={{
                         flex: '0 0 45%',
                         height: '100%',
@@ -568,12 +644,98 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                         boxShadow: '-4px 0 15px rgba(0,0,0,0.05)',
                         animation: 'fadeInRight 0.4s ease-out'
                     }}>
-                        <AddCimrDeclaration
-                            onClose={handleClose}
-                            onSave={onSave}
-                            departementId={departementId}
-                            initialData={editingItem}
-                        />
+                        {isAddingEmploye ? (
+                            <AddCimrDeclaration
+                                onClose={handleClose}
+                                onSave={onSave}
+                                departementId={departementId}
+                                initialData={editingItem}
+                            />
+                        ) : (
+                            <div className="p-4">
+                                <div className="d-flex justify-content-between align-items-center mb-4">
+                                    <h5 className="mb-0 fw-bold" style={{ color: '#2c767c' }}>
+                                        Détails des Employés - {sideDetailRow.mois}/{sideDetailRow.annee}
+                                    </h5>
+                                    <button onClick={handleClose} className="btn-close"></button>
+                                </div>
+                                <div className="mb-3">
+                                    <Badge bg="info" className="me-2">{sideDetailRow.statut === 'paye' ? 'Payé' : sideDetailRow.statut === 'declare' ? 'Déclaré' : 'À Déclarer'}</Badge>
+                                    <span className="text-muted small">
+                                        {sideDetailRow.employee_count} employé(s)
+                                        {sideDetailRow.details && ` (Total récupéré: ${sideDetailRow.details.length})`}
+                                    </span>
+                                </div>
+                                <div className="table-responsive">
+                                    <table className="table table-sm table-hover border rounded">
+                                        <thead className="bg-light">
+                                            <tr>
+                                                <th>Employé</th>
+                                                <th>Matricule</th>
+                                                <th className="text-end">Montant</th>
+                                                <th className="text-center">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(() => {
+                                                const rawDetails = sideDetailRow.details || [];
+                                                const targetStatut = String(sideDetailRow.statut || "").trim().toLowerCase();
+
+                                                const filteredDetails = rawDetails.filter(d =>
+                                                    String(d.statut || "").trim().toLowerCase() === targetStatut
+                                                );
+
+                                                if (filteredDetails.length === 0) {
+                                                    return (
+                                                        <tr>
+                                                            <td colSpan="4" className="text-center py-4 text-muted small">
+                                                                {rawDetails.length > 0
+                                                                    ? `Filtrage échoué : ${rawDetails.length} records trouvés mais aucun avec le statut "${targetStatut}".`
+                                                                    : "Aucun détail récupéré depuis le serveur."
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                }
+
+                                                return filteredDetails.map((detail, idx) => (
+                                                    <tr key={idx}>
+                                                        <td className="small">{detail.employe}</td>
+                                                        <td className="small">{detail.matricule}</td>
+                                                        <td className="text-end small">
+                                                            {parseFloat(detail.montant_cimr_employeur || 0).toLocaleString()} DH
+                                                        </td>
+                                                        <td className="text-center">
+                                                            <div className="d-flex gap-2 justify-content-center">
+                                                                <button
+                                                                    className="btn btn-sm btn-link p-0 text-primary"
+                                                                    onClick={() => handleEdit(detail)}
+                                                                    title="Modifier"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faEdit} />
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-sm btn-link p-0 text-danger"
+                                                                    onClick={() => handleDeleteIndividual(detail.id)}
+                                                                    title="Supprimer"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faTrash} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()}
+                                            <tr className="table-info fw-bold">
+                                                <td colSpan="2" className="small">TOTAL</td>
+                                                <td className="text-end small">{parseFloat(sideDetailRow.total_montant || 0).toLocaleString()} DH</td>
+                                                <td></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

@@ -9,6 +9,7 @@ import Dashboard from './Acceuil/Dashboard';
 import DepartementManager from './Zakaria/Employe/DepartementManager';
 import DepartementManager2 from './Zakaria/Employe/DepartementManager2';
 import CimrManager from './Zakaria/CimrAffiliation/CimrManager';
+import CimrDashboard from './Zakaria/CimrAffiliation/CimrDashboard';
 import CimrDeclarationManager from './Zakaria/CimrDeclaration/CimrDeclarationManager';
 
 
@@ -43,6 +44,7 @@ const App = () => {
 
             <Route path="/employes2" element={<DepartementManager2 />} />
 
+            <Route path="/cimr-dashboard" element={<CimrDashboard />} />
             <Route path="/cimr-affiliations" element={<CimrManager />} />
             <Route path="/cimr-declarations" element={<CimrDeclarationManager />} />
 

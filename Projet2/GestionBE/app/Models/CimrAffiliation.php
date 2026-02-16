@@ -20,6 +20,7 @@ class CimrAffiliation extends Model
         'date_affiliation',
         'salaire_cotisable',
         'taux_employeur',
+        'montant_cotisation',
         'statut',
     ];
 
@@ -28,6 +29,7 @@ class CimrAffiliation extends Model
         'date_affiliation' => 'date',
         'salaire_cotisable' => 'decimal:2',
         'taux_employeur' => 'decimal:2',
+        'montant_cotisation' => 'decimal:2',
     ];
 
     public function departement()

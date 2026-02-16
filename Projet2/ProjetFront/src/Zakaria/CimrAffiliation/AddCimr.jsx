@@ -20,22 +20,31 @@ const AddCimr = ({ onClose, onSave, departementId, initialData }) => {
         affilieCimr: "non",
         salaireCotisable: 0,
         tauxEmployeur: 0,
+        montantCotisation: 0,
         statut: "actif",
         departement_id: departementId || ""
     });
 
-    useEffect(() => {
-        // Fetch employees
-        const fetchEmployees = axios.get("http://127.0.0.1:8000/api/departements/employes", { withCredentials: true });
-        // Fetch existing affiliations to check for duplicates
-        const fetchAffiliations = axios.get("http://127.0.0.1:8000/api/cimr-affiliations", { withCredentials: true });
+    const fetchEmployees = () => {
+        const fetchEmployeesReq = axios.get("http://127.0.0.1:8000/api/departements/employes", { withCredentials: true });
+        const fetchAffiliationsReq = axios.get("http://127.0.0.1:8000/api/cimr-affiliations", { withCredentials: true });
 
-        Promise.all([fetchEmployees, fetchAffiliations])
+        Promise.all([fetchEmployeesReq, fetchAffiliationsReq])
             .then(([empRes, affRes]) => {
                 if (Array.isArray(empRes.data)) {
-                    setEmployees(empRes.data);
+                    // Filtrer les employés par département sélectionné
+                    const filtered = departementId
+                        ? empRes.data.filter(emp => {
+                            if (String(emp.departement_id) === String(departementId)) return true;
+                            if (emp.departements && Array.isArray(emp.departements)) {
+                                return emp.departements.some(d => String(d.id) === String(departementId));
+                            }
+                            return false;
+                        })
+                        : empRes.data;
+                    setEmployees(filtered);
                     if (initialData && initialData.matricule) {
-                        const found = empRes.data.find(e => e.matricule === initialData.matricule);
+                        const found = filtered.find(e => e.matricule === initialData.matricule);
                         if (found) setSelectedEmpId(found.id);
                     }
                 }
@@ -44,7 +53,21 @@ const AddCimr = ({ onClose, onSave, departementId, initialData }) => {
                 }
             })
             .catch(err => console.error("Error fetching data", err));
-    }, [initialData]);
+    };
+
+    useEffect(() => {
+        fetchEmployees();
+    }, [initialData, departementId]);
+
+    useEffect(() => {
+        const salaire = parseFloat(form.salaireCotisable) || 0;
+        const taux = parseFloat(form.tauxEmployeur) || 0;
+        const montant = (salaire * taux) / 100;
+
+        if (form.montantCotisation !== montant) {
+            setForm(prev => ({ ...prev, montantCotisation: montant }));
+        }
+    }, [form.salaireCotisable, form.tauxEmployeur]);
 
     const handleEmployeeSelect = (e) => {
         const empId = e.target.value;
@@ -69,6 +92,7 @@ const AddCimr = ({ onClose, onSave, departementId, initialData }) => {
                     ...prev,
                     employe: `${emp.prenom} ${emp.nom}`,
                     matricule: emp.matricule,
+                    salaireCotisable: emp.salaire_base || 0,
                     departement_id: emp.departement_id || prev.departement_id
                 }));
             }
@@ -251,6 +275,17 @@ const AddCimr = ({ onClose, onSave, departementId, initialData }) => {
                                 </Form.Group>
                             </Col>
                         </Row>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="small fw-bold">Montant Cotisation (MAD)</Form.Label>
+                            <Form.Control
+                                type="number"
+                                name="montantCotisation"
+                                value={form.montantCotisation}
+                                className="custom-input fw-bold"
+                                style={{ backgroundColor: '#eef2ff', color: '#3730a3' }}
+                                readOnly
+                            />
+                        </Form.Group>
                         <Form.Group className="mb-3">
                             <Form.Label className="small fw-bold">Statut</Form.Label>
                             <Form.Select name="statut" value={form.statut} onChange={handleChange} className="custom-input">
