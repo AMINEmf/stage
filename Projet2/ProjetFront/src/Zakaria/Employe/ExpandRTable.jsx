@@ -95,7 +95,7 @@ const ExpandRTable = ({
   const filterData = (item, searchTerm) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
-    
+
     return columns.some(column => {
       const value = item[column.key];
       if (!value) return false;
@@ -108,7 +108,7 @@ const ExpandRTable = ({
   };
 
   const handleMuiChangeRowsPerPage = (event) => {
-    handleChangeRowsPerPage({ target: { value: parseInt(event.target.value, 10) }});
+    handleChangeRowsPerPage({ target: { value: parseInt(event.target.value, 10) } });
   };
 
   const renderImageCell = (item, column) => {
@@ -119,12 +119,12 @@ const ExpandRTable = ({
 
       if (imgSrc) {
         const fullImgSrc = imgSrc.startsWith('http') ? imgSrc : `http://127.0.0.1:8000/storage/${imgSrc}`;
-        
+
         return (
           <div className="employee-avatar">
-            <img 
-              src={fullImgSrc} 
-              alt={item.designation || item.name || item.nom || 'Image'} 
+            <img
+              src={fullImgSrc}
+              alt={item.designation || item.name || item.nom || 'Image'}
               className={`zoomable-image ${isZoomed ? 'zoomed' : ''}`}
               style={{
                 width: "50px",
@@ -147,7 +147,7 @@ const ExpandRTable = ({
         if (item.nom) initials.push(item.nom.charAt(0).toUpperCase());
         if (item.prenom) initials.push(item.prenom.charAt(0).toUpperCase());
         if (item.name) initials.push(item.name.charAt(0).toUpperCase());
-        
+
         if (initials.length > 0) {
           return (
             <div className="employee-avatar">
@@ -175,8 +175,8 @@ const ExpandRTable = ({
       return null;
     }
 
-    return column.render 
-      ? column.render(item, searchTerm, toggleRowExpansion) 
+    return column.render
+      ? column.render(item, searchTerm, toggleRowExpansion)
       : (highlightText ? highlightText(item[column.key], searchTerm) : item[column.key]) || '';
   };
 
@@ -196,28 +196,25 @@ const ExpandRTable = ({
     cursor: toggleRowExpansion ? 'pointer' : 'default',
   });
 
+  const tableCellStyles = {
+    padding: '0.75rem 1rem',
+    fontSize: '0.875rem',
+    color: '#111827',
+    borderBottom: "1px solid #e5e7eb",
+  };
+
   const headerCellStyles = {
     gridTemplateColumns: 'repeat(9, 1fr)',
-    gap: '1rem',                         
-    paddingBottom: '0.5rem',             
+    gap: '1rem',
+    paddingBottom: '0.5rem',
     borderBottom: 'none',
-    fontSize: '0.875rem',      
+    fontSize: '0.875rem',
     fontWeight: 600,
     color: '#4b5563',
     backgroundColor: '#f9fafb',
     whiteSpace: 'nowrap',
     padding: '0.75rem 1rem',
     textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  };
-  
-  const tableCellStyles = {
-    padding: '0.75rem 1rem',
-    borderBottom: 'none',
-    paddingTop: '0.5rem',                 
-    paddingBottom: '0.75rem',             
-    alignItems: 'center',
-    color: '#111827',
     position: 'relative',
     fontSize: '0.875rem',
     borderBottom: "1px solid #e5e7eb",
@@ -226,9 +223,11 @@ const ExpandRTable = ({
   const tableContainerStyles = {
     boxShadow: 'none',
     borderRadius: 2,
-    overflow: 'auto',
+    overflowX: 'auto',
+    overflowY: 'visible',
     border: '1px solid #e5e7eb',
     maxWidth: '100%',
+    backgroundColor: '#fff',
   };
 
   return (
@@ -244,21 +243,11 @@ const ExpandRTable = ({
           cursor: pointer; 
           position: relative;
         }
-
-        // .zoomable-image.zoomed {
-        //   transform: scale(2.5) !important; 
-        //   z-index: 1000 !important; 
-        //   position: relative !important;
-        //   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        // }
-
       `}</style>
 
-
-
-      <div className="overflow-hidden">
-        <TableContainer 
-          component={Paper} 
+      <div className="w-100" style={{ display: "flex", flexDirection: "column" }}>
+        <TableContainer
+          component={Paper}
           sx={tableContainerStyles}
         >
           <Table sx={tableStyles} aria-label="table de données" stickyHeader>
@@ -274,17 +263,17 @@ const ExpandRTable = ({
                     sx={{ padding: '0', borderBottom: 'none' }}
                   />
                 </TableCell>
-                
+
                 {columns.map((column) => (
-                  <TableCell 
-                    key={column.key} 
+                  <TableCell
+                    key={column.key}
                     sx={headerCellStyles}
                     align={column.key === 'prix' || column.key === 'price' ? 'right' : 'left'}
                   >
                     {column.label}
                   </TableCell>
                 ))}
-                
+
                 {hasActions && (
                   <TableCell align="right" sx={{
                     ...headerCellStyles,
@@ -327,180 +316,11 @@ const ExpandRTable = ({
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((item, index) => {
                     return (
-                    <React.Fragment key={item.id || `row-${Math.random()}`}>
-                      <TableRow
-                        onClick={() => toggleRowExpansion && toggleRowExpansion(item.id)}
-                        sx={{
-                          ...(getRowStyle ? getRowStyle(item) : tableRowStyles(item)),
-                          ...(index !== filteredItems.length - 1 && {
-                            position: 'relative',
-                            '&::after': {
-                              content: '""',
-                              position: 'absolute',
-                              bottom: 0,
-                              left: '1rem',
-                              right: '1rem',
-                              height: '1px',
-                              backgroundColor: '#e5e7eb',
-                              width: 'calc(100% - 2rem)',
-                            }
-                          })
-                        }}
-                      >
-                        <TableCell padding="checkbox" sx={tableCellStyles}>
-                          <Checkbox
-                            checked={selectedItems.includes(item.id)}
-                            onChange={() => handleCheckboxChange(item.id)}
-                            inputProps={{ 'aria-label': `select row ${item.id}` }}
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{ padding: '0', borderBottom: 'none' }}
-                          />
-                        </TableCell>
-                        
-                        {columns.map((column, colIndex) => {
-                          return (
-                            <TableCell 
-                              key={`${item.id}-${column.key}`}
-                              align={column.key === 'prix' || column.key === 'price' ? 'right' : 'left'}
-                              sx={tableCellStyles}
-                            >
-                              {renderImageCell(item, column)}
-                            </TableCell>
-                          );
-                        })}
-
-                        {hasActions && (
-                          <TableCell
-                            align="right"
-                            sx={{
-                              ...tableCellStyles,
-                              verticalAlign: "middle",
-                              position: 'sticky',
-                              right: 0,
-                              zIndex: 2,
-                              backgroundColor: "#fff",
-                              borderBottom: "1px solid #e5e7eb",
-                            }}
-                          >
-  <div
-    style={{
-      display: 'flex',
-      justifyContent: 'flex-end',
-      alignItems: 'center',
-      gap: '10px',
-      height: '100%',
-    }}
-  >
-                              {supportPDF && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    console.log("PDF action for item:", item.id);
-                                  }}
-                                  aria-label="PDF"
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
-                                </button>
-                              )}
-                              
-                              {/* Bouton Imprimer */}
-                              {handlePrint && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePrint(item);
-                                  }}
-                                  aria-label="Print"
-                                  title="Imprimer"
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <FontAwesomeIcon icon={faPrint} style={{ color: '#28a745', fontSize: '14px' }} />
-                                </button>
-                              )}
-                              
-                              {/* Bouton Modifier */}
-                              {handleEdit && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canEdit) return;
-                                    handleEdit(item);
-                                  }}
-                                  aria-label="Edit"
-                                  title="Modifier"
-                                  className={!canEdit ? 'disabled-btn' : ''}
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: canEdit ? 'pointer' : 'not-allowed',
-                                    opacity: canEdit ? 1 : 0.5,
-                                  }}
-                                  disabled={!canEdit}
-                                >
-                                  <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
-                                </button>
-                              )}
-                              
-                              {/* Bouton Dupliquer - Affiché seulement si handleDuplicate est fourni */}
-                              {handleDuplicate && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDuplicate(item);
-                                  }}
-                                  aria-label="Duplicate"
-                                  title="Dupliquer"
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <FontAwesomeIcon icon={faCopy} style={{ color: '#17a2b8', fontSize: '14px' }} />
-                                </button>
-                              )}
-                              
-                              {/* Bouton Supprimer */}
-                              {handleDelete && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canDelete) return;
-                                    handleDelete(item.id);
-                                  }}
-                                  aria-label="Delete"
-                                  title="Supprimer"
-                                  className={!canDelete ? 'disabled-btn' : ''}
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: canDelete ? 'pointer' : 'not-allowed',
-                                    opacity: canDelete ? 1 : 0.5,
-                                  }}
-                                  disabled={!canDelete}
-                                >
-                                  <FontAwesomeIcon icon={faTrash} style={{ color: '#ff0000', fontSize: '14px' }} />
-                                </button>
-                              )}
-                              
-                              {renderCustomActions && renderCustomActions(item)}
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                      
-                      {isRowExpanded(item.id) && (
+                      <React.Fragment key={item.id || `row-${Math.random()}`}>
                         <TableRow
+                          onClick={() => toggleRowExpansion && toggleRowExpansion(item.id)}
                           sx={{
+                            ...(getRowStyle ? getRowStyle(item) : tableRowStyles(item)),
                             ...(index !== filteredItems.length - 1 && {
                               position: 'relative',
                               '&::after': {
@@ -516,27 +336,196 @@ const ExpandRTable = ({
                             })
                           }}
                         >
-                          <TableCell 
-                            colSpan={columns.length + (hasActions ? 1 : 0) + 1}
-                            sx={{ 
-                              padding: '16px', 
-                              backgroundColor: '#f9fafb',
+                          <TableCell padding="checkbox" sx={tableCellStyles}>
+                            <Checkbox
+                              checked={selectedItems.includes(item.id)}
+                              onChange={() => handleCheckboxChange(item.id)}
+                              inputProps={{ 'aria-label': `select row ${item.id}` }}
+                              onClick={(e) => e.stopPropagation()}
+                              sx={{ padding: '0', borderBottom: 'none' }}
+                            />
+                          </TableCell>
+
+                          {columns.map((column, colIndex) => {
+                            return (
+                              <TableCell
+                                key={`${item.id}-${column.key}`}
+                                align={column.key === 'prix' || column.key === 'price' ? 'right' : 'left'}
+                                sx={tableCellStyles}
+                              >
+                                {renderImageCell(item, column)}
+                              </TableCell>
+                            );
+                          })}
+
+                          {hasActions && (
+                            <TableCell
+                              align="right"
+                              sx={{
+                                ...tableCellStyles,
+                                verticalAlign: "middle",
+                                position: 'sticky',
+                                right: 0,
+                                zIndex: 2,
+                                backgroundColor: "#fff",
+                                borderBottom: "1px solid #e5e7eb",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'flex-end',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  height: '100%',
+                                }}
+                              >
+                                {supportPDF && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      console.log("PDF action for item:", item.id);
+                                    }}
+                                    aria-label="PDF"
+                                    style={{
+                                      border: 'none',
+                                      backgroundColor: 'transparent',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
+                                  </button>
+                                )}
+
+                                {/* Bouton Imprimer */}
+                                {handlePrint && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePrint(item);
+                                    }}
+                                    aria-label="Print"
+                                    title="Imprimer"
+                                    style={{
+                                      border: 'none',
+                                      backgroundColor: 'transparent',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <FontAwesomeIcon icon={faPrint} style={{ color: '#28a745', fontSize: '14px' }} />
+                                  </button>
+                                )}
+
+                                {/* Bouton Modifier */}
+                                {handleEdit && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!canEdit) return;
+                                      handleEdit(item);
+                                    }}
+                                    aria-label="Edit"
+                                    title="Modifier"
+                                    className={!canEdit ? 'disabled-btn' : ''}
+                                    style={{
+                                      border: 'none',
+                                      backgroundColor: 'transparent',
+                                      cursor: canEdit ? 'pointer' : 'not-allowed',
+                                      opacity: canEdit ? 1 : 0.5,
+                                    }}
+                                    disabled={!canEdit}
+                                  >
+                                    <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
+                                  </button>
+                                )}
+
+                                {/* Bouton Dupliquer - Affiché seulement si handleDuplicate est fourni */}
+                                {handleDuplicate && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDuplicate(item);
+                                    }}
+                                    aria-label="Duplicate"
+                                    title="Dupliquer"
+                                    style={{
+                                      border: 'none',
+                                      backgroundColor: 'transparent',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <FontAwesomeIcon icon={faCopy} style={{ color: '#17a2b8', fontSize: '14px' }} />
+                                  </button>
+                                )}
+
+                                {/* Bouton Supprimer */}
+                                {handleDelete && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!canDelete) return;
+                                      handleDelete(item.id);
+                                    }}
+                                    aria-label="Delete"
+                                    title="Supprimer"
+                                    className={!canDelete ? 'disabled-btn' : ''}
+                                    style={{
+                                      border: 'none',
+                                      backgroundColor: 'transparent',
+                                      cursor: canDelete ? 'pointer' : 'not-allowed',
+                                      opacity: canDelete ? 1 : 0.5,
+                                    }}
+                                    disabled={!canDelete}
+                                  >
+                                    <FontAwesomeIcon icon={faTrash} style={{ color: '#ff0000', fontSize: '14px' }} />
+                                  </button>
+                                )}
+
+                                {renderCustomActions && renderCustomActions(item)}
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+
+                        {isRowExpanded(item.id) && (
+                          <TableRow
+                            sx={{
+                              ...(index !== filteredItems.length - 1 && {
+                                position: 'relative',
+                                '&::after': {
+                                  content: '""',
+                                  position: 'absolute',
+                                  bottom: 0,
+                                  left: '1rem',
+                                  right: '1rem',
+                                  height: '1px',
+                                  backgroundColor: '#e5e7eb',
+                                  width: 'calc(100% - 2rem)',
+                                }
+                              })
                             }}
                           >
-                            {renderExpandedRow(item)}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </React.Fragment>
+                            <TableCell
+                              colSpan={columns.length + (hasActions ? 1 : 0) + 1}
+                              sx={{
+                                padding: '16px',
+                                backgroundColor: '#f9fafb',
+                              }}
+                            >
+                              {renderExpandedRow(item)}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
                     );
                   })
               )}
-                
+
               {!loading && filteredItems.length === 0 && (
                 <TableRow>
-                  <TableCell 
+                  <TableCell
                     colSpan={columns.length + (hasActions ? 1 : 0) + 1}
-                    align="center" 
+                    align="center"
                     sx={{ padding: '24px', color: '#6b7280' }}
                   >
                     Aucune donnée disponible
@@ -544,13 +533,13 @@ const ExpandRTable = ({
                 </TableRow>
               )}
             </TableBody>
-          </Table>
-        </TableContainer>
-        
+          </Table >
+        </TableContainer >
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: '10px' }}>
-          <div className="pagination-container" style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div className="pagination-container" style={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
             margin: '20px 0'
           }}>
@@ -574,10 +563,10 @@ const ExpandRTable = ({
               SUPPRIMER SELECTION
             </Button>
           </div>
-          
-          <div className="pagination-container" style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+
+          <div className="pagination-container" style={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
             margin: '20px 0'
           }}>
@@ -615,7 +604,7 @@ const ExpandRTable = ({
             />
           </div>
         </div>
-      </div>
+      </div >
     </>
   );
 };

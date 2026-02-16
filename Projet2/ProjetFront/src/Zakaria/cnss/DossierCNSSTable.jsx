@@ -5,6 +5,7 @@ import React, {
   useMemo,
   forwardRef,
   useImperativeHandle,
+  useRef,
 } from "react";
 import axios from "axios";
 import { Button, Dropdown, Form } from "react-bootstrap";
@@ -27,6 +28,40 @@ const API_BASE = window.location.hostname === "localhost"
 
 const normalizeValue = (value) => (value == null ? "" : String(value).toLowerCase().trim());
 
+const StatusChip = ({ status }) => {
+  const normalized = String(status || "").toUpperCase();
+  let color = "#64748b";
+  let bg = "#f1f5f9";
+
+  if (["ACTIF", "ACTIVE", "PAYE"].includes(normalized)) {
+    color = "#4caf50";
+    bg = "#e8f5e9";
+  } else if (["EN_COURS", "EN_ATTENTE", "DECLARE"].includes(normalized)) {
+    color = "#ff9800";
+    bg = "#fff3e0";
+  } else if (["RESILIE", "REFUSÉE", "ANNULÉE", "ERREUR"].includes(normalized)) {
+    color = "#f44336";
+    bg = "#ffebee";
+  }
+
+  return (
+    <span
+      style={{
+        backgroundColor: bg,
+        color: color,
+        padding: "0.25rem 0.625rem",
+        borderRadius: "0.75rem",
+        fontSize: "0.75rem",
+        fontWeight: 600,
+        display: "inline-block",
+        whiteSpace: "nowrap"
+      }}
+    >
+      {status || "N/A"}
+    </span>
+  );
+};
+
 const DossierCNSSTable = forwardRef((props, ref) => {
   const {
     globalSearch,
@@ -40,7 +75,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
 
   const [dossiers, setDossiers] = useState([]);
   const [isTableLoading, setIsTableLoading] = useState(false);
-  const [selectedEmployeId, setSelectedEmployeId] = useState(null);
+  const [selectedDossier, setSelectedDossier] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [showAddOperation, setShowAddOperation] = useState(false);
   const [addOperationEmployeId, setAddOperationEmployeId] = useState(null);
@@ -65,7 +100,45 @@ const DossierCNSSTable = forwardRef((props, ref) => {
     ],
   });
 
-  const isDetailsOpen = Boolean(selectedEmployeId);
+  // Resizing state
+  const [drawerWidth, setDrawerWidth] = useState(45); // percentage
+  const [isResizing, setIsResizing] = useState(false);
+  const containerRef = useRef(null);
+
+  const startResizing = useCallback((e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback((e) => {
+    if (isResizing && containerRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newWidth = ((containerRect.right - e.clientX) / containerRect.width) * 100;
+      if (newWidth > 20 && newWidth < 80) {
+        setDrawerWidth(newWidth);
+      }
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
+    } else {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    }
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
+
+  const isDetailsOpen = Boolean(selectedDossier);
   const isAnyFormOpen = isDetailsOpen || showAddOperation;
   const hasSelectedDepartement = Boolean(departementId);
 
@@ -106,7 +179,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
   }, [fetchDossiers]);
 
   useEffect(() => {
-    setSelectedEmployeId(null);
+    setSelectedDossier(null);
     setSelectedItems([]);
   }, [departementId]);
 
@@ -151,20 +224,25 @@ const DossierCNSSTable = forwardRef((props, ref) => {
 
   const allColumns = useMemo(
     () => [
-      { key: "matricule", label: "Matricule" },
-      {
-        key: "employe_label",
-        label: "Nom & Prenom",
-        render: (item) => <span>{item.employe_label}</span>,
-      },
+      { key: "matricule", label: "N Dossier" },
       {
         key: "numero_adherent",
-        label: "Numéro adhérent",
+        label: "N Adherent",
         render: (item) => <span>{item.numero_adherent || "-"}</span>,
       },
       {
+        key: "statut",
+        label: "Statut",
+        render: (item) => <StatusChip status={item.cnss_affiliation_status} />,
+      },
+      {
+        key: "employe_label",
+        label: "Nom",
+        render: (item) => <span>{item.employe_label}</span>,
+      },
+      {
         key: "operations_count",
-        label: "Nombre d'opérations",
+        label: "nombre operation",
         render: (item) => <span>{Number(item.operations_count ?? 0)}</span>,
       },
     ],
@@ -261,6 +339,37 @@ const DossierCNSSTable = forwardRef((props, ref) => {
       filters: prev.filters.map((filter) => (filter.key === key ? { ...filter, value } : filter)),
     }));
   }, []);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedItems.length === 0) return;
+
+    const result = await Swal.fire({
+      title: "Êtes-vous sûr?",
+      text: `Vous allez supprimer ${selectedItems.length} dossier(s)!`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Oui, supprimer!",
+      cancelButtonText: "Annuler",
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await Promise.all(
+          selectedItems.map((id) => axios.delete(`${API_BASE}/api/cnss/dossiers/${id}`))
+        );
+
+        setSelectedItems([]);
+        await fetchDossiers();
+
+        Swal.fire("Supprimés!", "Les dossiers ont été supprimés.", "success");
+      } catch (error) {
+        console.error("Error deleting selected dossiers:", error);
+        Swal.fire("Erreur!", "Une erreur est survenue lors de la suppression.", "error");
+      }
+    }
+  }, [selectedItems, fetchDossiers]);
 
   const highlightText = useCallback((text, searchTerm) => {
     if (!text || !searchTerm) return text;
@@ -371,13 +480,15 @@ const DossierCNSSTable = forwardRef((props, ref) => {
 
   const iconButtonStyle = {
     backgroundColor: "#f9fafb",
-    border: "1px solid #ccc",
-    borderRadius: "5px",
-    padding: "13px 16px",
+    border: "0.0625rem solid #ccc",
+    borderRadius: "0.3125rem",
+    padding: "0.8rem 1rem",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    minWidth: "2.5rem",
+    minHeight: "2.5rem",
   };
 
   const CustomMenu = React.forwardRef(({ className, "aria-labelledby": labeledBy }, customRef) => (
@@ -386,12 +497,14 @@ const DossierCNSSTable = forwardRef((props, ref) => {
       className={className}
       aria-labelledby={labeledBy}
       style={{
-        padding: "10px",
+        padding: "0.625rem",
         backgroundColor: "white",
-        border: "1px solid #ccc",
-        borderRadius: "5px",
-        maxHeight: "400px",
+        border: "0.0625rem solid #ccc",
+        borderRadius: "0.3125rem",
+        maxHeight: "max(300px, 40vh)",
+        maxWidth: "90vw",
         overflowY: "auto",
+        boxSizing: "border-box"
       }}
     >
       <Form onClick={(event) => event.stopPropagation()}>
@@ -415,25 +528,67 @@ const DossierCNSSTable = forwardRef((props, ref) => {
         position: "relative",
         left: "-2%",
         top: "0",
-        height: "calc(100vh - 160px)",
+        minHeight: "calc(100vh - 160px)",
       }}
       className="container_employee"
     >
-      <div className={`with-split-view ${isAnyFormOpen ? "split-active" : ""}`} style={{ width: "100%", height: "100%", display: "flex", overflow: "hidden" }}>
+      <div
+        ref={containerRef}
+        className={`with-split-view ${isAnyFormOpen ? "split-active" : ""}`}
+        style={{
+          width: "100%",
+          height: "calc(100vh - 160px)",
+          display: "flex",
+          gap: isAnyFormOpen ? "0" : "auto",
+          overflowX: isAnyFormOpen ? "auto" : "visible",
+          overflowY: "hidden",
+          boxSizing: "border-box"
+        }}
+      >
         {/* CSS Override for Split View */}
         <style>
           {`
         .with-split-view .add-cnss-container, 
-        .with-split-view .add-accident-container,
-        .with-split-view .side-panel-container {
-            position: relative !important;
+        .with-split-view .add-accident-container {
+            position: absolute !important;
             top: 0 !important;
             left: 0 !important;
             width: 100% !important;
             height: 100% !important;
+            z-index: 100 !important;
+            background: white !important;
             box-shadow: none !important;
             animation: none !important;
             border-radius: 0 !important;
+        }
+        
+        /* Responsive Split View for Zoom */
+        @media (max-width: 1100px) {
+          .with-split-view.split-active {
+            flex-direction: column !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+          }
+          .with-split-view.split-active > div {
+            min-width: 100% !important;
+            max-width: 100% !important;
+            flex: 0 0 auto !important;
+            height: auto !important;
+          }
+          .with-split-view.split-active .split-view-drawer {
+            border-top: 1px solid #eef2f5;
+            box-shadow: 0 -0.25rem 0.9375rem rgba(0,0,0,0.05);
+            min-height: 500px;
+          }
+        }
+
+        /* Ensure smooth scrolling for split view */
+        .with-split-view::-webkit-scrollbar {
+          height: 6px;
+        }
+        .with-split-view::-webkit-scrollbar-thumb {
+          background-color: #cbd5e1;
+          border-radius: 3px;
         }
       `}
         </style>
@@ -441,17 +596,20 @@ const DossierCNSSTable = forwardRef((props, ref) => {
         {/* Left Pane: Table & Filters */}
         <div
           style={{
-            flex: isAnyFormOpen ? "0 0 55%" : "1 1 100%",
-            overflowY: "auto",
-            overflowX: "auto",
-            borderRight: isAnyFormOpen ? "2px solid #eef2f5" : "none",
-            transition: "all 0.3s ease",
-            paddingRight: "10px",
+            flex: isAnyFormOpen ? `1 1 ${100 - drawerWidth}%` : "1 1 100%",
+            borderRight: isAnyFormOpen && !isResizing ? "0.125rem solid #eef2f5" : "none",
+            transition: isResizing ? "none" : "all 0.3s ease",
+            paddingRight: isAnyFormOpen ? "0.625rem" : "0",
+            minWidth: isAnyFormOpen ? "0" : "100%",
+            boxSizing: "border-box",
+            height: "100%",
+            overflowX: "hidden",
+            overflowY: "auto"
           }}
         >
           <div className="mt-4">
             <div className="section-header mb-3">
-              <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
+              <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: "1.5rem" }}>
                 <div>
                   <span className="section-title mb-1">
                     <i className="fas fa-id-card me-2"></i>
@@ -481,19 +639,14 @@ const DossierCNSSTable = forwardRef((props, ref) => {
                         }}
                       />
                       <Button
-                        onClick={() => {
-                          if (!canOpenAddOperation) return;
-                          handleOpenAddOperation();
-                        }}
+                        onClick={handleOpenAddOperation}
                         className={`btn btn-outline-primary d-flex align-items-center ${!canOpenAddOperation ? "disabled-btn" : ""}`}
+                        disabled={!canOpenAddOperation}
                         size="sm"
-                        style={{
-                          marginRight: '30px !important',
-                          width: '160px',
-                        }}
+                        style={{ marginRight: "30px !important", width: "160px" }}
                       >
                         <FaPlusCircle className="me-2" />
-                        Ajouter une opération
+                        Ajouter une Opération
                       </Button>
 
                       <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
@@ -579,12 +732,12 @@ const DossierCNSSTable = forwardRef((props, ref) => {
                         onChange={(event) => handleFilterChange(filter.key, event.target.value || "")}
                         className="filter-input"
                         style={{
-                          minWidth: 110,
-                          maxWidth: 170,
-                          height: 30,
+                          minWidth: "7rem",
+                          maxWidth: "100%",
+                          height: "2rem",
                           fontSize: "0.9rem",
-                          padding: "2px 6px",
-                          borderRadius: 6,
+                          padding: "0.125rem 0.375rem",
+                          borderRadius: "0.375rem",
                         }}
                       >
                         <option value="">{filter.placeholder}</option>
@@ -623,39 +776,71 @@ const DossierCNSSTable = forwardRef((props, ref) => {
               <button
                 onClick={(event) => {
                   event.stopPropagation();
-                  setSelectedEmployeId(item.id);
+                  setSelectedDossier(item);
                 }}
-                aria-label="Voir dossier"
-                title="Voir dossier"
+                aria-label="Gérer dossier"
+                title="Gérer dossier"
+                className="d-flex align-items-center"
                 style={{
                   border: "none",
                   backgroundColor: "transparent",
                   cursor: "pointer",
+                  color: "#2c767c",
+                  gap: "8px",
+                  padding: 0
                 }}
               >
-                <FontAwesomeIcon icon={faEye} style={{ color: "#007bff", fontSize: "14px" }} />
+                <FontAwesomeIcon icon={faEye} style={{ fontSize: "14px", color: "#2c767c" }} />
+                <span style={{ fontSize: "13px", fontWeight: 600 }}>Gérer</span>
               </button>
             )}
             canEdit={false}
             canDelete={false}
-            canBulkDelete={false}
+            canBulkDelete={true}
+            handleDeleteSelected={handleDeleteSelected}
           />
         </div>
+
+        {/* Resizer Handle */}
+        {isAnyFormOpen && (
+          <div
+            onMouseDown={startResizing}
+            style={{
+              width: "8px",
+              cursor: "col-resize",
+              backgroundColor: isResizing ? "#2c767c" : "transparent",
+              transition: "background-color 0.2s",
+              zIndex: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <div style={{ width: "2px", height: "30px", backgroundColor: "#e2e8f0", borderRadius: "1px" }} />
+          </div>
+        )}
 
         {/* Right Pane: Details or Operation Form */}
         {isAnyFormOpen && (
           <div
+            className="split-view-drawer"
             style={{
-              flex: "0 0 45%",
-              overflowY: "auto",
+              flex: `1 1 ${drawerWidth}%`,
+              height: "100%",
+              overflow: "auto",
+              position: "relative",
               backgroundColor: "#fdfdfd",
-              boxShadow: "-4px 0 15px rgba(0,0,0,0.05)",
+              boxShadow: "-0.25rem 0 0.9375rem rgba(0,0,0,0.05)",
+              transition: isResizing ? "none" : "flex 0.3s ease",
+              minWidth: "0",
+              maxWidth: "90vw",
+              boxSizing: "border-box"
             }}
           >
             {isDetailsOpen && (
               <DossierCNSSDetails
-                employeId={selectedEmployeId}
-                onClose={() => setSelectedEmployeId(null)}
+                dossier={selectedDossier}
+                onClose={() => setSelectedDossier(null)}
                 onDocumentsUpdated={fetchDossiers}
               />
             )}

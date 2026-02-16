@@ -223,22 +223,22 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = []
       <style>
         {`
           .side-panel-container {
-            position: fixed !important;
-            top: 9.4%; 
-            left: 60%; 
-            width: 41%;
-            height: calc(100vh - 160px) !important;
-            animation: slideInAccident 0.3s ease-out;
+            position: absolute !important;
+            top: 0; 
+            left: 0; 
+            width: 100%;
+            height: 100% !important;
+            animation: fadeIn 0.3s ease-out;
             background: white;
-            z-index: 1100;
+            z-index: 1000;
             display: flex;
             flex-direction: column;
-            box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-            border-radius: 8px 0 0 8px;
+            box-shadow: none;
+            border-radius: 0;
           }
-          @keyframes slideInAccident {
-            from { transform: translateX(100%); }
-            to { transform: translateX(0); }
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
           }
           .form-header {
             padding: 16px 24px;
@@ -258,7 +258,7 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = []
             gap: 10px;
           }
           .form-body {
-            flex-grow: 1;
+            flex: 1;
             overflow-y: auto;
             padding: 24px;
           }
@@ -498,12 +498,12 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = []
                 </div>
                 <div className="table-responsive">
                   <Table striped bordered hover>
-                    <thead>
+                    <thead style={{ backgroundColor: "#f8fafc" }}>
                       <tr>
-                        <th>Fichier</th>
-                        <th>Type</th>
-                        <th>Date</th>
-                        <th>Actions</th>
+                        <th style={{ color: "#2c767c", fontWeight: 700 }}>Fichier</th>
+                        <th style={{ color: "#2c767c", fontWeight: 700 }}>Type</th>
+                        <th style={{ color: "#2c767c", fontWeight: 700 }}>Date</th>
+                        <th style={{ color: "#2c767c", fontWeight: 700 }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
