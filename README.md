@@ -1,1 +1,1 @@
-# rh-sps-stage
+# stage
