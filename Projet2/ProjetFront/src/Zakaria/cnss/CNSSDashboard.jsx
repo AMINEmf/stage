@@ -275,7 +275,7 @@ const CNSSDashboard = () => {
         {/* Page Title */}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" sx={{ fontSize: "1.5rem", fontWeight: 700, color: themeColors.textPrimary }}>
-            Dashboard CNSS
+            tableau de bord CNSS
           </Typography>
           <Typography variant="body2" sx={{ color: themeColors.textSecondary, mt: 0.5 }}>
             Suivi des affiliations, déclarations et opérations

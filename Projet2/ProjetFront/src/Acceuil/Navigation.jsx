@@ -862,7 +862,7 @@ const Navigation = () => {
                   <ListItemIcon>
                     <ListIcon />
                   </ListItemIcon>
-                  <ListItemText primary="Dashboard CNSS" />
+                  <ListItemText primary="tableau de bord CNSS" />
                 </SubMenuItem>
                 <SubMenuItem button component={Link} to="/cnss">
                   <ListItemIcon>
