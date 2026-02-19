@@ -28,8 +28,27 @@ class EmployeController extends Controller
         }
     }
 
+    public function getByMatricule($matricule)
+    {
+        $employe = Employe::with(['departements', 'declarationsSalaire']) 
+                            ->where('matricule',$matricule)
+                            ->first();
 
+        if(!$employe){
+            return response()->json(['message' => "EMPLOYE NOT FOUND"],404);
+        }
 
+        return response()->json([
+            'matricule' => $employe->matricule,
+            'nom' => $employe->nom,
+            'prenom' => $employe->prenom,
+            'cin' => $employe->cin,
+            'departements' => $employe->departements->pluck('nom'),
+            'jours_travailles' => $employe->declarationsSalaire->sum('jours_travailles'),
+            'salaire_brut' => $employe->declarationsSalaire->sum('salaire_brut'),
+            'salaire_base' => $employe->salaire_base
+        ]);
+    }
 
 
     public function getDashboardStats()

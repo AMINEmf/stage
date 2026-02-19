@@ -11,12 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('gp_bultin_models', function (Blueprint $table) {
-            $table->id();
-               $table->string('photo')->nullable();
-            $table->string('designation');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('gp_bultin_models')) {
+            Schema::create('gp_bultin_models', function (Blueprint $table) {
+                $table->id();
+                $table->string('photo')->nullable();
+                $table->string('designation');
+                $table->timestamps();
+            });
+        }
     }
 
     /**

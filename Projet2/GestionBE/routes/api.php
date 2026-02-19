@@ -1070,3 +1070,46 @@ Route::apiResource('horaires-periodiques', HorairePeriodiqueController::class);
 
 
 });
+
+use App\Models\DepartementDeclaration;
+use App\Models\Employe;
+
+Route::get('/Departement', function(){
+    return DepartementDeclaration::all();
+});
+
+Route::get('/Departement/{id}', function($id){
+    $departement = DepartementDeclaration::with('employes')->find($id);
+    return $departement;
+});
+
+Route::get('/Departement/{id}/employes', function($id){
+    return Employe::where('departement_id', $id)
+        ->select('id','matricule','nom','prenom','salaire_base')
+        ->get();
+});
+
+
+use App\Models\DeclarationSalaire;
+
+Route::get('/declarations', function(Request $request){
+
+    $departement_id = $request->departement_id;
+    $mois = $request->mois;
+
+    return DeclarationSalaire::with(['employe.departements'])
+        ->whereHas('employe.departements', function($q) use ($departement_id){
+            $q->where('departements.id', $departement_id);
+        })
+        ->where('mois', $mois)
+        ->get();
+});
+
+// recuperer les employes d'un departement pour un matricule donné
+Route::get('/employe/{matricule}',[EmployeController::class, 'getByMatricule']);
+
+Route::post('/declaration-salaire', [DeclarationSalaireController::class, 'store']);
+
+Route::get('/declarations', [DeclarationSalaireController::class, 'index']);
+Route::post('/declaration-salaire', [DeclarationSalaireController::class, 'store']);
+Route::get('/employe/{matricule}', [DeclarationSalaireController::class, 'getByMatricule']);

@@ -11,13 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('gp_bultin_models', function (Blueprint $table) {
-            $table->id();
-            $table->string('designation');
-            $table->foreignId('theme_bultin_model_id')->constrained('gp_theme_bultin_model')
-            ->onUpdate('cascade')->onDelete('cascade');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('gp_bultin_models')) {
+            Schema::create('gp_bultin_models', function (Blueprint $table) {
+                $table->id();
+                $table->string('designation');
+                $table->foreignId('theme_bultin_model_id')->constrained('gp_theme_bultin_model')
+                    ->onUpdate('cascade')->onDelete('cascade');
+                $table->timestamps();
+            });
+        }
     }
 
     /**

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 
 class Employe extends Model
 {
+    protected $table = 'employes';
+
     protected $fillable = [
            'matricule',
            'num_badge',
@@ -108,7 +110,10 @@ public function demandesConges()
 }
 
 
-
+public function declarationsSalaire()
+    {
+        return $this->hasMany(DeclarationSalaire::class, 'employe_id');
+    }
 
 
 protected static function booted()

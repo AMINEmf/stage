@@ -12,7 +12,7 @@ import CNSSDashboard from './Zakaria/cnss/CNSSDashboard';
 import DeclarationsCNSS from './Zakaria/cnss/DeclarationsCNSS';
 import DossierCNSS from './Zakaria/cnss/DossierCNSS';
 import EmpHistorique from './Zakaria/EmpHistorique.jsx';
-
+import AffichageDeclaration from './Zakaria/cnss/AffichageDeclaration.jsx';
 
 import { OpenProvider } from './Acceuil/OpenProvider.jsx';
 
@@ -43,7 +43,7 @@ const App = () => {
             <Route path="/cnss/dashboard" element={<CNSSDashboard />} />
             <Route path="/cnss/declarations" element={<DeclarationsCNSS />} />
             <Route path="/cnss/dossiers" element={<DossierCNSS />} />
-
+            <Route path="/cnss/Affichagedeclaration" element={<AffichageDeclaration />} />
             <Route path="/emphistorique" element={<EmpHistorique />} />
 
 

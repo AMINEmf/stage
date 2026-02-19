@@ -882,6 +882,12 @@ const Navigation = () => {
                   </ListItemIcon>
                   <ListItemText primary="Dossier CNSS" />
                 </SubMenuItem>
+                <SubMenuItem button component={Link} to="/cnss/Affichagedeclaration" state={{primary:"Affichage des déclarations"}}>
+                  <ListItemIcon>
+                    <ListIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Affichage des déclarations" />
+                </SubMenuItem>
               </List>
             </Collapse>
 

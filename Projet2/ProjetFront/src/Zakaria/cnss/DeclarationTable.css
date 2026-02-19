@@ -1,0 +1,142 @@
+.form-container{
+    position: absolute;
+    width: 600px;
+    height: 810px;
+    background-color: white;
+    margin-left: 800px;
+    margin-top: 5px;
+}
+.form-container .form-header{
+    display: flex;
+    justify-content: space-between;
+}
+.form-container .form-header p{
+    margin-left: -250px;
+}
+.form-container .form-body .form-matricule{
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.form-container .form-body .form-matricule input{
+    width: 250px;
+    height: 30px;
+    border-radius: 3px;
+    border: 1px solid black;
+}
+.form-container .form-body .form-nom{
+    position: absolute;
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap:5px;
+    margin-left: 290px;
+    margin-top: -60px;
+}
+.form-container .form-body .form-nom input{
+    width: 250px;
+    height: 30px;
+    border-radius: 3px;
+    border: 1px solid black;
+}
+
+.form-container .form-body .form-cin{
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap:5px;
+    position: absolute;
+    margin-top: 30px;
+}
+
+.form-container .form-body .form-cin input{
+    width: 250px;
+    height: 30px;
+    border-radius: 3px;
+    border: 1px solid black;
+}
+
+.form-container .form-body .form-departement{
+    width:250px;
+    display: flex;
+    flex-direction: column;
+    gap:5px;
+    position: absolute;
+    margin-left: 290px;
+    margin-top: 30px;
+}
+
+.form-container .form-body .form-departement input{
+    width: 250px;
+    height: 30px;
+    border-radius: 3px;
+    border: 1px solid black;
+}
+
+.form-container .form-body .form-mois{
+    position: absolute;
+    top: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-container .form-body .form-mois select{
+    width:540px;
+    height:35px;
+    border-radius: 3px;
+    border: 1px solid black;
+}
+
+.form-container .form-Users{
+    position: absolute;
+    top: 400px;
+    width: 540px;
+    height: 40px;
+    display: flex;
+}
+
+.declaration-table{
+    position: absolute;
+    top: 180px;
+    width: 1200px;
+}
+.declaration-table th{
+    padding: 10px;
+    background-color: #f9fafb;
+}
+.form-container .form-Users .form-Users-salaireCNSS{
+    width: 270px;
+    height: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    position: absolute;
+    margin-top: 40px;
+    margin-left: -200px;
+}
+.form-container .form-Users .form-Users-salaireBRUT{
+    width: 270px;
+    height: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    position: absolute;
+    margin-top: 40px;
+    margin-left: 80px;
+}
+
+.form-container .form-Users .form-Users-salaireCNSS input{
+    width: 270px;
+    height: 50px;
+    border-radius: 3px;
+    border: 1px solid black;
+}
+
+.form-container .form-Users .form-Users-salaireBRUT input{
+    width: 270px;
+    height: 50px;
+    border-radius: 3px;
+    border: 1px solid black;
+}
