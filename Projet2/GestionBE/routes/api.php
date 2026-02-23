@@ -58,6 +58,13 @@ use App\Http\Controllers\DepartementController;
 use App\Http\Controllers\EmployeController;
 use App\Http\Controllers\EmployeDepartementController;
 
+// Controllers créés pour éviter les erreurs 500
+use App\Http\Controllers\CalendrieController;
+use App\Http\Controllers\RegleCompensationController;
+use App\Http\Controllers\PaysController;
+use App\Http\Controllers\GpCalendrierEmployeController;
+use App\Http\Controllers\DetailsCalendrieController;
+
 
 use App\Models\Role;
 use Illuminate\Http\Request;
@@ -469,6 +476,8 @@ use App\Http\Controllers\AccidentController;
 use App\Http\Controllers\CimrAffiliationController;
 use App\Http\Controllers\CimrDeclarationController;
 use App\Http\Controllers\AccidentLieuController;
+use App\Http\Controllers\AccidentTypeController;
+use App\Http\Controllers\AccidentNatureController;
 
 
 // use App\Http\Controllers\ContractTypeController;
@@ -601,14 +610,20 @@ Route::post("/login", [AuthController::class, 'login']);
      Route::post("/logout", [AuthController::class, 'logout']);
 
 // Accidents public API (no auth)
+Route::get('accidents/dashboard-stats', [AccidentController::class, 'dashboardStats']);
 Route::apiResource('accidents', AccidentController::class);
 Route::apiResource('cimr-affiliations', CimrAffiliationController::class);
 Route::get('cimr-declarations/dashboard-stats', [CimrDeclarationController::class, 'dashboardStats']);
 Route::get('cimr-declarations/eligible-employees', [CimrDeclarationController::class, 'eligibleEmployees']);
 Route::post('cimr-declarations/delete-by-period', [CimrDeclarationController::class, 'destroyByPeriod']);
+Route::post('cimr-declarations/update-by-period', [CimrDeclarationController::class, 'updateByPeriod']);
 Route::apiResource('cimr-declarations', CimrDeclarationController::class);
 Route::apiResource('accident-lieux', AccidentLieuController::class);
+Route::apiResource('accident-types', AccidentTypeController::class);
+Route::apiResource('accident-natures', AccidentNatureController::class);
 Route::get('/departements/employes', [EmployeController::class, 'index']);
+// Endpoint léger pour AccidentTable, CimrTable (sans relations lourdes)
+Route::get('/employes/light', [EmployeController::class, 'listLight']);
 
 
 Route::middleware('auth:sanctum')->group(function () {

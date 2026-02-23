@@ -27,6 +27,12 @@ function CimrManager() {
     const [addingSubDepartement, setAddingSubDepartement] = useState(null);
     const [includeSubDepartments, setIncludeSubDepartments] = useState(false);
 
+    // Préchargement des employés pour CimrTable
+    const [preloadedEmployees, setPreloadedEmployees] = useState(() => {
+        const cached = localStorage.getItem('employeesLightCache');
+        return cached ? JSON.parse(cached) : [];
+    });
+
     const { setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, searchQuery, setSearchQuery, clearActions } = useHeader();
     const { dynamicStyles } = useOpen();
     const [permissions, setPermissions] = useState([]);
@@ -110,6 +116,16 @@ function CimrManager() {
             }
         }
         fetchDepartements();
+
+        // Précharger les employés pour CimrTable (en parallèle)
+        axios.get("http://127.0.0.1:8000/api/employes/light", { withCredentials: true })
+            .then(res => {
+                const emps = Array.isArray(res.data) ? res.data : [];
+                setPreloadedEmployees(emps);
+                localStorage.setItem('employeesLightCache', JSON.stringify(emps));
+            })
+            .catch(err => console.error("Error preloading employees:", err));
+
         document.addEventListener("click", handleClickOutside);
         return () => {
             document.removeEventListener("click", handleClickOutside);
@@ -452,6 +468,7 @@ function CimrManager() {
                             globalSearch={searchQuery}
                             filtersVisible={filtersVisible}
                             handleFiltersToggle={handleFiltersToggle}
+                            preloadedEmployees={preloadedEmployees}
                         />
                     </div>
                 </Box>

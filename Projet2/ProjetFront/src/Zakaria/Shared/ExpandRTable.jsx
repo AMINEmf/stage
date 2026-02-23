@@ -44,10 +44,11 @@ const ExpandRTable = ({
   canEdit = true,
   canDelete = true,
   canBulkDelete = true,
+  disableFilter = false,
 }) => {
 
   const hasActions = handleEdit || handleDelete || handleDuplicate || handlePrint || renderCustomActions;
-  const displayData = filteredData || data || [];
+  const displayData = data || []; // Prioritize provided 'data' if filteredData is not provided or ambiguous
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [zoomedImages, setZoomedImages] = useState(new Set());
 
@@ -175,10 +176,10 @@ const ExpandRTable = ({
 
     return column.render
       ? column.render(item, searchTerm, toggleRowExpansion)
-      : (highlightText ? highlightText(item[column.key], searchTerm) : item[column.key]) || '';
+      : (highlightText && searchTerm ? highlightText(item[column.key], searchTerm) : item[column.key]) || '';
   };
 
-  const filteredItems = displayData.filter(item => filterData(item, searchTerm));
+  const filteredItems = disableFilter ? displayData : displayData.filter(item => filterData(item, searchTerm));
 
   const tableStyles = {
     boxShadow: 'none',
@@ -218,6 +219,7 @@ const ExpandRTable = ({
     position: 'relative',
     fontSize: '0.875rem',
     borderBottom: "1px solid #e5e7eb",
+    whiteSpace: 'nowrap',
   };
 
   const tableContainerStyles = {
@@ -267,7 +269,7 @@ const ExpandRTable = ({
                   <Checkbox
                     indeterminate={selectedItems.length > 0 && selectedItems.length < displayData.length}
                     checked={selectAll}
-                    onChange={canDelete ? handleSelectAllChange : undefined}
+                    onChange={canDelete ? (e) => handleSelectAllChange(e.target.checked) : undefined}
                     disabled={!canDelete}
                     inputProps={{ 'aria-label': 'select all' }}
                     sx={{ padding: '0', borderBottom: 'none' }}

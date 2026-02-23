@@ -29,6 +29,12 @@ function DepartementManager2() {
   const [addingSubDepartement, setAddingSubDepartement] = useState(null);
   const [includeSubDepartments, setIncludeSubDepartments] = useState(false);
 
+  // Préchargement des employés pour AccidentTable
+  const [preloadedEmployees, setPreloadedEmployees] = useState(() => {
+    const cached = localStorage.getItem('employeesLightCache');
+    return cached ? JSON.parse(cached) : [];
+  });
+
   const { setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, searchQuery, setSearchQuery, clearActions } = useHeader();
   const { dynamicStyles } = useOpen();
   const [permissions, setPermissions] = useState([]);
@@ -118,6 +124,15 @@ function DepartementManager2() {
 
     // 2. Lancer la mise à jour asynchrone
     fetchDepartements();
+
+    // 3. Précharger les employés pour AccidentTable (en parallèle)
+    axios.get("http://127.0.0.1:8000/api/employes/light", { withCredentials: true })
+      .then(res => {
+        const emps = Array.isArray(res.data) ? res.data : [];
+        setPreloadedEmployees(emps);
+        localStorage.setItem('employeesLightCache', JSON.stringify(emps));
+      })
+      .catch(err => console.error("Error preloading employees:", err));
 
     document.addEventListener("click", handleClickOutside);
     return () => {
@@ -706,6 +721,7 @@ function DepartementManager2() {
               globalSearch={searchQuery}
               filtersVisible={filtersVisible}
               handleFiltersToggle={handleFiltersToggle}
+              preloadedEmployees={preloadedEmployees}
             />
           </div>
 

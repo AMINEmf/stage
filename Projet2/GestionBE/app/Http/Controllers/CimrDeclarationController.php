@@ -88,25 +88,28 @@ class CimrDeclarationController extends Controller
 
     public function eligibleEmployees()
     {
-        // Retourner tous les employés pour permettre la déclaration
-        return \App\Models\Employe::select('id', 'nom', 'prenom', 'matricule', 'departement_id')
+        // Récupérer tous les employés avec leurs affiliations actives en une seule requête (évite N+1)
+        $employes = \App\Models\Employe::select('id', 'nom', 'prenom', 'matricule', 'departement_id')->get();
+        
+        // Récupérer toutes les affiliations actives indexées par matricule
+        $affiliations = \App\Models\CimrAffiliation::where('statut', 'actif')
             ->get()
-            ->map(function ($emp) {
-                $affiliation = \App\Models\CimrAffiliation::where('matricule', $emp->matricule)
-                    ->where('statut', 'actif')
-                    ->first();
-                return [
-                    'id' => $emp->id,
-                    'employe' => $emp->nom . ' ' . $emp->prenom,
-                    'nom' => $emp->nom,
-                    'prenom' => $emp->prenom,
-                    'matricule' => $emp->matricule,
-                    'departement_id' => $emp->departement_id,
-                    'salaire_cotisable' => $affiliation->salaire_cotisable ?? 0,
-                    'taux_employeur' => $affiliation->taux_employeur ?? 0,
-                    'montant_cotisation' => $affiliation->montant_cotisation ?? 0,
-                ];
-            });
+            ->keyBy('matricule');
+        
+        return $employes->map(function ($emp) use ($affiliations) {
+            $affiliation = $affiliations->get($emp->matricule);
+            return [
+                'id' => $emp->id,
+                'employe' => $emp->nom . ' ' . $emp->prenom,
+                'nom' => $emp->nom,
+                'prenom' => $emp->prenom,
+                'matricule' => $emp->matricule,
+                'departement_id' => $emp->departement_id,
+                'salaire_cotisable' => $affiliation->salaire_cotisable ?? 0,
+                'taux_employeur' => $affiliation->taux_employeur ?? 0,
+                'montant_cotisation' => $affiliation->montant_cotisation ?? 0,
+            ];
+        });
     }
 
     public function store(Request $request)
@@ -173,6 +176,28 @@ class CimrDeclarationController extends Controller
     {
         $cimrDeclaration->delete();
         return response()->json(null, 204);
+    }
+
+    public function updateByPeriod(Request $request)
+    {
+        $request->validate([
+            'mois'    => 'required|integer',
+            'annee'   => 'required|integer',
+            'statut'  => ['required', Rule::in(['a_declarer', 'declare', 'paye'])],
+            'old_statut' => 'nullable|string',
+        ]);
+
+        $query = CimrDeclaration::where('mois', $request->mois)
+            ->where('annee', $request->annee);
+
+        if ($request->filled('old_statut')) {
+            $query->where('statut', $request->old_statut);
+        }
+
+        $count = $query->count();
+        $query->update(['statut' => $request->statut]);
+
+        return response()->json(['updated' => $count]);
     }
 
     public function destroyByPeriod(Request $request)

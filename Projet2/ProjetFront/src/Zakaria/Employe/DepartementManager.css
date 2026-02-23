@@ -7,6 +7,10 @@
   display: flex;
   box-sizing: border-box;
   overflow: hidden;
+  gap: 10px;
+  background: #ffffff;
+  padding: 10px;
+  border-radius: 12px;
 }
 
 

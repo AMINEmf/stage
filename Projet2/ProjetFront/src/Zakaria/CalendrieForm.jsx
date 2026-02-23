@@ -309,9 +309,9 @@ const CalendrieForm = ({ onSubmit, onCancel, initialData, selectedGroup, selecte
         }
 
         .btn-secondary-custom {
-            background-color: #f3f4f6;
-            border: 1px solid #d1d5db;
-            color: #4b5563;
+            background-color: #2c767c;
+            border: none;
+            color: white;
             padding: 0.75rem 1.5rem;
             border-radius: 6px;
             font-size: 0.875rem;
@@ -321,8 +321,8 @@ const CalendrieForm = ({ onSubmit, onCancel, initialData, selectedGroup, selecte
         }
 
         .btn-secondary-custom:hover:not(:disabled) {
-            background-color: #009691;
-            border-color: #009691;
+            background-color: #245f64;
+            border-color: #245f64;
         }
 
         .btn-secondary-custom:disabled {

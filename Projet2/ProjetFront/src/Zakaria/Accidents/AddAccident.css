@@ -1,26 +1,28 @@
 /* AddAccident.css */
 
 .add-accident-container {
-    position: fixed !important;
-    top: 9.4%;
-    left: 60%;
-    width: 41%;
-    height: calc(100vh - 160px) !important;
+    width: 40%;
+    min-width: 340px;
+    flex-shrink: 0;
+    height: 100%;
     background-color: #fff;
-    border-radius: 8px;
+    border-radius: 10px;
     display: flex;
     flex-direction: column;
-    z-index: 1000;
+    z-index: 1;
     animation: slideInAccident 0.3s ease-out;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    overflow: hidden;
 }
 
 @keyframes slideInAccident {
     from {
-        transform: translateX(100%);
+        opacity: 0;
+        transform: translateX(30px);
     }
 
     to {
+        opacity: 1;
         transform: translateX(0);
     }
 }

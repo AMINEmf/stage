@@ -30,6 +30,17 @@ class EmployeController extends Controller
         // }
     }
 
+    /**
+     * Endpoint léger pour récupérer la liste des employés (sans relations lourdes)
+     * Utilisé par AccidentTable, CimrTable, etc. pour les filtres
+     */
+    public function listLight()
+    {
+        return Employe::select('id', 'nom', 'prenom', 'matricule', 'departement_id', 'cin', 'fonction', 'date_entree')
+            ->where('active', 1)
+            ->get();
+    }
+
 
 
 

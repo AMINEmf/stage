@@ -108,7 +108,7 @@ const AppBar = styled(MuiAppBar, {
   }),
   // <--------------------------- Couleur de Appbar ----------------------------------->
   backgroundColor: "#f9fafb",
-  boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+  boxShadow: "none",
 
   ...(open && {
     marginLeft: `${drawerWidth}px`,
@@ -124,19 +124,20 @@ const AppBar = styled(MuiAppBar, {
 
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.black, 0.05),
+  borderRadius: '8px',
+  backgroundColor: "#f1f5f9",
   "&:hover": {
-    backgroundColor: alpha(theme.palette.common.black, 0.1),
+    backgroundColor: "#e2e8f0",
   },
   marginRight: theme.spacing(2),
   marginLeft: 0,
   width: "100%",
+  display: "flex",
+  alignItems: "center",
+  paddingRight: "4px",
   [theme.breakpoints.up("sm")]: {
-    width: "400px",
+    width: "420px",
   },
-
-
 }));
 
 const SearchIconWrapper = styled("div")(({ theme }) => ({
@@ -151,12 +152,17 @@ const SearchIconWrapper = styled("div")(({ theme }) => ({
 }));
 
 const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "#2c3e50",
+  color: "#475569",
+  width: "100%",
   "& .MuiInputBase-input": {
     padding: theme.spacing(1, 1, 1, 0),
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create("width"),
     width: "100%",
+    fontSize: "0.85rem",
+    "&::placeholder": {
+      color: "#94a3b8",
+      opacity: 1,
+    },
   },
 }));
 
@@ -657,10 +663,10 @@ const Navigation = () => {
               noWrap
               sx={{
                 flexGrow: 1,
-                fontSize: "22px",
+                fontSize: "1.15rem",
                 fontWeight: 700,
-                color: "#2c3e50",
-                letterSpacing: "-0.025em"
+                color: "#1e293b",
+                letterSpacing: "-0.01em"
               }}
             >
               {title}
@@ -676,7 +682,7 @@ const Navigation = () => {
             <Box sx={{ display: "flex", marginRight: '-1%' }}>
               <Search>
                 <SearchIconWrapper>
-                  <SearchIcon />
+                  <SearchIcon sx={{ color: '#94a3b8', fontSize: '20px' }} />
                 </SearchIconWrapper>
                 <StyledInputBase
                   placeholder="Recherche globale..."
@@ -684,9 +690,12 @@ const Navigation = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                {/* Icône ⋮ à l'intérieur de la barre */}
-                <IconButton color="#2c3e50" onClick={handleMenuOpen} size="small" style={{ marginLeft: '32%' }}>
-                  <MoreVertIcon />
+                <IconButton
+                  size="small"
+                  onClick={handleMenuOpen}
+                  sx={{ color: '#94a3b8' }}
+                >
+                  <MoreVertIcon sx={{ fontSize: '20px' }} />
                 </IconButton>
               </Search>
 
@@ -729,17 +738,20 @@ const Navigation = () => {
 
             <IconButton color="inherit">
               <Badge color="secondary">
-                {user && (
-                  <ListItem button style={{ color: "#2c3e50" }}>
-                    <ListItemIcon style={{ color: '#2c3e50' }}>
-                      <Avatar
-                        alt={user[0].name}
-                        src={user[0].photo}
-                        style={{ width: "40px", height: "40px", }}
-                      />
-                    </ListItemIcon>
-                    {/* <ListItemText primary={`${user[0].name}`} />{" "} */}
-                  </ListItem>
+                {user && user[0] && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                    <Avatar
+                      alt={user[0].name}
+                      src={user[0].photo}
+                      sx={{
+                        width: 38,
+                        height: 38,
+                        bgcolor: '#e2e8f0',
+                        border: '2px solid #ffffff',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                      }}
+                    />
+                  </Box>
                 )}
               </Badge>
             </IconButton>
@@ -879,7 +891,7 @@ const Navigation = () => {
                   <ListItemIcon>
                     <DashboardIcon />
                   </ListItemIcon>
-                  <ListItemText primary="Dashboard CIMR" />
+                  <ListItemText primary="Tableau de bord CIMR" />
                 </SubMenuItem>
                 <SubMenuItem button component={Link} to="/cimr-affiliations">
                   <ListItemIcon>

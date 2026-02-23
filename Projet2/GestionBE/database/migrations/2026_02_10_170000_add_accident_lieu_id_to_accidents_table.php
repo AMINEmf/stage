@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('accidents', function (Blueprint $table) {
-            $table->foreignId('accident_lieu_id')->nullable()->constrained('accident_lieux')->nullOnDelete();
-            $table->dropColumn('lieu');
+            if (!Schema::hasColumn('accidents', 'accident_lieu_id')) {
+                $table->foreignId('accident_lieu_id')->nullable()->constrained('accident_lieux')->nullOnDelete();
+            }
+            if (Schema::hasColumn('accidents', 'lieu')) {
+                $table->dropColumn('lieu');
+            }
         });
     }
 

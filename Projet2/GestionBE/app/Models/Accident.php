@@ -15,17 +15,27 @@ class Accident extends Model
         'date_accident',
         'heure',
         'accident_lieu_id',
-        'type_accident',
-        'gravite',
+        'accident_type_id',
+        'accident_nature_id',
         'arret_travail',
         'duree_arret',
-        'declaration_cnss',
         'statut',
+        'commentaire',
         'departement_id',
     ];
 
     public function lieu()
     {
         return $this->belongsTo(AccidentLieu::class, 'accident_lieu_id');
+    }
+
+    public function type()
+    {
+        return $this->belongsTo(AccidentType::class, 'accident_type_id');
+    }
+
+    public function nature()
+    {
+        return $this->belongsTo(AccidentNature::class, 'accident_nature_id');
     }
 }

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 
 class Employe extends Model
 {
+    use HasFactory;
+    
     protected $fillable = [
            'matricule',
            'num_badge',

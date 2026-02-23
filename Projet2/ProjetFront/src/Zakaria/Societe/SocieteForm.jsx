@@ -200,9 +200,9 @@ const SocieteForm = ({ onSubmit, onCancel, initialData }) => {
         }
 
         .btn-secondary-custom {
-            background-color: #f3f4f6;
-            border: 1px solid #d1d5db;
-            color: #4b5563;
+            background-color: #2c767c;
+            border: none;
+            color: white;
             padding: 0.75rem 1.5rem;
             border-radius: 6px;
             font-size: 0.875rem;
@@ -212,9 +212,8 @@ const SocieteForm = ({ onSubmit, onCancel, initialData }) => {
         }
 
         .btn-secondary-custom:hover:not(:disabled) {
-            background-color: #e5e7eb;
-            border-color: #9ca3af;
-            color: #374151;
+            background-color: #245f64;
+            border-color: #245f64;
         }
 
         .btn-secondary-custom:disabled {

@@ -8,9 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('cimr_affiliations', function (Blueprint $table) {
-            $table->decimal('montant_cotisation', 15, 2)->nullable()->after('taux_employeur');
-        });
+        if (!Schema::hasColumn('cimr_affiliations', 'montant_cotisation')) {
+            Schema::table('cimr_affiliations', function (Blueprint $table) {
+                $table->decimal('montant_cotisation', 15, 2)->nullable()->after('taux_employeur');
+            });
+        }
     }
 
     public function down(): void

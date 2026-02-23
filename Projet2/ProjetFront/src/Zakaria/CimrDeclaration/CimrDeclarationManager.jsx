@@ -10,7 +10,7 @@ import { Box } from "@mui/material";
 
 function CimrDeclarationManager() {
     const [isAddingEmploye, setIsAddingEmploye] = useState(false);
-    const { setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, clearActions } = useHeader();
+    const { setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, clearActions, searchQuery } = useHeader();
     const { dynamicStyles } = useOpen();
     const tableRef = useRef(null);
 
@@ -28,11 +28,12 @@ function CimrDeclarationManager() {
         <ThemeProvider theme={createTheme()}>
             <Box sx={{ ...dynamicStyles }}>
                 <Box component="main" sx={{ flexGrow: 1, p: 0, mt: 12 }}>
-                    <div style={{ padding: "0 20px" }}>
+                    <div className="departement_home1">
                         <CimrDeclarationTable
                             ref={tableRef}
                             isAddingEmploye={isAddingEmploye}
                             setIsAddingEmploye={setIsAddingEmploye}
+                            globalSearch={searchQuery}
                         />
                     </div>
                 </Box>

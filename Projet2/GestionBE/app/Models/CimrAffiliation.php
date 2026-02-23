@@ -14,19 +14,24 @@ class CimrAffiliation extends Model
     protected $fillable = [
         'employe',
         'matricule',
+        'cin',
+        'poste',
+        'date_embauche',
         'departement_id',
-        'affilie_cimr',
         'numero_cimr',
         'date_affiliation',
+        'date_fin_affiliation',
         'salaire_cotisable',
         'taux_employeur',
         'montant_cotisation',
         'statut',
+        'fiche_affiliation',
     ];
 
     protected $casts = [
-        'affilie_cimr' => 'boolean',
         'date_affiliation' => 'date',
+        'date_fin_affiliation' => 'date',
+        'date_embauche' => 'date',
         'salaire_cotisable' => 'decimal:2',
         'taux_employeur' => 'decimal:2',
         'montant_cotisation' => 'decimal:2',

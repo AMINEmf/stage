@@ -23,9 +23,22 @@ class AccidentLieuController extends Controller
         return response()->json($lieu, 201);
     }
 
-    public function destroy(AccidentLieu $accidentLieu)
+    public function update(Request $request, $id)
     {
-        $accidentLieu->delete();
+        $lieu = AccidentLieu::findOrFail($id);
+        
+        $validated = $request->validate([
+            'nom' => 'required|string|unique:accident_lieux,nom,' . $id . '|max:255',
+        ]);
+
+        $lieu->update($validated);
+        return response()->json($lieu);
+    }
+
+    public function destroy($id)
+    {
+        $lieu = AccidentLieu::findOrFail($id);
+        $lieu->delete();
         return response()->noContent();
     }
 }

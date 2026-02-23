@@ -545,25 +545,24 @@ button.onClose:hover {
 
 .filters-container {
   display: flex;
-  justify-content: center;
   align-items: center;
-  margin-bottom: 30px;
-  padding: 20px 24px;
+  margin-bottom: 15px;
+  padding: 12px 20px;
   background: rgba(8, 179, 173, 0.03);
   border-radius: 12px;
-  box-shadow: 0 6px 20px rgba(8, 179, 173, 0.15);
+  box-shadow: 0 4px 12px rgba(8, 179, 173, 0.1);
   position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  gap: 20px;
 }
 
 .filters-icon-section {
   display: flex;
   align-items: center;
-  margin-left: 8px;
-  position: absolute;
-  left: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-right: 24px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .filters-icon {

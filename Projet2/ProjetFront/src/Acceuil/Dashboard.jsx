@@ -248,7 +248,7 @@ const Dashboard = () => {
         top: '0px',
         left: '220px',
         width: '90%',
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#ffffff',
         minHeight: '100vh'
       }}>
         <Box component="main" sx={{ flexGrow: 1, p: 3 }}>

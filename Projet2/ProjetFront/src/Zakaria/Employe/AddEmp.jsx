@@ -1965,14 +1965,32 @@ const toggleSize = () => {
             color: #ef4444;
           }
 
+        .btn-primary-custom {
+            background-color: #2c767c;
+            border: none;
+            color: white;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
         .btn-primary-custom:hover:not(:disabled) {
-            background-color: #009691;
-            border-color: #009691;
+            background-color: #245f64;
+            border-color: #245f64;
+        }
+
+        .btn-secondary-custom {
+            background-color: #2c767c;
+            border: none;
+            color: white;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
 
         .btn-secondary-custom:hover:not(:disabled) {
-            background-color:rgb(3, 6, 6);
-            border-color: #009691;
+            background-color: #245f64;
+            border-color: #245f64;
         }
         `}
       </style>
