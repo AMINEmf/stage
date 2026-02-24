@@ -6,6 +6,12 @@ background-color: #ffffff !important;
 
   }
 
+/* Masquer le checkbox parasite dans les popups SweetAlert2 */
+.swal2-checkbox,
+.swal2-popup .swal2-checkbox {
+  display: none !important;
+}
+
 .app-container {
   min-height: calc(100vh - 110px); /* Calculez la hauteur minimale de votre contenu pour s'adapter à l'écran */
 }

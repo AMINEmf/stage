@@ -1189,6 +1189,16 @@ const CimrTable = forwardRef((props, ref) => {
                             expandedRows={expandedRows}
                             toggleRowExpansion={toggleRowExpansion}
                             renderExpandedRow={renderExpandedRow}
+                            getRowStyle={(row) => ({
+                                backgroundColor: (editingItem && row.id === editingItem.id)
+                                    ? '#d1fae5'
+                                    : 'white',
+                                borderLeft: (editingItem && row.id === editingItem.id)
+                                    ? '4px solid #2c767c'
+                                    : '4px solid transparent',
+                                '&:hover': { backgroundColor: (editingItem && row.id === editingItem.id) ? '#a7f3d0' : '#f9fafb' },
+                                cursor: 'pointer',
+                            })}
                         />
                     </div>
                 </div>

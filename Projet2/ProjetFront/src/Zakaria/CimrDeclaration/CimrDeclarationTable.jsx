@@ -35,6 +35,11 @@ const statusStyles = {
         bg: '#fff7ed',
         color: '#c2410c',
         label: 'A_DECLARER',
+    },
+    cloture: {
+        bg: '#f1f5f9',
+        color: '#475569',
+        label: 'CLÔTURÉ',
     }
 };
 
@@ -435,7 +440,8 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
             inputOptions: {
                 'a_declarer': 'À Déclarer',
                 'declare': 'Déclaré',
-                'paye': 'Payé'
+                'paye': 'Payé',
+                'cloture': 'Clôturé'
             },
             inputValue: row.statut,
             showCancelButton: true,
@@ -596,9 +602,9 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
             render: (row) => (
                 <div className="d-flex gap-1 justify-content-center">
                     <button
-                        style={{ border: 'none', backgroundColor: 'transparent', cursor: 'pointer', padding: '4px 6px' }}
-                        onClick={(e) => { e.stopPropagation(); handleManageEmployees(row); }}
-                        title="Gérer les employés"
+                        style={{ border: 'none', backgroundColor: 'transparent', cursor: row.statut === 'cloture' ? 'not-allowed' : 'pointer', padding: '4px 6px', opacity: row.statut === 'cloture' ? 0.35 : 1 }}
+                        onClick={(e) => { e.stopPropagation(); if (row.statut === 'cloture') return; handleManageEmployees(row); }}
+                        title={row.statut === 'cloture' ? 'Déclaration clôturée — modification interdite' : 'Gérer les employés'}
                     >
                         <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
                     </button>
@@ -1037,6 +1043,7 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                                             <option value="paye">Payé</option>
                                             <option value="declare">Déclaré</option>
                                             <option value="a_declarer">À Déclarer</option>
+                                            <option value="cloture">Clôturé</option>
                                         </select>
                                     </div>
 
@@ -1069,6 +1076,16 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                                     setRowsPerPage(parseInt(e.target.value, 10));
                                     setPage(0);
                                 }}
+                                getRowStyle={(row) => ({
+                                    backgroundColor: (sideDetailRow && row.mois === sideDetailRow.mois && row.annee === sideDetailRow.annee)
+                                        ? '#d1fae5'
+                                        : 'white',
+                                    borderLeft: (sideDetailRow && row.mois === sideDetailRow.mois && row.annee === sideDetailRow.annee)
+                                        ? '4px solid #2c767c'
+                                        : '4px solid transparent',
+                                    '&:hover': { backgroundColor: (sideDetailRow && row.mois === sideDetailRow.mois && row.annee === sideDetailRow.annee) ? '#a7f3d0' : '#f9fafb' },
+                                    cursor: 'default',
+                                })}
                             />
                         )}
                     </div>
@@ -1243,6 +1260,7 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                                             <option value="a_declarer">À Déclarer</option>
                                             <option value="declare">Déclaré</option>
                                             <option value="paye">Payé</option>
+                                            <option value="cloture">Clôturé</option>
                                         </select>
                                         <button
                                             className="btn btn-sm"

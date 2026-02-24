@@ -1092,6 +1092,16 @@ const AccidentTable = forwardRef((props, ref) => {
               handleEdit={handleEdit}
               handleDelete={handleDelete}
               handleDeleteSelected={handleDeleteSelected}
+              getRowStyle={(row) => ({
+                backgroundColor: (editingAccident && row.id === editingAccident.id)
+                    ? '#d1fae5'
+                    : 'white',
+                borderLeft: (editingAccident && row.id === editingAccident.id)
+                    ? '4px solid #2c767c'
+                    : '4px solid transparent',
+                '&:hover': { backgroundColor: (editingAccident && row.id === editingAccident.id) ? '#a7f3d0' : '#f9fafb' },
+                cursor: 'pointer',
+              })}
             />
           </div>
         </div>

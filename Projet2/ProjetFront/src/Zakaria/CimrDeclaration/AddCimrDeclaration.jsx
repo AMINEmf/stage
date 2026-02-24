@@ -10,6 +10,7 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
     const [declaredMatricules, setDeclaredMatricules] = useState(new Set());
     const fetchingRef = useRef(false);
     const abortRef = useRef(null);
+    const hasInitializedRef = useRef(false);
     const [searchTerm, setSearchTerm] = useState("");
 
     const currentMonth = new Date().getMonth() + 1;
@@ -51,11 +52,14 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
             }));
             setEmployees(emps);
 
-            if (initialData) {
-                const found = emps.find(e => String(e.matricule) === String(initialData.matricule));
-                if (found) setSelectedEmployees([found]);
-            } else {
-                setSelectedEmployees(emps);
+            if (!hasInitializedRef.current) {
+                hasInitializedRef.current = true;
+                if (initialData) {
+                    const found = emps.find(e => String(e.matricule) === String(initialData.matricule));
+                    if (found) setSelectedEmployees([found]);
+                } else {
+                    setSelectedEmployees([]);
+                }
             }
         };
 
@@ -299,8 +303,8 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
                                         />
                                     </InputGroup>
                                     <div className="d-flex gap-2">
-                                        <Button variant="outline-info" size="sm" onClick={handleSelectAll} style={{ fontSize: '0.75rem', borderColor: '#2c767c', color: '#2c767c' }}>Tout cocher</Button>
-                                        <Button variant="outline-secondary" size="sm" onClick={handleDeselectAll} style={{ fontSize: '0.75rem' }}>Tout décocher</Button>
+                                        <Button type="button" variant="outline-info" size="sm" onClick={handleSelectAll} style={{ fontSize: '0.75rem', borderColor: '#2c767c', color: '#2c767c' }}>Tout cocher</Button>
+                                        <Button type="button" variant="outline-secondary" size="sm" onClick={handleDeselectAll} style={{ fontSize: '0.75rem' }}>Tout décocher</Button>
                                     </div>
                                 </div>
 
@@ -401,6 +405,7 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
                                         <option value="a_declarer">À Déclarer</option>
                                         <option value="declare">Déclaré</option>
                                         <option value="paye">Payé</option>
+                                        <option value="cloture">Clôturé</option>
                                     </Form.Select>
                                 </Form.Group>
                             </Col>

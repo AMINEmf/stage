@@ -125,7 +125,7 @@ class CimrDeclarationController extends Controller
                 '*.mois' => ['required', 'integer', 'min:1', 'max:12'],
                 '*.annee' => ['required', 'integer', 'min:2000', 'max:2100'],
                 '*.montant_cimr_employeur' => ['nullable', 'numeric'],
-                '*.statut' => ['required', Rule::in(['a_declarer', 'declare', 'paye'])],
+                '*.statut' => ['required', Rule::in(['a_declarer', 'declare', 'paye', 'cloture'])],
             ]);
             
             $declarations = [];
@@ -142,7 +142,7 @@ class CimrDeclarationController extends Controller
             'mois' => ['required', 'integer', 'min:1', 'max:12'],
             'annee' => ['required', 'integer', 'min:2000', 'max:2100'],
             'montant_cimr_employeur' => ['nullable', 'numeric'],
-            'statut' => ['required', Rule::in(['a_declarer', 'declare', 'paye'])],
+            'statut' => ['required', Rule::in(['a_declarer', 'declare', 'paye', 'cloture'])],
         ]);
 
         $declaration = CimrDeclaration::create($validated);
@@ -157,6 +157,10 @@ class CimrDeclarationController extends Controller
 
     public function update(Request $request, CimrDeclaration $cimrDeclaration)
     {
+        if ($cimrDeclaration->statut === 'cloture') {
+            return response()->json(['message' => 'Cette déclaration est clôturée et ne peut pas être modifiée.'], 403);
+        }
+
         $validated = $request->validate([
             'employe' => ['sometimes', 'required', 'string', 'max:255'],
             'matricule' => ['sometimes', 'required', 'string', 'max:255'],
@@ -164,7 +168,7 @@ class CimrDeclarationController extends Controller
             'mois' => ['sometimes', 'required', 'integer', 'min:1', 'max:12'],
             'annee' => ['sometimes', 'required', 'integer', 'min:2000', 'max:2100'],
             'montant_cimr_employeur' => ['sometimes', 'nullable', 'numeric'],
-            'statut' => ['sometimes', 'required', Rule::in(['a_declarer', 'declare', 'paye'])],
+            'statut' => ['sometimes', 'required', Rule::in(['a_declarer', 'declare', 'paye', 'cloture'])],
         ]);
 
         $cimrDeclaration->update($validated);
@@ -183,7 +187,7 @@ class CimrDeclarationController extends Controller
         $request->validate([
             'mois'    => 'required|integer',
             'annee'   => 'required|integer',
-            'statut'  => ['required', Rule::in(['a_declarer', 'declare', 'paye'])],
+            'statut'  => ['required', Rule::in(['a_declarer', 'declare', 'paye', 'cloture'])],
             'old_statut' => 'nullable|string',
         ]);
 
@@ -191,7 +195,14 @@ class CimrDeclarationController extends Controller
             ->where('annee', $request->annee);
 
         if ($request->filled('old_statut')) {
+            // Block updating rows that are already clôturé (unless we ARE setting cloture)
+            if ($request->old_statut === 'cloture' && $request->statut !== 'cloture') {
+                return response()->json(['message' => 'Les déclarations clôturées ne peuvent pas être modifiées.', 'updated' => 0], 403);
+            }
             $query->where('statut', $request->old_statut);
+        } else {
+            // Never mass-update clôturé rows unless explicitly requested
+            $query->where('statut', '!=', 'cloture');
         }
 
         $count = $query->count();
