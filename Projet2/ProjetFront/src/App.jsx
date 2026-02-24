@@ -11,6 +11,7 @@ import CNSS from './Zakaria/cnss';
 import CNSSDashboard from './Zakaria/cnss/CNSSDashboard';
 import DeclarationsCNSS from './Zakaria/cnss/DeclarationsCNSS';
 import DossierCNSS from './Zakaria/cnss/DossierCNSS';
+import DeclarationsIndividuellesCNSS from './Zakaria/cnss/DeclarationsIndividuellesCNSS';
 import EmpHistorique from './Zakaria/EmpHistorique.jsx';
 
 
@@ -43,6 +44,7 @@ const App = () => {
             <Route path="/cnss/dashboard" element={<CNSSDashboard />} />
             <Route path="/cnss/declarations" element={<DeclarationsCNSS />} />
             <Route path="/cnss/dossiers" element={<DossierCNSS />} />
+            <Route path="/cnss/declarations-individuelles" element={<DeclarationsIndividuellesCNSS />} />
 
             <Route path="/emphistorique" element={<EmpHistorique />} />
 

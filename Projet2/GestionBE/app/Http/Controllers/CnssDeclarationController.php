@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CnssAffiliation;
 use App\Models\CnssDeclaration;
 use App\Models\CnssDeclarationDetail;
+use App\Models\DeclarationIndividuelleCnss;
 use App\Models\Employe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -50,10 +51,12 @@ class CnssDeclarationController extends Controller
         }
     }
 
-    public function eligibleEmployees()
+    public function eligibleEmployees(Request $request)
     {
         try {
-            $employees = $this->getEligibleEmployeesCollection();
+            $mois  = $request->query('mois')  ? (int) $request->query('mois')  : null;
+            $annee = $request->query('annee') ? (int) $request->query('annee') : null;
+            $employees = $this->getEligibleEmployeesCollection($mois, $annee);
             return response()->json($employees->values(), 200);
         } catch (\Exception $e) {
             return response()->json([
@@ -105,9 +108,22 @@ class CnssDeclarationController extends Controller
                 'details.affiliation',
             ])->findOrFail($id);
 
-            $detailRows = $declaration->details->map(function (CnssDeclarationDetail $detail) {
+            $declMois  = (int) $declaration->mois;
+            $declAnnee = (int) $declaration->annee;
+
+            $detailRows = $declaration->details->map(function (CnssDeclarationDetail $detail) use ($declMois, $declAnnee) {
                 $employe = $detail->employe;
-                $salary = $this->resolveEmployeeSalary($employe);
+                $salary = $this->resolveEmployeeSalary($employe, $declMois, $declAnnee);
+
+                // Fetch jours_travailles from individual declaration for the same period
+                $joursTravailles = null;
+                if ($employe) {
+                    $indivDecl = DeclarationIndividuelleCnss::where('employe_id', $employe->id)
+                        ->where('mois', $declMois)
+                        ->where('annee', $declAnnee)
+                        ->first();
+                    $joursTravailles = $indivDecl?->jours_travailles;
+                }
 
                 return [
                     'id' => $detail->id,
@@ -117,6 +133,7 @@ class CnssDeclarationController extends Controller
                     'prenom' => $employe?->prenom,
                     'numero_cnss' => $detail->affiliation?->numero_cnss,
                     'salaire' => $salary,
+                    'jours_travailles' => $joursTravailles,
                     'affiliation_cnss_id' => $detail->affiliation_cnss_id,
                 ];
             })->values();
@@ -204,7 +221,11 @@ class CnssDeclarationController extends Controller
     private function persistDeclaration(?CnssDeclaration $declaration, Request $request, Collection $selectedEmployeeIds)
     {
         try {
-            $eligibleEmployees = $this->getEligibleEmployeesCollection()->keyBy('id');
+            $mois  = (int) $request->mois;
+            $annee = (int) $request->annee;
+
+            // Resolve salaries using salaire_brut_imposable from individual declarations when available
+            $eligibleEmployees = $this->getEligibleEmployeesCollection($mois, $annee)->keyBy('id');
 
             $invalidIds = $selectedEmployeeIds
                 ->filter(fn ($employeeId) => !$eligibleEmployees->has($employeeId))
@@ -264,7 +285,7 @@ class CnssDeclarationController extends Controller
         }
     }
 
-    private function getEligibleEmployeesCollection(): Collection
+    private function getEligibleEmployeesCollection(?int $mois = null, ?int $annee = null): Collection
     {
         $activeAffiliations = CnssAffiliation::with('employe')
             ->whereIn('statut', self::ACTIVE_AFFILIATION_STATUSES)
@@ -272,7 +293,7 @@ class CnssDeclarationController extends Controller
 
         return $activeAffiliations
             ->filter(fn (CnssAffiliation $affiliation) => $affiliation->employe !== null)
-            ->map(function (CnssAffiliation $affiliation) {
+            ->map(function (CnssAffiliation $affiliation) use ($mois, $annee) {
                 /** @var Employe $employe */
                 $employe = $affiliation->employe;
 
@@ -281,7 +302,7 @@ class CnssDeclarationController extends Controller
                     'matricule' => $employe->matricule,
                     'nom' => $employe->nom,
                     'prenom' => $employe->prenom,
-                    'salaire' => $this->resolveEmployeeSalary($employe),
+                    'salaire' => $this->resolveEmployeeSalary($employe, $mois, $annee),
                     'affiliation_cnss_id' => (int) $affiliation->id,
                     'numero_cnss' => $affiliation->numero_cnss,
                 ];
@@ -290,8 +311,21 @@ class CnssDeclarationController extends Controller
             ->values();
     }
 
-    private function resolveEmployeeSalary(Employe $employee): float
+    private function resolveEmployeeSalary(Employe $employee, ?int $mois = null, ?int $annee = null): float
     {
+        // If a specific period is given, prefer the salaire_brut_imposable from individual declarations
+        if ($mois && $annee) {
+            $decl = DeclarationIndividuelleCnss::where('employe_id', $employee->id)
+                ->where('mois', $mois)
+                ->where('annee', $annee)
+                ->first();
+
+            if ($decl && $decl->salaire_brut_imposable > 0) {
+                return round((float) $decl->salaire_brut_imposable, 2);
+            }
+        }
+
+        // Fallback to base salary on the employee record
         $salary = $employee->salaire_base
             ?? $employee->salaire_moyen
             ?? $employee->salaire_reference_annuel

@@ -257,8 +257,8 @@ const ExpandRTable = ({
                   <Checkbox
                     indeterminate={selectedItems.length > 0 && selectedItems.length < displayData.length}
                     checked={selectAll}
-                    onChange={canDelete ? handleSelectAllChange : undefined}
-                    disabled={!canDelete}
+                    onChange={canBulkDelete ? handleSelectAllChange : undefined}
+                    disabled={!canBulkDelete}
                     inputProps={{ 'aria-label': 'select all' }}
                     sx={{ padding: '0', borderBottom: 'none' }}
                   />

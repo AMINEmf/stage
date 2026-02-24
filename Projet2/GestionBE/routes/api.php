@@ -477,6 +477,7 @@ use App\Http\Controllers\CnssDossierController;
 use App\Http\Controllers\CnssDocumentController;
 use App\Http\Controllers\CnssOperationController;
 use App\Http\Controllers\CnssDashboardController;
+use App\Http\Controllers\DeclarationIndividuelleCnssController;
 
 
 use App\Http\Controllers\ContractTypeController;
@@ -1027,6 +1028,13 @@ Route::get('/groupes', [GroupeClientController::class , 'index']);
     Route::get('/cnss/operations/{operation}', [CnssOperationController::class, 'show']);
     Route::put('/cnss/operations/{operation}', [CnssOperationController::class, 'update']);
     Route::delete('/cnss/operations/{operation}', [CnssOperationController::class, 'destroy']);
+
+    // Routes Déclarations Individuelles CNSS
+    Route::get('/cnss/declarations-individuelles', [DeclarationIndividuelleCnssController::class, 'index']);
+    Route::post('/cnss/declarations-individuelles', [DeclarationIndividuelleCnssController::class, 'store']);
+    Route::put('/cnss/declarations-individuelles/{id}', [DeclarationIndividuelleCnssController::class, 'update']);
+    Route::delete('/cnss/declarations-individuelles/{id}', [DeclarationIndividuelleCnssController::class, 'destroy']);
+    Route::get('/employes/{employeId}/declarations-individuelles', [DeclarationIndividuelleCnssController::class, 'byEmploye']);
 
     Route::get('/contract-types', [ContractTypeController::class , 'index']);
     Route::post('/contract-types', [ContractTypeController::class , 'store']);

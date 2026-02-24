@@ -421,7 +421,7 @@ function DossierCNSS() {
 
   return (
     <ThemeProvider theme={createTheme()}>
-      <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
+      <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#fff" }}>
         <Box component="main" sx={{ flexGrow: 1, p: 0, mt: 12, minHeight: "calc(100vh - 160px)" }}>
           <div className="departement_home1">
             <ul className="departement_list">

@@ -3407,7 +3407,6 @@ style={{ height: "150px", width: "100%", maxWidth: "150px" }}
       variant="primary"
       style={{ marginTop: "20px", backgroundColor: "#3a8a90", border: "none" }}
     >
-      <Save size={16} className="mr-2" />
       {editingContractId ? "Mettre à jour le contrat" : "Ajouter Contrat"}
     </Button>
     
@@ -3530,7 +3529,6 @@ style={{ height: "150px", width: "100%", maxWidth: "150px" }}
                           size="sm" 
                           onClick={() => handleSaveContractEdit(contract.id)}
                         >
-                          <Save size={14} className="me-1" />
                           Enregistrer
                         </Button>
                         <Button 

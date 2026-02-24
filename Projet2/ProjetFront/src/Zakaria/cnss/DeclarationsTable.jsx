@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   useState,
   useEffect,
   useCallback,
@@ -6,9 +6,11 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Button, Dropdown, Form } from "react-bootstrap";
 import { faClose, faEye, faFilter, faSliders } from "@fortawesome/free-solid-svg-icons";
+import { BarChart2 } from "lucide-react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Swal from "sweetalert2";
 import jsPDF from "jspdf";
@@ -16,6 +18,7 @@ import "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { FaPlusCircle } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
+import { BarChart } from "@mui/x-charts/BarChart";
 import ExpandRTable from "../Employe/ExpandRTable";
 import AddDeclarationCNSS from "./AddDeclarationCNSS";
 import DeclarationDetails from "./DeclarationDetails";
@@ -65,6 +68,130 @@ const DeclarationsTable = forwardRef((props, ref) => {
   const [columnVisibility, setColumnVisibility] = useState({});
   const [selectedItems, setSelectedItems] = useState([]);
   const [isTableLoading, setIsTableLoading] = useState(false);
+  const [showChartModal, setShowChartModal] = useState(false);
+
+  // ── Expand rows ──────────────────────────────────────────────────────────────
+  const [expandedRows, setExpandedRows] = useState({});
+  const [expandedEmployees, setExpandedEmployees] = useState({}); // { [declarationId]: { loading, data } }
+  const navigate = useNavigate();
+
+  const toggleRowExpansion = useCallback(async (id) => {
+    setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }));
+    // Fetch only once
+    if (!expandedEmployees[id]) {
+      setExpandedEmployees((prev) => ({ ...prev, [id]: { loading: true, data: [] } }));
+      try {
+        const res = await axios.get(`http://127.0.0.1:8000/api/cnss/declarations/${id}`);
+        const details = Array.isArray(res.data?.details) ? res.data.details : [];
+        setExpandedEmployees((prev) => ({ ...prev, [id]: { loading: false, data: details } }));
+      } catch {
+        setExpandedEmployees((prev) => ({ ...prev, [id]: { loading: false, data: [] } }));
+      }
+    }
+  }, [expandedEmployees]);
+
+  const renderExpandedRow = useCallback((item) => {
+    const entry = expandedEmployees[item.id];
+    const loading = entry?.loading;
+    const rows = entry?.data || [];
+
+    return (
+      <div style={{ padding: "12px 0" }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: "8px",
+          marginBottom: "12px", fontWeight: 700, fontSize: "0.8rem",
+          color: "#2c767c", textTransform: "uppercase", letterSpacing: "0.06em",
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2c767c" strokeWidth="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          Employés déclarés — {monthLabelFromNumber(item.mois)} {item.annee}
+        </div>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "20px", color: "#6b7280", fontSize: "0.85rem" }}>
+            Chargement...
+          </div>
+        ) : (
+          <table style={{
+            width: "100%", borderCollapse: "collapse",
+            fontSize: "0.85rem", backgroundColor: "#fff",
+            border: "1px solid #e5e7eb", borderRadius: "8px", overflow: "hidden",
+          }}>
+            <thead>
+              <tr style={{ backgroundColor: "#f0fdfa" }}>
+                {["Matricule", "Employé", "N° CNSS", "Jours trav.", "Salaire brut imp.", ""].map((h) => (
+                  <th key={h} style={{
+                    padding: "10px 14px", textAlign: h === "Salaire brut imp." ? "right" : "left",
+                    fontWeight: 700, color: "#374151",
+                    fontSize: "0.78rem", textTransform: "uppercase",
+                    letterSpacing: "0.05em", borderBottom: "1px solid #e5e7eb",
+                    whiteSpace: "nowrap",
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "30px", color: "#6b7280" }}>
+                    Aucun employé déclaré pour cette période.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row, i) => (
+                  <tr key={row.id ?? i} style={{ backgroundColor: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                    <td style={{ padding: "9px 14px", borderBottom: "1px solid #f3f4f6" }}>
+                      <span style={{
+                        background: "#e0f2f1", color: "#2c767c",
+                        padding: "3px 9px", borderRadius: "4px", fontWeight: 600, fontSize: "0.82rem",
+                      }}>{row.matricule || "-"}</span>
+                    </td>
+                    <td style={{ padding: "9px 14px", borderBottom: "1px solid #f3f4f6", fontWeight: 600, color: "#111827" }}>
+                      {`${row.nom || ""} ${row.prenom || ""}`.trim() || "-"}
+                    </td>
+                    <td style={{ padding: "9px 14px", borderBottom: "1px solid #f3f4f6", color: "#6b7280" }}>
+                      {row.numero_cnss || "-"}
+                    </td>
+                    <td style={{ padding: "9px 14px", borderBottom: "1px solid #f3f4f6", color: "#374151" }}>
+                      {row.jours_travailles ?? "-"}
+                    </td>
+                    <td style={{ padding: "9px 14px", borderBottom: "1px solid #f3f4f6", textAlign: "right", color: "#2c767c", fontWeight: 600 }}>
+                      {formatCurrency(row.salaire)}
+                    </td>
+                    <td style={{ padding: "9px 14px", borderBottom: "1px solid #f3f4f6", textAlign: "center" }}>
+                      <button
+                        title={`Voir déclarations individuelles de ${row.nom} ${row.prenom}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate("/cnss/declarations-individuelles", {
+                            state: { employeeId: row.employe_id, employeeNom: row.nom, employeePrenom: row.prenom },
+                          });
+                        }}
+                        style={{
+                          border: "none", background: "transparent", cursor: "pointer",
+                          color: "#2c767c", padding: "4px", borderRadius: "4px",
+                          display: "inline-flex", alignItems: "center",
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                          <polyline points="15 3 21 3 21 9"/>
+                          <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }, [expandedEmployees, navigate]);
   const [filterOptions, setFilterOptions] = useState({
     filters: [
       {
@@ -155,7 +282,7 @@ const DeclarationsTable = forwardRef((props, ref) => {
   );
   const isFormDrawerOpen = drawerMode === "add" || drawerMode === "edit";
   const isDetailsDrawerOpen = drawerMode === "view";
-  const isDrawerOpen = isFormDrawerOpen || isDetailsDrawerOpen;
+  const isDrawerOpen = isFormDrawerOpen || isDetailsDrawerOpen || showChartModal;
 
   const visibleColumns = useMemo(() => {
     return allColumns.filter((column) => columnVisibility[column.key]);
@@ -245,6 +372,7 @@ const DeclarationsTable = forwardRef((props, ref) => {
 
   const handleAddNewDeclaration = useCallback(() => {
     if (drawerMode) return;
+    setShowChartModal(false);
     setSelectedDeclaration(null);
     setDrawerMode("add");
   }, [drawerMode]);
@@ -259,11 +387,13 @@ const DeclarationsTable = forwardRef((props, ref) => {
   }, [fetchDeclarations]);
 
   const handleOpenDetails = useCallback((declaration) => {
+    setShowChartModal(false);
     setSelectedDeclaration(declaration);
     setDrawerMode("view");
   }, []);
 
   const handleEditDeclaration = useCallback((declaration) => {
+    setShowChartModal(false);
     setSelectedDeclaration(declaration);
     setDrawerMode("edit");
   }, []);
@@ -305,8 +435,8 @@ const DeclarationsTable = forwardRef((props, ref) => {
   }, []);
 
   const handleSelectAllChange = useCallback(
-    (checked) => {
-      if (checked) {
+    (event) => {
+      if (event.target.checked) {
         setSelectedItems(filteredDeclarations.map((item) => item.id));
       } else {
         setSelectedItems([]);
@@ -498,6 +628,18 @@ const DeclarationsTable = forwardRef((props, ref) => {
     justifyContent: "center",
   };
 
+  // Données pour le graphe
+  const chartData = useMemo(() => {
+    const sorted = [...declarations].sort((a, b) =>
+      a.annee !== b.annee ? a.annee - b.annee : a.mois - b.mois
+    );
+    return {
+      labels: sorted.map((d) => `${monthLabelFromNumber(d.mois)} ${d.annee}`),
+      masseSalariale: sorted.map((d) => Number(d.masse_salariale || 0)),
+      montantCNSS: sorted.map((d) => Number(d.montant_total || 0)),
+    };
+  }, [declarations]);
+
   const CustomMenu = React.forwardRef(({ className, "aria-labelledby": labeledBy }, customRef) => (
     <div
       ref={customRef}
@@ -590,6 +732,42 @@ const DeclarationsTable = forwardRef((props, ref) => {
             color: #4b5563;
             margin-bottom: 5px;
         }
+
+        @keyframes slideInChart {
+          from { transform: translateX(100%); }
+          to   { transform: translateX(0); }
+        }
+        .chart-panel {
+          background: #fff;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+        }
+        .chart-drawer-header {
+          padding: 16px 24px;
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-shrink: 0;
+        }
+        .chart-drawer-header h3 {
+          margin: 0;
+          font-size: 18px;
+          color: #2c767c;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .chart-drawer-body {
+          flex: 1;
+          overflow-y: auto;
+          padding: 24px;
+        }
+        .chart-drawer-body::-webkit-scrollbar { width: 6px; }
+        .chart-drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
       `}</style>
 
       <div className="with-split-view" style={{
@@ -612,19 +790,17 @@ const DeclarationsTable = forwardRef((props, ref) => {
           <div className="section-header mb-3">
             <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
               <div>
-                <span className="section-title mb-1">
+                <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c', textTransform: 'none' }}>
                   <i className="fas fa-id-card me-2"></i>
                   Declarations CNSS
                 </span>
-                {!isFormDrawerOpen && (
-                  <p className="section-description text-muted mb-0">
-                    {filteredDeclarations.length} declaration{filteredDeclarations.length > 1 ? "s" : ""} affichee
-                    {filteredDeclarations.length > 1 ? "s" : ""}
-                  </p>
-                )}
+                <p className="section-description text-muted mb-0">
+                  {filteredDeclarations.length} declaration{filteredDeclarations.length > 1 ? "s" : ""} affichee
+                  {filteredDeclarations.length > 1 ? "s" : ""}
+                </p>
               </div>
 
-              <div style={{ display: "flex", gap: "12px" }}>
+              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                 {!isDrawerOpen && (
                   <>
                     <FontAwesomeIcon
@@ -639,30 +815,47 @@ const DeclarationsTable = forwardRef((props, ref) => {
                         marginRight: "8px",
                       }}
                     />
-
-                    <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
-                      <Dropdown.Toggle
-                        as="button"
-                        id="dropdown-visibility-declarations"
-                        title="Visibilite Colonnes"
-                        style={iconButtonStyle}
-                      >
-                        <FontAwesomeIcon icon={faSliders} style={{ width: 18, height: 18, color: "#4b5563" }} />
-                      </Dropdown.Toggle>
-                      <Dropdown.Menu as={CustomMenu} />
-                    </Dropdown>
                   </>
                 )}
+
+                <button
+                  onClick={() => { setDrawerMode(null); setSelectedDeclaration(null); setShowChartModal(true); }}
+                  title="Voir graphe"
+                  style={{
+                    ...iconButtonStyle,
+                    backgroundColor: "#2c767c",
+                    border: "1px solid #2c767c",
+                    color: "#fff",
+                    padding: "6px 12px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <BarChart2 size={18} color="#ffffff" strokeWidth={2} />
+                </button>
 
                 <Button
                   onClick={handleAddNewDeclaration}
                   className="btn btn-outline-primary d-flex align-items-center"
                   size="sm"
-                  style={{ width: "170px" }}
+                  style={{ whiteSpace: "nowrap" }}
                 >
                   <FaPlusCircle className="me-2" />
-                  Ajouter une declaration CNSS
+                  Nouvelle declaration
                 </Button>
+
+                {!isDrawerOpen && (
+                  <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
+                    <Dropdown.Toggle
+                      as="button"
+                      id="dropdown-visibility-declarations"
+                      title="Visibilite Colonnes"
+                      style={iconButtonStyle}
+                    >
+                      <FontAwesomeIcon icon={faSliders} style={{ width: 18, height: 18, color: "#4b5563" }} />
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu as={CustomMenu} />
+                  </Dropdown>
+                )}
               </div>
             </div>
           </div>
@@ -773,9 +966,9 @@ const DeclarationsTable = forwardRef((props, ref) => {
           page={currentPage}
           handleChangePage={handleChangePage}
           handleChangeRowsPerPage={handleChangeRowsPerPage}
-          expandedRows={[]}
-          toggleRowExpansion={() => { }}
-          renderExpandedRow={() => null}
+          expandedRows={expandedRows}
+          toggleRowExpansion={toggleRowExpansion}
+          renderExpandedRow={renderExpandedRow}
           renderCustomActions={(item) => (
             <button
               onClick={(event) => {
@@ -816,6 +1009,98 @@ const DeclarationsTable = forwardRef((props, ref) => {
 
           {isDetailsDrawerOpen && selectedDeclaration && (
             <DeclarationDetails declaration={selectedDeclaration} onClose={handleCloseDrawer} />
+          )}
+          {showChartModal && (
+            <div className="chart-panel" style={{ animation: "slideInChart 0.3s cubic-bezier(0.4,0,0.2,1) both" }}>
+              <div className="chart-drawer-header">
+                <h3>
+                  <BarChart2 size={18} color="#2c767c" strokeWidth={2} />
+                  Graphe des D&eacute;clarations CNSS
+                </h3>
+                <button
+                  onClick={() => setShowChartModal(false)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1.5rem",
+                    lineHeight: 1,
+                  }}
+                  aria-label="Fermer"
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="chart-drawer-body">
+                {declarations.length === 0 ? (
+                  <p style={{ textAlign: "center", color: "#6b7280", padding: "60px 0" }}>
+                    Aucune donn&eacute;e disponible pour afficher le graphe.
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "20px" }}>
+                      {declarations.length}&nbsp;d&eacute;claration(s) &mdash; Masse salariale &amp; Montant CNSS par mois
+                    </p>
+                    <BarChart
+                      xAxis={[{
+                        scaleType: "band",
+                        data: chartData.labels,
+                        tickLabelStyle: { fontSize: 10 },
+                      }]}
+                      series={[
+                        {
+                          data: chartData.masseSalariale,
+                          label: "Masse salariale (MAD)",
+                          color: "#2c767c",
+                          valueFormatter: (v) => `${v.toLocaleString("fr-FR")} MAD`,
+                        },
+                        {
+                          data: chartData.montantCNSS,
+                          label: "Montant CNSS (MAD)",
+                          color: "#f59e0b",
+                          valueFormatter: (v) => `${v.toLocaleString("fr-FR")} MAD`,
+                        },
+                      ]}
+                      height={360}
+                      margin={{ top: 20, right: 20, bottom: 70, left: 80 }}
+                      sx={{
+                        ".MuiChartsAxis-tickLabel": { fontSize: "0.75rem" },
+                        ".MuiChartsLegend-root": { fontSize: "0.78rem" },
+                      }}
+                    />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "24px" }}>
+                      {[
+                        { label: "Masse salariale totale", value: declarations.reduce((s, d) => s + Number(d.masse_salariale || 0), 0), color: "#2c767c" },
+                        { label: "Montant CNSS total",     value: declarations.reduce((s, d) => s + Number(d.montant_total   || 0), 0), color: "#f59e0b" },
+                        { label: "D&eacute;clarations", value: null, count: declarations.length, color: "#6366f1" },
+                        { label: "Mois couverts", value: null, count: new Set(declarations.map((d) => `${d.mois}-${d.annee}`)).size, color: "#10b981" },
+                      ].map((card) => (
+                        <div key={card.label} style={{
+                          background: "#f8fafc",
+                          border: `1px solid ${card.color}33`,
+                          borderRadius: "10px",
+                          padding: "14px 18px",
+                        }}>
+                          <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            {card.label}
+                          </p>
+                          <p style={{ margin: "6px 0 0", fontSize: "1.1rem", fontWeight: 700, color: card.color }}>
+                            {card.value !== null
+                              ? `${card.value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MAD`
+                              : card.count}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}

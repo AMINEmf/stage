@@ -127,7 +127,7 @@ const EmployeeSelector = ({
                                             {emp.nom} {emp.prenom}
                                         </div>
                                         <small className="text-muted">
-                                            Matricule: {emp.matricule || '-'} | Salaire: {Number(emp.salaire || 0).toLocaleString()} MAD
+                                            Matricule: {emp.matricule || '-'} | Salaire brut imp.: {Number(emp.salaire || 0).toLocaleString()} MAD
                                         </small>
                                     </div>
                                 </div>

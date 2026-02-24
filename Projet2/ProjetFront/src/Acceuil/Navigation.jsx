@@ -123,6 +123,8 @@ const AppBar = styled(MuiAppBar, {
 
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
+  display: "flex",
+  alignItems: "center",
   borderRadius: theme.shape.borderRadius,
   backgroundColor: alpha(theme.palette.common.black, 0.05),
   "&:hover": {
@@ -134,8 +136,6 @@ const Search = styled("div")(({ theme }) => ({
   [theme.breakpoints.up("sm")]: {
     width: "400px",
   },
-
-
 }));
 
 const SearchIconWrapper = styled("div")(({ theme }) => ({
@@ -151,6 +151,7 @@ const SearchIconWrapper = styled("div")(({ theme }) => ({
 
 const StyledInputBase = styled(InputBase)(({ theme }) => ({
   color: "#2c3e50",
+  flex: 1,
   "& .MuiInputBase-input": {
     padding: theme.spacing(1, 1, 1, 0),
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
@@ -676,7 +677,7 @@ const Navigation = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
                 {/* Icône ⋮ à l'intérieur de la barre */}
-                <IconButton color="#2c3e50" onClick={handleMenuOpen} size="small" style={{ marginLeft: '32%' }}>
+                <IconButton onClick={handleMenuOpen} size="small" style={{ color: '#4b5563', flexShrink: 0 }}>
                   <MoreVertIcon />
                 </IconButton>
               </Search>
@@ -881,6 +882,12 @@ const Navigation = () => {
                     <ListIcon />
                   </ListItemIcon>
                   <ListItemText primary="Dossier CNSS" />
+                </SubMenuItem>
+                <SubMenuItem button component={Link} to="/cnss/declarations-individuelles">
+                  <ListItemIcon>
+                    <ListIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Déclarations individuelles CNSS" />
                 </SubMenuItem>
               </List>
             </Collapse>

@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Table, Spinner, Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
-import { FileText, Calendar, DollarSign, Users, TrendingUp } from "lucide-react";
+import { FileText, Calendar, DollarSign, Users, TrendingUp, ExternalLink } from "lucide-react";
 import "../Employe/AddEmp.css";
 
 const monthLabelFromNumber = (monthValue) => {
@@ -36,6 +37,7 @@ const formatCurrency = (value) => {
 };
 
 function DeclarationDetails({ declaration, onClose }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [detailsData, setDetailsData] = useState(null);
 
@@ -116,8 +118,10 @@ function DeclarationDetails({ declaration, onClose }) {
             <div style={{ padding: "25px 30px", flex: 1, overflowY: 'auto' }}>
               {/* En-tête avec icône */}
               <div className="section-header" style={{ marginBottom: "25px" }}>
-                <h3 className="section-title" style={{ color: "#2c3e50", fontWeight: "600", display: "flex", alignItems: "center", gap: "12px" }}>
-                  <FileText size={28} style={{ color: "#00afaa" }} />
+                <h3 className="section-title" style={{ color: "#2c3e50", fontWeight: "600", gap: "12px", display: "flex",
+              alignItems: "center",
+              justifyContent: "center" }}>
+                  
                   Détails Déclaration CNSS
                 </h3>
               </div>
@@ -260,7 +264,12 @@ function DeclarationDetails({ declaration, onClose }) {
                             fontWeight: "600",
                             fontSize: "14px",
                             textAlign: "right"
-                          }}>Salaire</th>
+                          }}>Salaire brut imp.</th>
+                          <th style={{ 
+                            padding: "14px 16px", 
+                            borderBottom: "2px solid #dee2e6", 
+                            width: "48px"
+                          }}></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -300,11 +309,29 @@ function DeclarationDetails({ declaration, onClose }) {
                               }}>
                                 {formatCurrency(row.salaire)}
                               </td>
+                              <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                                <button
+                                  title={`Voir déclarations individuelles de ${row.nom} ${row.prenom}`}
+                                  onClick={() => navigate("/cnss/declarations-individuelles", {
+                                    state: { employeeId: row.employe_id, employeeNom: row.nom, employeePrenom: row.prenom }
+                                  })}
+                                  style={{
+                                    border: "none", background: "transparent",
+                                    cursor: "pointer", color: "#2c767c",
+                                    padding: "4px", borderRadius: "4px",
+                                    display: "inline-flex", alignItems: "center",
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#e0f2f1"}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                >
+                                  <ExternalLink size={15} />
+                                </button>
+                              </td>
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={4} style={{ padding: "40px", textAlign: "center", color: "#6c757d" }}>
+                            <td colSpan={5} style={{ padding: "40px", textAlign: "center", color: "#6c757d" }}>
                               <Users size={48} style={{ opacity: "0.3", marginBottom: "10px" }} />
                               <div style={{ fontSize: "15px" }}>Aucun employé déclaré pour cette période.</div>
                             </td>

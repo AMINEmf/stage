@@ -40,7 +40,7 @@ function DeclarationsCNSS() {
 
   return (
     <ThemeProvider theme={createTheme()}>
-      <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#f5f5f5", height: "100vh", display: "flex", flexDirection: "column" }}>
+      <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#fff", height: "100vh", display: "flex", flexDirection: "column" }}>
         <Box component="main" sx={{ flexGrow: 1, p: 0, mt: 12, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <DeclarationsTable
             ref={declarationsTableRef}

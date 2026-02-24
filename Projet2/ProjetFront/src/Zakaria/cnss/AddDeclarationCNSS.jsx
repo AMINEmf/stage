@@ -51,7 +51,10 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
   const fetchEligibleEmployees = useCallback(async () => {
     setLoadingEmployees(true);
     try {
-      const response = await axios.get("http://127.0.0.1:8000/api/cnss/declarations/eligible-employees");
+      const params = {};
+      if (mois) params.mois = Number(mois);
+      if (annee) params.annee = Number(annee);
+      const response = await axios.get("http://127.0.0.1:8000/api/cnss/declarations/eligible-employees", { params });
       const employeesData = Array.isArray(response.data) ? response.data : [];
       setEligibleEmployees(employeesData);
     } catch (error) {
@@ -61,7 +64,7 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
     } finally {
       setLoadingEmployees(false);
     }
-  }, []);
+  }, [mois, annee]);
 
   useEffect(() => {
     fetchEligibleEmployees();
@@ -216,20 +219,22 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
           }
           .form-header {
             padding: 16px 24px;
-            background-color: #f8fafc;
-            border-bottom: 1px solid #e2e8f0;
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e9ecef;
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
+            position: relative;
           }
           .form-header h3 {
             margin: 0;
-            font-size: 18px;
-            color: #2c767c;
+            font-size: 1.15rem;
+            color: #4b5563;
             font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
+            justify-content: center;
           }
           .form-body {
             flex-grow: 1;
@@ -243,7 +248,7 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
             background-color: #f8fafc;
             border-top: 1px solid #e2e8f0;
             display: flex;
-            justify-content: flex-end;
+            justify-content: center;
             gap: 12px;
           }
           /* Custom Input Styles */
@@ -263,7 +268,7 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
             margin-bottom: 6px;
           }
           /* Section Titles */
-          .section-title {
+          .form-section-title {
             color: #64748b;
             font-size: 12px;
             font-weight: 700;
@@ -286,12 +291,14 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
         {/* HEADER */}
         <div className="form-header">
           <h3>
-            <Activity size={20} />
+            
             {isEditMode ? "Modifier Déclaration" : "Nouvelle Déclaration"}
           </h3>
           <button
             onClick={handleClose}
             style={{
+              position: "absolute",
+              right: "16px",
               background: "transparent",
               border: "none",
               color: "#94a3b8",
@@ -311,7 +318,7 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
           <Form onSubmit={handleSubmit} id="declarationForm">
 
             {/* SECTION 1: INFORMATIONS GENERALES */}
-            <div className="section-title">
+            <div className="form-section-title">
               <Calendar size={16} />
               <span>Informations Générales</span>
             </div>
@@ -358,7 +365,7 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
             </div>
 
             {/* SECTION 2: EMPLOYES */}
-            <div className="section-title">
+            <div className="form-section-title">
               <User size={16} />
               <span>Employés & Cotisations</span>
             </div>
@@ -410,7 +417,7 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
             variant="outline-secondary"
             onClick={handleClose}
             className="px-4"
-            style={{ borderColor: "#cbd5e1" }}
+            style={{ backgroundColor: "#2c767c", borderColor: "#2c767c", color: "#fff" }}
           >
             Annuler
           </Button>
@@ -422,7 +429,6 @@ function AddDeclarationCNSS({ toggleDeclarationForm, onDeclarationSaved = () => 
             className="px-4 d-flex align-items-center"
             style={{ backgroundColor: "#2c767c", borderColor: "#2c767c" }}
           >
-            <Save size={16} className="me-2" />
             {saving ? "Enregistrement..." : isEditMode ? "Mettre à jour" : "Enregistrer"}
           </Button>
         </div>

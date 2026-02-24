@@ -71,20 +71,22 @@ function AddCnssDocument({ employeId, onClose, onSaved }) {
           }
           .form-header {
             padding: 16px 24px;
-            background-color: #f8fafc;
-            border-bottom: 1px solid #e2e8f0;
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e9ecef;
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
+            position: relative;
           }
           .form-header h3 {
             margin: 0;
-            font-size: 18px;
-            color: #2c767c;
+            font-size: 1.15rem;
+            color: #4b5563;
             font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
+            justify-content: center;
           }
           .form-body {
             flex-grow: 1;
@@ -147,6 +149,8 @@ function AddCnssDocument({ employeId, onClose, onSaved }) {
               border: "none",
               color: "#94a3b8",
               cursor: "pointer",
+              position: "absolute",
+              right: "16px",
               padding: "4px",
               display: "flex",
               alignItems: "center",
@@ -223,7 +227,6 @@ function AddCnssDocument({ employeId, onClose, onSaved }) {
             className="px-4 d-flex align-items-center"
             style={{ backgroundColor: "#2c767c", borderColor: "#2c767c" }}
           >
-            <Save size={16} className="me-2" />
             {loading ? "Enregistrement..." : "Enregistrer"}
           </Button>
         </div>
