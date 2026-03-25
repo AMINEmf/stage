@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use App\Imports\EmployesImport;
 use Maatwebsite\Excel\Facades\Excel;
-
+use App\Models\Credit;
 
 
 class EmployeController extends Controller
@@ -41,7 +41,30 @@ class EmployeController extends Controller
             ->get();
     }
 
+    public function listCredit()
+    {
+        $employes = Employe::select('id','nom','prenom','salaire_base','fonction','departement_id','anciennete','active')
+                                    ->with(['contrats:id,employe_id,type_contrat','departement:id,nom','credits.typeCredit'])
+                                    ->get();
+        return response()->json($employes);
+    }
 
+    public function addCredit(Request $request){
+        $data = $request->validate([
+            'montant_credit' => 'required|numeric',
+            'date_credit' => 'required|date',
+            'statut' => 'required|string',
+            'id_employe' => 'required|numeric',
+            'type_credit' => 'required|string'
+        ]);
+
+        $credit = Credit::create($data);
+
+        return response()->json([
+            'success'=> true,
+            'data' => $credit,
+        ]);
+    }
 
 
 

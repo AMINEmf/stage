@@ -94,6 +94,11 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileExcel } from "@fortawesome/free-solid-svg-icons";
 
 
+import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
+import DomainVerificationOutlinedIcon from '@mui/icons-material/DomainVerificationOutlined';
+import HistoryIcon from '@mui/icons-material/History';
+import CandlestickChartIcon from '@mui/icons-material/CandlestickChart';
+
 
 const drawerWidth = 260;
 
@@ -387,6 +392,8 @@ const Navigation = () => {
   const [isSocieteOpen, setIsSocieteOpen] = useState(false);
   const [isCimrOpen, setIsCimrOpen] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
+  const [isGestionCreditOpen,setIsGestionCreditOpen] = useState(false);
+  const [isGestionFinanceOpen,setIsGestionFinanceOpen] = useState(false);
 
 
 
@@ -460,7 +467,13 @@ const Navigation = () => {
     setIsCimrOpen(!isCimrOpen);
   };
 
+  const handleCredit = () => {
+    setIsGestionCreditOpen(!isGestionCreditOpen);
+  };
 
+  const handleFinance = () => {
+    setIsGestionFinanceOpen(!isGestionFinanceOpen);
+  };
 
   const isAuthenticated = localStorage.getItem("isAuthenticated");
   const token = localStorage.getItem("API_TOKEN");
@@ -857,6 +870,43 @@ const Navigation = () => {
               </List>
             </Collapse>
 
+            {/* ---------------------------------- Menu principal pour gestion Credit -----------------------------------------*/}
+            <ListItem 
+              button
+              onClick={handleCredit}
+              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+              style={{ color: "white", display: "flex" }}
+            >
+              <ListItemIcon>
+                <AccountBalanceOutlinedIcon style={{ fontSize: "1.6rem", color: "white" }}/>
+              </ListItemIcon>
+              <ListItemText primary="Gestion crédits"/>
+              {isGestionCreditOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+            </ListItem>
+
+            <Collapse in={isGestionCreditOpen} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  <SubMenuItem button component={Link} to="/credit-dashboared">
+                    <ListItemIcon>
+                      <DashboardIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Tableau de bord Crédit"/>
+                  </SubMenuItem>
+                  <SubMenuItem button component={Link} to="/credit-verification">
+                    <ListItemIcon>
+                      <DomainVerificationOutlinedIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Verification Crédit"/>
+                  </SubMenuItem>
+                  <SubMenuItem button component={Link} to="/credit-historique">
+                    <ListItemIcon>
+                      <HistoryIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Historique Crédit"/>
+                  </SubMenuItem>
+                </List>
+            </Collapse>
+
             {/* Menu principal pour Accidents de travail */}
             <ListItem
               button
@@ -908,8 +958,36 @@ const Navigation = () => {
               </List>
             </Collapse>
 
+            {/* ------------------------------- Menu Gestion Finance ---------------------------------- */}
+            <ListItem 
+              button
+              onClick={handleFinance}
+              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+              style={{ color: "white", display: "flex" }}
+            >
+              <ListItemIcon>
+                <CandlestickChartIcon style={{ fontSize: "1.6rem", color: "white" }}/>
+              </ListItemIcon>
+              <ListItemText primary="Gestion Finance"/>
+              {isGestionFinanceOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+            </ListItem>
 
-
+            <Collapse in={isGestionFinanceOpen} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  <SubMenuItem button component={Link} to="/finance-dashboared">
+                    <ListItemIcon>
+                      <DashboardIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Tableau de bord Finance"/>
+                  </SubMenuItem>
+                  <SubMenuItem button component={Link} to="/finance-validation">
+                    <ListItemIcon>
+                      <DomainVerificationOutlinedIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Validation Finance"/>
+                  </SubMenuItem>
+                </List>
+            </Collapse>
 
 
 

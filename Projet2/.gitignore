@@ -1,0 +1,16 @@
+# Laravel
+GestionBE/vendor/
+GestionBE/.env
+
+# React
+ProjetFront/node_modules/
+ProjetFront/dist/
+ProjetFront/build/
+
+# Database
+*.sql
+
+# General
+.env
+node_modules/
+.DS_Store

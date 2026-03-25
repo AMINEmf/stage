@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
-
+use App\Models\Contrat;
 
 
 
@@ -61,15 +61,24 @@ class Employe extends Model
             'salaire_moyen', 'salaire_reference_annuel'
         
     ];
+
+    public function credits()
+    {
+        return $this->hasMany(Credit::class,'id_employe','id');
+    }
+    
     public function departements()
 {
     return $this->belongsToMany(Departement::class, 'employe_departement', 'employe_id', 'departement_id');
 }
-public function contrat()
+public function contrats()
     {
-        return $this->hasMany(Contrat::class);
+        return $this->hasMany(Contrat::class, 'employe_id');
     }
 
+    public function departement(){
+        return $this->belongsTo(Departement::class, 'departement_id');
+    }
 
     public function calendriersEmployes()
     {

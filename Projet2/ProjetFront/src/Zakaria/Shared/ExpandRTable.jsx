@@ -17,6 +17,7 @@ import "../Style.css";
 const ExpandRTable = ({
   columns,
   data,
+  preloadedEmployees,
   filteredData,
   searchTerm,
   highlightText,
@@ -51,7 +52,9 @@ const ExpandRTable = ({
   const displayData = data || []; // Prioritize provided 'data' if filteredData is not provided or ambiguous
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [zoomedImages, setZoomedImages] = useState(new Set());
-
+  console.log("data",data)
+  console.log("columns :",columns)
+  console.log("new data",preloadedEmployees)
 
   const isRowExpanded = (itemId) => {
     switch (expansionType) {
@@ -111,76 +114,115 @@ const ExpandRTable = ({
   };
 
   const renderImageCell = (item, column) => {
-    if (column.key === 'image' || column.key === 'img' || column.key === 'photo' || column.key === 'url_img') {
-      const imgSrc = item[column.key];
-      const imageId = `${item.id}-${column.key}`;
-      const isZoomed = zoomedImages.has(imageId);
+  // ==========================
+  // IMAGE / AVATAR SECTION
+  // ==========================
+  if (
+    column.key === 'image' ||
+    column.key === 'img' ||
+    column.key === 'photo' ||
+    column.key === 'url_img'
+  ) {
+    const imgSrc = item[column.key];
+    const imageId = `${item.id}-${column.key}`;
+    const isZoomed = zoomedImages.has(imageId);
 
-      if (imgSrc) {
-        const fullImgSrc = imgSrc.startsWith('http') ? imgSrc : `http://127.0.0.1:8000/storage/${imgSrc}`;
+    if (imgSrc) {
+      const fullImgSrc = imgSrc.startsWith('http')
+        ? imgSrc
+        : `http://127.0.0.1:8000/storage/${imgSrc}`;
 
+      return (
+        <div className="employee-avatar">
+          <img
+            src={fullImgSrc}
+            alt={item.designation || item.name || item.nom || 'Image'}
+            className={`zoomable-image ${isZoomed ? 'zoomed' : ''}`}
+            style={{
+              width: "50px",
+              height: "50px",
+              borderRadius: "50%",
+              border: "2px solid #eee",
+              objectFit: "cover",
+              cursor: "pointer",
+              transition: "transform 0.3s ease, border 0.3s ease"
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleImageZoom(imageId);
+            }}
+          />
+        </div>
+      );
+    } else {
+      const initials = [];
+      if (item.nom) initials.push(item.nom.charAt(0).toUpperCase());
+      if (item.prenom) initials.push(item.prenom.charAt(0).toUpperCase());
+      if (item.name) initials.push(item.name.charAt(0).toUpperCase());
+
+      if (initials.length > 0) {
         return (
           <div className="employee-avatar">
-            <img
-              src={fullImgSrc}
-              alt={item.designation || item.name || item.nom || 'Image'}
-              className={`zoomable-image ${isZoomed ? 'zoomed' : ''}`}
+            <div
               style={{
                 width: "50px",
                 height: "50px",
                 borderRadius: "50%",
                 border: "2px solid #eee",
-                objectFit: "cover",
-                cursor: "pointer",
-                transition: "transform 0.3s ease, border 0.3s ease"
+                backgroundColor: "#3a8a90",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "18px",
+                fontWeight: "bold"
               }}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleImageZoom(imageId);
-              }}
-            />
+            >
+              {initials.join('')}
+            </div>
           </div>
         );
-      } else {
-        const initials = [];
-        if (item.nom) initials.push(item.nom.charAt(0).toUpperCase());
-        if (item.prenom) initials.push(item.prenom.charAt(0).toUpperCase());
-        if (item.name) initials.push(item.name.charAt(0).toUpperCase());
-
-        if (initials.length > 0) {
-          return (
-            <div className="employee-avatar">
-              <div
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  borderRadius: "50%",
-                  border: "2px solid #eee",
-                  backgroundColor: "#3a8a90",
-                  color: "white",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "18px",
-                  fontWeight: "bold"
-                }}
-              >
-                {initials.join('')}
-              </div>
-            </div>
-          );
-        }
       }
-      return null;
     }
 
-    return column.render
-      ? column.render(item, searchTerm, toggleRowExpansion)
-      : (highlightText && searchTerm ? highlightText(item[column.key], searchTerm) : item[column.key]) || '';
-  };
+    return "";
+  }
+
+  // ==========================
+  // NORMAL DATA SECTION
+  // ==========================
+
+  // 1️⃣ Check direct employee field
+  if (item[column.key] !== undefined && item[column.key] !== null) {
+    return highlightText && searchTerm
+      ? highlightText(item[column.key], searchTerm)
+      : item[column.key];
+  }
+
+  // 2️⃣ Check inside first credit (nested data)
+  if (
+    item.credits &&
+    item.credits.length > 0 &&
+    item.credits[0][column.key] !== undefined
+  ) {
+    const value = item.credits[0][column.key];
+    return highlightText && searchTerm
+      ? highlightText(value, searchTerm)
+      : value;
+  }
+
+  // 3️⃣ Custom render if exists
+  if (column.render) {
+    return column.render(item, searchTerm, toggleRowExpansion);
+  }
+
+  // 4️⃣ Fallback
+  return "";
+};
 
   const filteredItems = disableFilter ? displayData : displayData.filter(item => filterData(item, searchTerm));
-
+  console.log("filteredItems :",filteredItems)
+  
   const tableStyles = {
     boxShadow: 'none',
     borderCollapse: 'separate',
@@ -422,7 +464,7 @@ const ExpandRTable = ({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!canEdit) return;
+                                    //if (!canEdit) return;
                                     handleEdit(item);
                                   }}
                                   aria-label="Edit"

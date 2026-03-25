@@ -5,7 +5,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-use App\Models\EmployeeHistory;
 use App\Models\Departement;
 
 class EmployeeHistory extends Model

@@ -11,7 +11,7 @@ class Departement extends Model
     public function employes()
 
 {
-    return $this->belongsToMany(Employe::class, 'employe_departement', 'departement_id', 'employe_id');
+    return $this->hasMany(Employe::class,  'departement_id');
 }
     public function parent()
 

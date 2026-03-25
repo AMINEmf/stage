@@ -15,6 +15,12 @@ import CimrDeclarationManager from './Zakaria/CimrDeclaration/CimrDeclarationMan
 
 import EmpHistorique from './Zakaria/EmpHistorique.jsx';
 
+import AccueilCredit from './Zakaria/Credits/AccueilCredit.jsx';
+import CreditManager from './Zakaria/Credits/CreditManager.jsx';
+import CreditHistorique from './Zakaria/CreditsHistorique/CreditHistorique.jsx';
+import DashboaredFinance from './Zakaria/Finance/FinanceDashboared.jsx';
+import FinanceManager from './Zakaria/Finance/FinanceManager.jsx';
+
 
 import { OpenProvider } from './Acceuil/OpenProvider.jsx';
 
@@ -44,11 +50,16 @@ const App = () => {
 
             <Route path="/employes2" element={<DepartementManager2 />} />
 
+            <Route path='/credit-dashboared' element={<AccueilCredit />}/>
+            <Route path='/credit-verification' element={<CreditManager />}/>
+            <Route path='/credit-historique' element={<CreditHistorique />}/> 
+
             <Route path="/cimr-dashboard" element={<CimrDashboard />} />
             <Route path="/cimr-affiliations" element={<CimrManager />} />
             <Route path="/cimr-declarations" element={<CimrDeclarationManager />} />
 
-
+            <Route path='/finance-dashboared' element={<DashboaredFinance />}/>
+            <Route path='/finance-validation' element={<FinanceManager />}/>
 
             <Route path="/emphistorique" element={<EmpHistorique />} />
 

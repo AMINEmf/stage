@@ -45,9 +45,9 @@ use App\Http\Controllers\ZoneController;
 use App\Http\Controllers\OffreController;
 use App\Http\Controllers\OffreDetailController;
 
-use App\Http\Controllers\GroupeClientController; //new 
+//use App\Http\Controllers\GroupeClientController; //new 
 
-use App\Http\Controllers\ClientGroupeClientController;  //new
+//use App\Http\Controllers\ClientGroupeClientController;  //new
 
 
 use App\Http\Controllers\OffreGroupeController;  //new
@@ -102,11 +102,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('produits', [ProduitController::class, 'store']);
 
 //     // Fournisseurs
-    Route::get('fournisseurs', [FournisseurController::class, 'index']);
+/*Route::get('fournisseurs', [FournisseurController::class, 'index']);
     Route::post('fournisseurs', [FournisseurController::class, 'store']);
     Route::get('fournisseurs/{fournisseur}', [FournisseurController::class, 'show']);
     Route::put('fournisseurs/{fournisseur}', [FournisseurController::class, 'update']);
-    Route::delete('fournisseurs/{fournisseur}', [FournisseurController::class, 'destroy']);
+    Route::delete('fournisseurs/{fournisseur}', [FournisseurController::class, 'destroy']);*/
 
 
 
@@ -119,10 +119,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::apiResource('/roles', RoleController::class);
-    Route::apiResource('/categories', CategorieController::class);
+    //Route::apiResource('/categories', CategorieController::class);
 
 //     //zone
-    Route::get('zones', [ZoneController::class, 'index']);
+    /*Route::get('zones', [ZoneController::class, 'index']);
     Route::post('zones', [ZoneController::class, 'store']);
     Route::get('zones/{zone}', [ZoneController::class, 'show']);
     Route::put('zones/{zone}', [ZoneController::class, 'update']);
@@ -132,19 +132,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/objectifs', [ObjectifController::class, 'store']);
     Route::get('/objectifs/{id}', [ObjectifController::class, 'show']);
     Route::put('/objectifs/{id}', [ObjectifController::class, 'update']);
-    Route::delete('/objectifs/{id}', [ObjectifController::class, 'destroy']);
+    Route::delete('/objectifs/{id}', [ObjectifController::class, 'destroy']);*/
 
 
 //     // Routes pour Livreurs
-    Route::get('/livreurs', [LivreurController::class, 'index']);
+    /*Route::get('/livreurs', [LivreurController::class, 'index']);
     Route::post('/livreurs', [LivreurController::class, 'store']);
     Route::get('/livreurs/{id}', [LivreurController::class, 'show']);
     Route::put('/livreurs/{id}', [LivreurController::class, 'update']);
-    Route::delete('/livreurs/{id}', [LivreurController::class, 'destroy']);
+    Route::delete('/livreurs/{id}', [LivreurController::class, 'destroy']);*/
 
 
 //     // Routes pour Vehicules
-    Route::get('/vehicules', [VehiculeController::class, 'index']);
+    /*Route::get('/vehicules', [VehiculeController::class, 'index']);
     Route::post('/vehicules', [VehiculeController::class, 'store']);
     Route::get('/vehicules/{id}', [VehiculeController::class, 'show']);
     Route::put('/vehicules/{id}', [VehiculeController::class, 'update']);
@@ -154,11 +154,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/vehicule-livreurs', [VehiculeLivreurController::class, 'store']);
     Route::get('/vehicule-livreurs/{id}', [VehiculeLivreurController::class, 'show']);
     Route::put('/vehicule-livreurs/{id}', [VehiculeLivreurController::class, 'update']);
-    Route::delete('/vehicule-livreurs/{id}', [VehiculeLivreurController::class, 'destroy']);
+    Route::delete('/vehicule-livreurs/{id}', [VehiculeLivreurController::class, 'destroy']);*/
 
 
 //     // Définition des routes pour les site clients
-    Route::get('siteclients', [SiteClientController::class, 'index']); // Route pour obtenir tous les site clients
+   /* Route::get('siteclients', [SiteClientController::class, 'index']); // Route pour obtenir tous les site clients
     Route::get('siteclients/{siteclient}', [SiteClientController::class, 'show']);
     Route::put('siteclients/{siteclient}', [SiteClientController::class, 'update']);
     Route::post('siteclients', [SiteClientController::class, 'store']);
@@ -171,18 +171,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('/devises', DevisController::class);
     Route::apiResource('/lignedevis', LigneDevisController::class);
 //     // Route pour obtenir les lignedevis associés à un devis spécifique
-    Route::get('devises/{devisId}/lignedevis', [DevisController::class, 'lignedevis']);
+    Route::get('devises/{devisId}/lignedevis', [DevisController::class, 'lignedevis']);*/
 //     //Factures
-    Route::apiResource('/factures', FactureController::class);
+   /* Route::apiResource('/factures', FactureController::class);
     Route::apiResource('/lignefactures', LigneFactureController::class);
 //     //stock
     Route::get('stock', [StockController::class, 'index']);
     Route::post('stock', [StockController::class, 'store']);
     Route::get('stock/{stock}', [StockController::class, 'show']);
     Route::put('stock/{stock}', [StockController::class, 'update']);
-    Route::delete('stock/{stck}', [StockController::class, 'destroy']);
+    Route::delete('stock/{stck}', [StockController::class, 'destroy']);*/
 //     //permis
-    Route::get('/permis', [PermisController::class, 'index']);
+  /*  Route::get('/permis', [PermisController::class, 'index']);
     Route::post('/permis', [PermisController::class, 'store']);
     Route::get('/permis/{id}', [PermisController::class, 'show']);
     Route::put('/permis/{id}', [PermisController::class, 'update']);
@@ -196,7 +196,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('regions', [RegionController::class, 'store']);
     Route::get('regions/{region}', [RegionController::class, 'show']);
     Route::put('regions/{region}', [RegionController::class, 'update']);
-    Route::delete('regions/{region}', [RegionController::class, 'destroy']);
+    Route::delete('regions/{region}', [RegionController::class, 'destroy']); */
 
 //       //Commandes
 //       Route::get('commandes', [CommandeController::class, 'index']);
@@ -223,7 +223,7 @@ Route::middleware('auth:sanctum')->group(function () {
 //       Route::apiResource('/oeuffinisemifini', OeuffinisemifiniController::class);
 //       Route::apiResource('/oeufcasses', CasseController::class);
 // //les api de amine 
-Route::get('/chiffre-affaire', [ChiffreAffaireController::class, 'index']);
+/*Route::get('/chiffre-affaire', [ChiffreAffaireController::class, 'index']);
 Route::post('/chiffre-affaire', [ChiffreAffaireController::class, 'store']);
 Route::get('/chiffre-affaire/{id}', [ChiffreAffaireController::class, 'show']);
 Route::put('/chiffre-affaire/{id}', [ChiffreAffaireController::class, 'update']);
@@ -247,9 +247,9 @@ Route::post('/banques', [EntrerBanqueController::class, 'store']);
 Route::get('/banques/{id}', [EntrerBanqueController::class, 'show']);
 Route::put('/banques/{id}', [EntrerBanqueController::class, 'update']);
 Route::delete('/banques/{id}', [EntrerBanqueController::class, 'destroy']);
-Route::apiResource('/etat-recouvrements', EtatRecouvrementController::class,);
+Route::apiResource('/etat-recouvrements', EtatRecouvrementController::class,); */
 
-Route::get('/reclamations', [ReclamationController::class, 'index']);
+/*Route::get('/reclamations', [ReclamationController::class, 'index']);
 Route::post('/reclamations', [ReclamationController::class, 'store']);
 Route::get('/reclamations/{id}', [ReclamationController::class, 'show']);
 Route::put('/reclamations/{id}', [ReclamationController::class, 'update']);
@@ -279,12 +279,12 @@ Route::apiResource('/lignelivraisons', LigneLivraisonController::class);
 Route::get('livraisons/{livraisonsId}/lignelivraisons', [BonLivraisonController::class, 'lignelivraison']);
 Route::post('livraisons/{livraisonsId}/lignelivraisons', [BonLivraisonController::class, 'lignelivraison']);
 Route::put('livraisons/{livraisonsId}/lignelivraisons', [BonLivraisonController::class, 'lignelivraison']);
-Route::delete('livraisons/{livraisonsId}/lignelivraisons', [BonLivraisonController::class, 'lignelivraison']);
+Route::delete('livraisons/{livraisonsId}/lignelivraisons', [BonLivraisonController::class, 'lignelivraison']); */
 
 
 
 // //clients
-Route::get('clients', [ClientController::class, 'index']);
+/* Route::get('clients', [ClientController::class, 'index']);
 Route::post('clients', [ClientController::class, 'store']);
 Route::get('clients/{client}', [ClientController::class, 'show']);
 Route::put('clients/{client}', [ClientController::class, 'update']);
@@ -314,11 +314,11 @@ Route::delete('/offres-groupe/{id}', [OffreGroupeController::class, 'destroy']);
 Route::delete('/offres-groupe/{id}', [OffreGroupeController::class, 'removeOffreFromGroup']);
 Route::put('offres/{id}/update-groupes', [OffreController::class, 'updateGroupes']);
 Route::put('/offres/{id}/update-groupes', [OffreController::class, 'updateGroupes']);
-Route::apiResource('/offres', OffreController::class);
+Route::apiResource('/offres', OffreController::class); */
 // // Resource routes for OffreDetailController
-Route::apiResource('/offre_details', OffreDetailController::class);
+//Route::apiResource('/offre_details', OffreDetailController::class);
 // // Route to get OffreDetails associated with a specific Offre
-Route::get('offres/{offreId}/offre_details', [OffreController::class, 'offreDetails']);
+//Route::get('offres/{offreId}/offre_details', [OffreController::class, 'offreDetails']);
 
 
 
@@ -644,7 +644,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 Route::apiResource('pays', PaysController::class);
-Route::apiResource('villes', VilleController::class);
+/*Route::apiResource('villes', VilleController::class);
 Route::apiResource('communes', CommuneController::class);
 Route::get('/villes', [VilleController::class, 'getVilles']);
 
@@ -658,7 +658,7 @@ Route::apiResource('unites', UniteController::class);
 
 Route::get('/departements/{id}/services', [DepartementController::class, 'getServices']);
 Route::get('/services/{id}/unites', [ServiceController::class, 'getUnitesByService']);
-Route::get('/unites/{id}/postes', [PosteController::class, 'getPostesByUnite']);
+Route::get('/unites/{id}/postes', [PosteController::class, 'getPostesByUnite']); */
 
 
 
@@ -673,20 +673,20 @@ Route::post('/departements/{departement}/children', [DepartementController::clas
 Route::apiResource('calendriers-employes', GpCalendrierEmployeController::class);
 Route::apiResource('calendrie', CalendrieController::class);
 Route::get('/departements/employes', [EmployeController::class, 'index']);
-Route::apiResource('regles-comp-employes', RegleCompEmployeController::class);
+//Route::apiResource('regles-comp-employes', RegleCompEmployeController::class);
 
 
 
 
-Route::apiResource('banque', GpBanqueController::class);
+/*Route::apiResource('banque', GpBanqueController::class);
 Route::apiResource('agences', GpAgenceController::class);
 Route::apiResource('comptes-bancaires', GpCompteBancaireController::class);
-
+*/
 
 
 
 // Routes pour les constantes
-Route::apiResource('type-constantes', TypeConstanteController::class);
+/*Route::apiResource('type-constantes', TypeConstanteController::class);
 Route::apiResource('constantes', ConstanteController::class);
 
 
@@ -699,20 +699,20 @@ Route::apiResource('group-constantes', GroupConstanteController::class);
 Route::apiResource('group-rubriques', GroupRubriqueController::class);
 Route::apiResource('type-rubriques', TypeRubriqueController::class);
 Route::apiResource('memos', MemoController::class);
-Route::apiResource('rubriques', RubriqueController::class);
+Route::apiResource('rubriques', RubriqueController::class); */
 
 // Routes spéciales pour les rubriques incomplètes/complètes
-Route::get('/rubriques/incomplete', [RubriqueController::class, 'getIncomplete']);
+/*Route::get('/rubriques/incomplete', [RubriqueController::class, 'getIncomplete']);
 Route::post('/rubriques/{rubrique}/mark-complete', [RubriqueController::class, 'markAsComplete']);
 
 Route::apiResource('memos-constantes', MemosConstanteController::class);
 Route::apiResource('imprimables', ImprimableController::class);
 Route::apiResource('mois-clotures', MoisClotureController::class);
 Route::apiResource('rappel-salaires', RappelSalaireController::class);
-Route::apiResource('proprietes', ProprieteController::class);
+Route::apiResource('proprietes', ProprieteController::class); */
 
 // Route spécialisée pour la liaison Rubriques ↔ Calculs - Reconstruction de formule
-Route::post('rubriques/{rubrique}/rebuild-formule', [RubriqueController::class, 'rebuildFormule']);
+/*Route::post('rubriques/{rubrique}/rebuild-formule', [RubriqueController::class, 'rebuildFormule']);
 
 // Routes pour les calculs
 Route::apiResource('calculs', CalculController::class);
@@ -741,7 +741,7 @@ Route::post('/rubriques/unlink-multiple', [BultinModelController::class, 'UnlikM
 //pour theme
 Route::apiResource('themes',ThemeBultinModelController::class);
 Route::put('/themes/{id}', [ThemeBultinModelController::class, 'update']);
-Route::post('/themes/{id}/definir-par-defaut', [ThemeBultinModelController::class, 'definirParDefaut']);
+Route::post('/themes/{id}/definir-par-defaut', [ThemeBultinModelController::class, 'definirParDefaut']); */
 
 // <---------------------------- api IKRAM -------------------------->
 
@@ -753,19 +753,19 @@ Route::get('/employes/{id}/rubriques-constantes', [EmployeController::class, 'ge
 Route::get('departements/hierarchy', [DepartementController::class, 'getHierarchy']);
 
 Route::get('/departements/{id}', [DepartementController::class, 'show']);
-Route::get('/constantes-rubriques', [ConstantesRubriquesController::class, 'index']);
-Route::post('/employes/{employe}/bulletins', [GpEmployeBulletinController::class, 'store']);
+//Route::get('/constantes-rubriques', [ConstantesRubriquesController::class, 'index']);
+//Route::post('/employes/{employe}/bulletins', [GpEmployeBulletinController::class, 'store']);
 
 
 
 
-Route::get('/groupes-paie/{id}/rubriques', [GpGroupPaieController::class, 'getRubriques']);
+/*Route::get('/groupes-paie/{id}/rubriques', [GpGroupPaieController::class, 'getRubriques']);
 Route::post('/groupes-paie/{id}/rubriques', [GpGroupPaieController::class, 'attachRubriques']);
 
 Route::delete('groupes-paie/{groupPaie}/rubriques/{rubrique}', [GpGroupPaieController::class, 'detachRubrique']);
 
 Route::apiResource('groupes-paie', GpGroupPaieController::class);
-Route::apiResource('gp_bon_sortie', GpBonSortieController::class);
+Route::apiResource('gp_bon_sortie', GpBonSortieController::class); */
 Route::get('/employes/dashboard-stats', [EmployeController::class, 'getDashboardStats']);
 Route::get('/total-departemet', [DepartementController::class, 'TotalDepartemet']);
 
@@ -781,14 +781,14 @@ Route::get('/total-departemet', [DepartementController::class, 'TotalDepartemet'
 Route::post('/import-employes',[EmployeController::class , 'import']);
 
 //societe
-Route::apiResource('societes', SocieteController::class);
+/*Route::apiResource('societes', SocieteController::class);
 Route::get('/employee-history', [EmployeDepartementController::class, 'getEmployeeHistory']);
 
 
 Route::get('/conge', [GpCongeController::class, 'index']);
 
 Route::apiResource('demandes-conges', GpDemandeCongeController::class);
-Route::apiResource('groupe-arrondi', GroupeArrondiController::class);
+Route::apiResource('groupe-arrondi', GroupeArrondiController::class); */
 
 
 
@@ -821,11 +821,11 @@ Route::apiResource('groupe-arrondi', GroupeArrondiController::class);
     Route::post('produits', [ProduitController::class, 'store']);
 
     // Fournisseurs
-    Route::get('fournisseurs', [FournisseurController::class, 'index']);
+    /* Route::get('fournisseurs', [FournisseurController::class, 'index']);
     Route::post('fournisseurs', [FournisseurController::class, 'store']);
     Route::get('fournisseurs/{fournisseur}', [FournisseurController::class, 'show']);
     Route::put('fournisseurs/{fournisseur}', [FournisseurController::class, 'update']);
-    Route::delete('fournisseurs/{fournisseur}', [FournisseurController::class, 'destroy']);
+    Route::delete('fournisseurs/{fournisseur}', [FournisseurController::class, 'destroy']); */
 
 
 
@@ -838,7 +838,7 @@ Route::apiResource('groupe-arrondi', GroupeArrondiController::class);
 
 
     Route::apiResource('/roles', RoleController::class);
-    Route::apiResource('/categories', CategorieController::class);
+    /*Route::apiResource('/categories', CategorieController::class);
 
     //zone
     Route::get('zones', [ZoneController::class, 'index']);
@@ -1037,7 +1037,7 @@ Route::apiResource('/offres', OffreController::class);
 // Resource routes for OffreDetailController
 Route::apiResource('/offre_details', OffreDetailController::class);
 // Route to get OffreDetails associated with a specific Offre
-Route::get('offres/{offreId}/offre_details', [OffreController::class, 'offreDetails']);
+Route::get('offres/{offreId}/offre_details', [OffreController::class, 'offreDetails']); */
 
 
 
@@ -1045,8 +1045,8 @@ Route::get('offres/{offreId}/offre_details', [OffreController::class, 'offreDeta
 // api_Soukaina
 
 Route::apiResource('pays', PaysController::class);
-Route::apiResource('villes', VilleController::class);
-Route::apiResource('communes', CommuneController::class);
+//Route::apiResource('villes', VilleController::class);
+//Route::apiResource('communes', CommuneController::class);
 
 
 
@@ -1056,10 +1056,10 @@ Route::apiResource('communes', CommuneController::class);
 
 // Societes routes
 
-Route::get('/societes', [SocieteController::class, 'index']);
+/*Route::get('/societes', [SocieteController::class, 'index']);
 Route::post('/societes', [SocieteController::class, 'store']);
 Route::put('/societes/{societe}', [SocieteController::class, 'update']);
-Route::delete('/societes/{societe}', [SocieteController::class, 'destroy']);
+Route::delete('/societes/{societe}', [SocieteController::class, 'destroy']); */
 
 // Departements routes
 Route::get('/societes/{societe}/departements', [DepartementController::class, 'index']);
@@ -1143,7 +1143,7 @@ Route::put('/employe-departements/update', [EmployeDepartementController::class,
 Route::get('/employee-history', [EmployeDepartementController::class, 'getEmployeeHistory']);
 Route::get('departements/hierarchy', [DepartementController::class, 'getHierarchy']);
 
-Route::get('/contrats', [ContratController::class, 'index']);
+/* Route::get('/contrats', [ContratController::class, 'index']);
 Route::post('/contrats', [ContratController::class, 'store']);
 Route::get('/contrats/{id}', [ContratController::class, 'show']);
 Route::put('/contrats/{id}', [ContratController::class, 'update']);
@@ -1184,13 +1184,13 @@ Route::get('/detail-motif-absences', [DetailMotifAbsenceController::class, 'inde
     
 
 Route::apiResource('horaires-periodiques', HorairePeriodiqueController::class);
-Route::apiResource('details-periodiques', DetailsPeriodiqueController::class);
+Route::apiResource('details-periodiques', DetailsPeriodiqueController::class);*/
 
 
 Route::apiResource('details-calendrie', DetailsCalendrieController::class);
 Route::apiResource('calendrie', CalendrieController::class);
 Route::apiResource('regle-compensations', RegleCompensationController::class);
-Route::apiResource('penalites', PenaliteController::class);
+/* Route::apiResource('penalites', PenaliteController::class);
 Route::apiResource('details-regles', DetailsRegleController::class);
 Route::apiResource('arrondis', ArrondiController::class);
 
@@ -1199,10 +1199,28 @@ Route::apiResource('details-regles', DetailsRegleController::class);
 Route::apiResource('heures-travail', HeureTravailController::class);
 
 
-Route::apiResource('horaire-exceptionnel', HoraireExceptionnelController::class);
+Route::apiResource('horaire-exceptionnel', HoraireExceptionnelController::class);*/
 
 
 });
 
+/* Credit Api */
+use App\Http\Controllers\HistoriqueController;
+use App\Http\Controllers\CreditController;
 
-  
+Route::get('/credit',[EmployeController::class, 'listCredit']);
+
+Route::post('/credit-data',[CreditController::class,'addCredit']);
+Route::post('/valide-finance',[CreditController::class,'Remboursement']);
+Route::delete('/delete-credit/{id}',[CreditController::class,'delete']);
+
+Route::match(['put','post'],'/credit/{id}',[CreditController::class,'update']);
+
+/* Budget historique*/
+use App\Http\Controllers\BudgetController;
+Route::get('/budget',[BudgetController::class,'index']);
+Route::post('/budget-rembourser',[BudgetController::class,'decrement']);
+
+/* Remboursement Api */
+use App\Http\Controllers\RemboursementController;
+Route::get('/remboursement/{id}',[RemboursementController::class,'getRembourseByEmploye']);

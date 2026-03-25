@@ -2,10 +2,7 @@
 
 namespace Database\Seeders;
 
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-
 use Illuminate\Database\Seeder;
-// use RolesAndPermissionsSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -14,20 +11,26 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
-
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
+        // Seed du département
         $this->call(DepartementSeeder::class);
-        // $this->call([FullDataSeeder::class, ]);
-        $this->call([RolesAndPermissionsSeeder::class,
-        
-        ClientSeeder::class]);
 
-       
-    
+        // Seed des rôles et permissions
+        $this->call(RolesAndPermissionsSeeder::class);
 
+        // Seed de toutes les données si nécessaire
+        $this->call(FullDataSeeder::class);
+
+        // Seed des affiliés CIMR si nécessaire
+        $this->call(CleanCimrSeeder::class);
+
+        // Ajouter d'autres seeders si besoin
+        // $this->call(AutreSeeder::class);
+        $this->call([ContratSeeder::class]);
+
+        $this->call([CreditSeeder::class]);
+
+        $this->call([CreditTypeSeeder::class]);
+
+        $this->call([AncienneteSeeder::class]);
     }
 }
