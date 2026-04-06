@@ -331,8 +331,8 @@ const initialContractState = {
 
   const loadBulletinModeles = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/bultinmodels');
-      const data = await response.json();
+      const response = await axios.get('/bultinmodels');
+      const data = response?.data || [];
       setBulletinModeles(data);
     } catch (error) {
       console.error('Erreur lors du chargement des bulletin modèles :', error);

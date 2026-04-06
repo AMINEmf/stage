@@ -398,10 +398,9 @@ const [fieldMappings, setFieldMappings] = useState({});
 
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/full-data')
-      .then(response => response.json())
-      .then(data => {
-        setData(data);
+    axios.get('/full-data')
+      .then(response => {
+        setData(response?.data || {});
       })
       .catch(error => console.error('Erreur de chargement:', error));
   }, []);
@@ -1323,7 +1322,7 @@ const handleImportValidation = () => {
       
       <div className="mt-4"   >
         <div className="section-header mb-3">
-          <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '24px', width: '100%' }}>
             {/* Bloc titre */}
             <div>
               <span className="section-title mb-1">
@@ -1341,7 +1340,7 @@ const handleImportValidation = () => {
 
             </div>
             {/* Bloc Dropdowns */}
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "12px", justifySelf: 'end' }}>
 
             <FontAwesomeIcon
               onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
@@ -1973,7 +1972,7 @@ const handleImportValidation = () => {
         </Modal.Footer>
       </Modal>
 
-      <style jsx>{`
+      <style>{`
         // .custom-checkbox1 .form-check-input:checked {
         //   background-color: #00afaa;
         //   border-color: #00afaa;
@@ -2304,7 +2303,7 @@ const handleImportValidation = () => {
   </Modal.Footer>
 
 
-  <style jsx>{`
+  <style>{`
     .custom-checkbox1 .form-check-input:checked {
       background-color: #00afaa;
       border-color: #00afaa;

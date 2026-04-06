@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Departement;
 use App\Models\Employe;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Gate;
@@ -12,10 +13,50 @@ use Illuminate\Support\Facades\Gate;
 
 class DepartementController extends Controller
 {
+    private const HIERARCHY_CACHE_KEY = 'departements_hierarchy_v1';
+    private const HIERARCHY_CACHE_TTL_SECONDS = 300;
+
     public function index()
     {
         if (Gate::allows('view_all_departements')) {
-            return Departement::with(['employes', 'children', 'parent'])->get();
+            $departements = Departement::with(['employes', 'children', 'parent'])->get();
+
+            $employees = Employe::query()
+                ->select(['id', 'matricule', 'nom', 'prenom', 'departement_id', 'url_img', 'active'])
+                ->with(['departements:id,nom'])
+                ->where(function ($query) {
+                    $query->whereNull('active')->orWhere('active', 1);
+                })
+                ->get();
+
+            $employeesByDepartment = [];
+            foreach ($employees as $employee) {
+                if (!empty($employee->departement_id)) {
+                    $employeesByDepartment[(string) $employee->departement_id][] = $employee;
+                }
+
+                $linkedDepartments = $employee->departements ?? collect();
+                foreach ($linkedDepartments as $department) {
+                    if (empty($department?->id)) {
+                        continue;
+                    }
+                    $employeesByDepartment[(string) $department->id][] = $employee;
+                }
+            }
+
+            $departements->transform(function ($departement) use ($employeesByDepartment) {
+                $existingEmployees = collect($departement->employes ?? []);
+                $directEmployees = collect($employeesByDepartment[(string) $departement->id] ?? []);
+                $mergedEmployees = $existingEmployees
+                    ->concat($directEmployees)
+                    ->unique('id')
+                    ->values();
+
+                $departement->setRelation('employes', $mergedEmployees);
+                return $departement;
+            });
+
+            return response()->json($departements);
         }
         return response()->json(['message' => 'Accès refusé'], 403);
     }
@@ -38,12 +79,25 @@ class DepartementController extends Controller
     
     public function getHierarchy()
     {
-        if (!Gate::allows('view_all_departements')) {
+        if (!$this->canAccessHierarchy()) {
             return response()->json(['message' => 'Accès refusé'], 403);
         }
-        \Log::info('getHierarchy called');
-        $rootDepartments = Departement::whereNull('parent_id')->with('children')->get();
-        return response()->json($this->buildHierarchy($rootDepartments));
+
+        $hierarchy = Cache::remember(
+            self::HIERARCHY_CACHE_KEY,
+            now()->addSeconds(self::HIERARCHY_CACHE_TTL_SECONDS),
+            function () {
+                $rootDepartments = Departement::whereNull('parent_id')->with('children')->get();
+                return $this->buildHierarchy($rootDepartments);
+            }
+        );
+
+        return response()->json($hierarchy);
+    }
+
+    private function forgetHierarchyCache(): void
+    {
+        Cache::forget(self::HIERARCHY_CACHE_KEY);
     }
 
     private function buildHierarchy($departments)
@@ -58,6 +112,33 @@ class DepartementController extends Controller
             $result[] = $dept;
         }
         return $result;
+    }
+
+    private function canAccessHierarchy(): bool
+    {
+        $hierarchyPermissions = [
+            'view_all_departements',
+            'create_departements',
+            'update_departements',
+            'delete_departements',
+            'view_all_employes',
+            'view_all_employee_histories',
+            'view_all_accidents',
+            'view_all_cimr',
+            'view_all_mutuelle',
+            'view_all_cnss',
+            'view_all_carrieres_formations',
+            'view_all_conflits',
+            'view_all_sanctions',
+        ];
+
+        foreach ($hierarchyPermissions as $permission) {
+            if (Gate::allows($permission)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 
@@ -80,6 +161,7 @@ class DepartementController extends Controller
         ]);
 
         $departement = Departement::create($request->all());
+        $this->forgetHierarchyCache();
         Log::info('Nouveau departement créé avec succès.', [
             'id' => $departement->id,
             'nom' => $departement->nom,
@@ -129,6 +211,7 @@ class DepartementController extends Controller
         }
 
         $departement->update($request->all());
+        $this->forgetHierarchyCache();
         return response()->json($departement, 200);
     }
 
@@ -152,6 +235,8 @@ class DepartementController extends Controller
 
             // Commit the transaction
             DB::commit();
+
+            $this->forgetHierarchyCache();
 
             return response()->json(['message' => 'Département supprimé avec succès'], 200);
         } catch (\Exception $e) {

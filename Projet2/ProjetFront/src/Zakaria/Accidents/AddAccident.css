@@ -5,10 +5,12 @@
     min-width: 340px;
     flex-shrink: 0;
     height: 100%;
+    min-height: 0;
     background-color: #fff;
     border-radius: 10px;
     display: flex;
     flex-direction: column;
+    align-self: stretch;
     z-index: 1;
     animation: slideInAccident 0.3s ease-out;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
@@ -37,6 +39,7 @@
     padding: 1.5rem;
     overflow-y: auto;
     flex-grow: 1;
+    min-height: 0;
 }
 
 .add-accident-container .form-footer {
@@ -67,8 +70,42 @@
     border-radius: 0.5rem !important;
     padding: 0.625rem 0.875rem !important;
     font-size: 0.875rem !important;
+    line-height: 1.35 !important;
+    min-height: 40px;
     transition: all 0.2s !important;
     color: #334155 !important;
+    background-color: #ffffff !important;
+}
+
+.custom-input.form-select,
+select.custom-input {
+    padding-right: 2.25rem !important;
+    background-position: right 0.78rem center !important;
+    background-size: 16px 12px !important;
+}
+
+.custom-input[type="date"],
+.custom-input[type="time"],
+.custom-input[type="number"],
+.custom-input[type="file"] {
+    line-height: 1.25 !important;
+}
+
+textarea.custom-input {
+    min-height: 86px;
+    line-height: 1.35 !important;
+    resize: vertical;
+}
+
+.custom-input::placeholder {
+    color: #94a3b8 !important;
+}
+
+.custom-input[readonly],
+.custom-input:disabled {
+    background-color: #f8fafc !important;
+    color: #64748b !important;
+    cursor: not-allowed;
 }
 
 .custom-input:focus {

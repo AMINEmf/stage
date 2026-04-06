@@ -694,16 +694,14 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = EM
   }, [hydrateTypeOptions, persistTypeOptions]);
 
   const handleAddType = useCallback(async (name) => {
-    if (operationTypesEndpointAvailable === false) {
-      Swal.fire("Indisponible", "La gestion des types d'opération est temporairement indisponible.", "info");
-      return;
-    }
     const normalized = sanitizeTypeValue(name);
     if (!normalized) return;
 
-    try {
-      await axios.post(OPERATION_TYPES_ENDPOINT, { name: normalized });
-    } catch (error) { }
+    if (operationTypesEndpointAvailable !== false) {
+      try {
+        await axios.post(OPERATION_TYPES_ENDPOINT, { name: normalized });
+      } catch (error) { }
+    }
 
     const newOption = { label: normalized, value: normalized };
     saveTypeOptions((prev) => {
@@ -716,19 +714,17 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = EM
   }, [sanitizeTypeValue, saveTypeOptions, operationTypesEndpointAvailable]);
 
   const handleEditType = useCallback(async (id, name) => {
-    if (operationTypesEndpointAvailable === false) {
-      Swal.fire("Indisponible", "La gestion des types d'opération est temporairement indisponible.", "info");
-      return;
-    }
     const oldValue = sanitizeTypeValue(id);
     const normalized = sanitizeTypeValue(name);
     if (!oldValue || !normalized) return;
 
     const editedOption = { label: normalized, value: normalized };
 
-    try {
-      await axios.put(`${OPERATION_TYPES_ENDPOINT}/${encodeURIComponent(oldValue)}`, { name: normalized });
-    } catch (error) { }
+    if (operationTypesEndpointAvailable !== false) {
+      try {
+        await axios.put(`${OPERATION_TYPES_ENDPOINT}/${encodeURIComponent(oldValue)}`, { name: normalized });
+      } catch (error) { }
+    }
 
     saveTypeOptions((prev) => {
       const withoutOld = prev.filter((item) => item.value !== oldValue);
@@ -744,16 +740,14 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = EM
   }, [sanitizeTypeValue, saveTypeOptions, typeValue, operationTypesEndpointAvailable]);
 
   const handleDeleteType = useCallback(async (id) => {
-    if (operationTypesEndpointAvailable === false) {
-      Swal.fire("Indisponible", "La gestion des types d'opération est temporairement indisponible.", "info");
-      return;
-    }
     const toDelete = sanitizeTypeValue(id);
     if (!toDelete) return;
 
-    try {
-      await axios.delete(`${OPERATION_TYPES_ENDPOINT}/${encodeURIComponent(toDelete)}`);
-    } catch (error) { }
+    if (operationTypesEndpointAvailable !== false) {
+      try {
+        await axios.delete(`${OPERATION_TYPES_ENDPOINT}/${encodeURIComponent(toDelete)}`);
+      } catch (error) { }
+    }
 
     saveTypeOptions((prev) => prev.filter((item) => item.value !== toDelete));
 
@@ -996,12 +990,12 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = EM
         const response = await axios.put(`${API_BASE}/api/cnss/operations/${operation.id}`, payload);
         const payloadData = response.data?.data ?? response.data;
         savedOperationId = payloadData?.id ?? operation.id;
-        Swal.fire("Succès", "Opération Mutuelle mise à jour.", "success");
+        Swal.fire("Succès", "Opération CNSS mise à jour.", "success");
       } else {
         const response = await axios.post(`${API_BASE}/api/cnss/dossiers/${normalizedEmployeId}/operations`, payload);
         const payloadData = response.data?.data ?? response.data;
         savedOperationId = payloadData?.id ?? savedOperationId;
-        Swal.fire("Succès", "Opération Mutuelle ajoutée.", "success");
+        Swal.fire("Succès", "Opération CNSS ajoutée.", "success");
       }
 
       if (savedOperationId && files.length > 0) {
@@ -1400,10 +1394,10 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = EM
                         type="button"
                         className="cnss-btn-add"
                         onClick={() => {
-                          if (operationTypesEndpointAvailable === false || isViewMode) return;
+                          if (isViewMode) return;
                           setManageTypeModal(true);
                         }}
-                        disabled={isViewMode || operationTypesEndpointAvailable === false}
+                        disabled={isViewMode}
                       >
                         +
                       </button>
@@ -1423,7 +1417,7 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = EM
                     )}
                     {operationTypesEndpointAvailable === false && (
                       <span className="cnss-error-message" style={{ color: '#9ca3af' }}>
-                        Aucun type disponible via l'API. La liste est chargée localement.
+                        Aucun type disponible via l'API. Vous pouvez gérer la liste localement avec le bouton +.
                       </span>
                     )}
                   </div>
@@ -1739,7 +1733,7 @@ function AddCnssOperation({ employeId, operation, mode = "add", typeOptions = EM
         </div>
 
         {/* Modales gestion types */}
-        {!isViewMode && operationTypesEndpointAvailable !== false && (
+        {!isViewMode && (
           <ManageResourceModal
             show={manageTypeModal}
             onHide={() => setManageTypeModal(false)}

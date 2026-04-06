@@ -7,12 +7,29 @@ use App\Models\Formation;
 use App\Models\FormationParticipant;
 use App\Services\SmartSuggestionScorer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class FormationController extends Controller
 {
+    private function participantsCacheKey(int $formationId): string
+    {
+        return "formation:{$formationId}:participants:v2";
+    }
+
+    private function participantsAttendanceCacheKey(int $formationId): string
+    {
+        return "formation:{$formationId}:participants_with_attendance:v1";
+    }
+
+    private function forgetParticipantsCaches(int $formationId): void
+    {
+        Cache::forget($this->participantsCacheKey($formationId));
+        Cache::forget($this->participantsAttendanceCacheKey($formationId));
+    }
+
     private function isInternalTrainerOfFormation(Formation $formation, int $employeId): bool
     {
         return ($formation->type === 'Interne')
@@ -86,6 +103,7 @@ class FormationController extends Controller
         try {
             $hasFormateurCols = Schema::hasColumns('formations', ['formateur_employe_id', 'formateur_id']);
             $hasParticipantsTable = Schema::hasTable('formation_participants');
+            $includeSessions = $request->boolean('include_sessions', false);
 
             $query = Formation::query();
 
@@ -96,6 +114,15 @@ class FormationController extends Controller
             $hasSessionsTable = Schema::hasTable('formation_sessions');
             if ($hasSessionsTable) {
                 $query->withCount('sessions');
+                if ($includeSessions) {
+                    $query->with([
+                        'sessions' => function ($q) {
+                            $q->select('id', 'formation_id', 'date', 'heure_debut', 'heure_fin', 'salle', 'statut')
+                                ->orderBy('date')
+                                ->orderBy('heure_debut');
+                        }
+                    ]);
+                }
             }
 
             if ($hasFormateurCols) {
@@ -190,8 +217,43 @@ class FormationController extends Controller
     /**
      * Show a single formation with its participants.
      */
-    public function show(Formation $formation)
+    public function show(Request $request, Formation $formation)
     {
+        if ($request->boolean('compact')) {
+            $hasFormateurCols = Schema::hasColumns('formations', ['formateur_employe_id', 'formateur_id']);
+
+            $compactLoads = [];
+            if ($hasFormateurCols) {
+                $compactLoads = [
+                    'formateurEmploye:id,matricule,nom,prenom',
+                    'formateur:id,name',
+                ];
+            }
+
+            if (!empty($compactLoads)) {
+                $formation->load($compactLoads);
+            }
+
+            $formation->loadCount('participants');
+            if (Schema::hasTable('formation_sessions')) {
+                $formation->loadCount('sessions');
+                $formation->attendance_rate = null;
+            }
+
+            if ($formation->type === 'Interne' && $formation->formateurEmploye) {
+                $e = $formation->formateurEmploye;
+                $formation->formateur_nom = trim(($e->nom ?? '') . ' ' . ($e->prenom ?? ''));
+            } elseif ($formation->type === 'Externe' && $formation->formateur) {
+                $formation->formateur_nom = $formation->formateur->name;
+            } else {
+                $formation->formateur_nom = null;
+            }
+
+            $formation->competence_ids = [];
+
+            return response()->json($formation);
+        }
+
         $formation->load([
             'participants.employe:id,matricule,nom,prenom,departement_id',
             'participants.employe.departements:id,nom',
@@ -220,6 +282,34 @@ class FormationController extends Controller
         $formation->competence_ids = $formation->competences->pluck('id')->toArray();
 
         return response()->json($formation);
+    }
+
+    /**
+     * Lightweight summary endpoint used by participants page.
+     */
+    public function summary(Formation $formation)
+    {
+        $payload = Formation::query()
+            ->select([
+                'id',
+                'code',
+                'titre',
+                'domaine',
+                'type',
+                'statut',
+                'effectif',
+                'date_debut',
+                'date_fin',
+                'formateur_employe_id',
+                'formateur_id',
+            ])
+            ->findOrFail($formation->id);
+
+        $payload->participants_count = (int) DB::table('formation_participants')
+            ->where('formation_id', (int) $formation->id)
+            ->count();
+
+        return response()->json($payload);
     }
 
     /**
@@ -309,45 +399,52 @@ class FormationController extends Controller
      */
     public function participants(Formation $formation)
     {
-        // Compute status based on formation dates (same for all participants)
-        $computedStatus = $this->computeParticipantStatus($formation);
+        $formationId = (int) $formation->id;
 
-        // Optimized query using direct DB query instead of Eloquent relationships
-        $participants = DB::table('formation_participants')
-            ->join('employes', 'employes.id', '=', 'formation_participants.employe_id')
-            ->leftJoin('employe_departement', 'employe_departement.employe_id', '=', 'employes.id')
-            ->leftJoin('departements', 'departements.id', '=', 'employe_departement.departement_id')
-            ->where('formation_participants.formation_id', $formation->id)
-            ->select(
-                'formation_participants.id',
-                'formation_participants.employe_id',
-                'employes.matricule',
-                'employes.nom',
-                'employes.prenom',
-                'departements.nom as departement_nom',
-                'formation_participants.note',
-                'formation_participants.commentaire',
-                'formation_participants.attestation',
-                'formation_participants.created_at'
-            )
-            ->get()
-            ->groupBy('id')
-            ->map(function ($group) use ($computedStatus) {
-                $p = $group->first();
-                return [
-                    'id' => $p->id,
-                    'employe_id' => $p->employe_id,
-                    'matricule' => $p->matricule,
-                    'employe' => trim(($p->nom ?? '') . ' ' . ($p->prenom ?? '')),
-                    'departement' => $p->departement_nom ?? '',
-                    'statut' => $computedStatus,
-                    'note' => $p->note,
-                    'commentaire' => $p->commentaire,
-                    'attestation' => $p->attestation,
-                    'created_at' => $p->created_at,
-                ];
-            })
-            ->values();
+        $participants = Cache::remember(
+            $this->participantsCacheKey($formationId),
+            now()->addSeconds(30),
+            function () use ($formation, $formationId) {
+                // Compute status once for all participants.
+                $computedStatus = $this->computeParticipantStatus($formation);
+
+                return DB::table('formation_participants as fp')
+                    ->join('employes as e', 'e.id', '=', 'fp.employe_id')
+                    ->leftJoin('departements as d', 'd.id', '=', 'e.departement_id')
+                    ->where('fp.formation_id', $formationId)
+                    ->select(
+                        'fp.id',
+                        'fp.employe_id',
+                        'e.matricule',
+                        'e.nom',
+                        'e.prenom',
+                        DB::raw("COALESCE(d.nom, '') as departement_nom"),
+                        'fp.note',
+                        'fp.commentaire',
+                        'fp.attestation',
+                        'fp.created_at'
+                    )
+                    ->orderBy('e.nom')
+                    ->orderBy('e.prenom')
+                    ->get()
+                    ->map(function ($p) use ($computedStatus) {
+                        return [
+                            'id' => $p->id,
+                            'employe_id' => $p->employe_id,
+                            'matricule' => $p->matricule,
+                            'employe' => trim(($p->nom ?? '') . ' ' . ($p->prenom ?? '')),
+                            'departement' => $p->departement_nom ?? '',
+                            'statut' => $computedStatus,
+                            'note' => $p->note,
+                            'commentaire' => $p->commentaire,
+                            'attestation' => $p->attestation,
+                            'created_at' => $p->created_at,
+                        ];
+                    })
+                    ->values()
+                    ->all();
+            }
+        );
 
         return response()->json($participants);
     }
@@ -396,6 +493,8 @@ class FormationController extends Controller
             'commentaire' => $data['commentaire'] ?? null,
         ]);
 
+        $this->forgetParticipantsCaches((int) $formation->id);
+
         $participant->load(['employe:id,matricule,nom,prenom,departement_id', 'employe.departements:id,nom']);
 
         // Compute status based on formation dates
@@ -430,6 +529,8 @@ class FormationController extends Controller
 
         $participant->update($data);
 
+        $this->forgetParticipantsCaches((int) $formation->id);
+
         // Return with computed status
         $computedStatus = $this->computeParticipantStatus($formation);
         $participant->load(['employe:id,matricule,nom,prenom,departement_id', 'employe.departements:id,nom']);
@@ -455,6 +556,7 @@ class FormationController extends Controller
     public function removeParticipant(Formation $formation, FormationParticipant $participant)
     {
         $participant->delete();
+        $this->forgetParticipantsCaches((int) $formation->id);
         return response()->json(['message' => 'Participant retiré']);
     }
 
@@ -470,68 +572,93 @@ class FormationController extends Controller
      */
     public function participantsWithAttendance(Formation $formation)
     {
-        // Total sessions for this formation (scalar sub-query equivalent)
-        $totalSessions = DB::table('formation_sessions')
-            ->where('formation_id', $formation->id)
-            ->count();
+        $formationId = (int) $formation->id;
 
-        // Aggregate per participant: join sessions → attendance
-        $rows = DB::table('formation_participants as fp')
-            ->select([
-                'fp.id',
-                'fp.employe_id',
-                'fp.statut',
-                'fp.note',
-                'fp.commentaire',
-                'fp.attestation',
-                'fp.created_at',
-                DB::raw('SUM(CASE WHEN fa.statut = \'Présent\' THEN 1 ELSE 0 END) AS total_present'),
-                DB::raw('SUM(CASE WHEN fa.statut = \'Absent\'  THEN 1 ELSE 0 END) AS total_absent'),
-                DB::raw('SUM(CASE WHEN fa.statut = \'Retard\'  THEN 1 ELSE 0 END) AS total_retard'),
-            ])
-            ->leftJoin('formation_sessions as fs', 'fs.formation_id', '=', 'fp.formation_id')
-            ->leftJoin('formation_attendance as fa', function ($join) {
-                $join->on('fa.session_id', '=', 'fs.id')
-                     ->on('fa.employe_id', '=', 'fp.employe_id');
-            })
-            ->where('fp.formation_id', $formation->id)
-            ->groupBy('fp.id', 'fp.employe_id', 'fp.statut', 'fp.note', 'fp.commentaire', 'fp.attestation', 'fp.created_at')
-            ->get();
+        $payload = Cache::remember(
+            $this->participantsAttendanceCacheKey($formationId),
+            now()->addSeconds(30),
+            function () use ($formationId) {
+                $rows = DB::table('formation_participants as fp')
+                    ->join('employes as e', 'e.id', '=', 'fp.employe_id')
+                    ->leftJoin('departements as d', 'd.id', '=', 'e.departement_id')
+                    ->where('fp.formation_id', $formationId)
+                    ->select([
+                        'fp.id',
+                        'fp.employe_id',
+                        'fp.statut',
+                        'fp.note',
+                        'fp.commentaire',
+                        'fp.attestation',
+                        'fp.created_at',
+                        'e.matricule',
+                        'e.nom',
+                        'e.prenom',
+                        DB::raw("COALESCE(d.nom, '') as departement_nom"),
+                    ])
+                    ->orderBy('e.nom')
+                    ->orderBy('e.prenom')
+                    ->get();
 
-        // Enrich with employee info + computed attendance_rate
-        $employeIds = $rows->pluck('employe_id')->unique()->toArray();
-        $employes   = \App\Models\Employe::with(['departements:id,nom'])
-            ->whereIn('id', $employeIds)
-            ->get()
-            ->keyBy('id');
+                // Fast-path: no participant means no expensive attendance aggregation.
+                if ($rows->isEmpty()) {
+                    return [];
+                }
 
-        $result = $rows->map(function ($row) use ($employes, $totalSessions) {
-            $emp            = $employes->get($row->employe_id);
-            $totalPresent   = (int) $row->total_present;
-            $attendanceRate = $totalSessions > 0
-                ? round(($totalPresent / $totalSessions) * 100, 1)
-                : null;
+                $totalSessions = (int) DB::table('formation_sessions')
+                    ->where('formation_id', $formationId)
+                    ->count();
 
-            return [
-                'id'              => $row->id,
-                'employe_id'      => $row->employe_id,
-                'matricule'       => $emp?->matricule,
-                'employe'         => trim(($emp?->nom ?? '') . ' ' . ($emp?->prenom ?? '')),
-                'departement'     => $emp?->departements?->first()?->nom ?? '',
-                'statut'          => $row->statut,
-                'note'            => $row->note,
-                'commentaire'     => $row->commentaire,
-                'attestation'     => $row->attestation,
-                'created_at'      => $row->created_at,
-                'total_sessions'  => $totalSessions,
-                'total_present'   => $totalPresent,
-                'total_absent'    => (int) $row->total_absent,
-                'total_retard'    => (int) $row->total_retard,
-                'attendance_rate' => $attendanceRate,
-            ];
-        });
+                $attendanceByEmployee = collect();
+                if ($totalSessions > 0) {
+                    $employeeIds = $rows->pluck('employe_id')->unique()->values()->all();
+                    if (!empty($employeeIds)) {
+                        $attendanceByEmployee = DB::table('formation_attendance as fa')
+                            ->join('formation_sessions as fs', 'fs.id', '=', 'fa.session_id')
+                            ->where('fs.formation_id', $formationId)
+                            ->whereIn('fa.employe_id', $employeeIds)
+                            ->groupBy('fa.employe_id')
+                            ->select(
+                                'fa.employe_id',
+                                DB::raw("SUM(CASE WHEN fa.statut = 'Présent' THEN 1 ELSE 0 END) AS total_present"),
+                                DB::raw("SUM(CASE WHEN fa.statut = 'Absent' THEN 1 ELSE 0 END) AS total_absent"),
+                                DB::raw("SUM(CASE WHEN fa.statut = 'Retard' THEN 1 ELSE 0 END) AS total_retard")
+                            )
+                            ->get()
+                            ->keyBy('employe_id');
+                    }
+                }
 
-        return response()->json($result->values());
+                return $rows->map(function ($row) use ($totalSessions, $attendanceByEmployee) {
+                    $attendance = $attendanceByEmployee->get($row->employe_id);
+                    $totalPresent = (int) ($attendance->total_present ?? 0);
+                    $totalAbsent = (int) ($attendance->total_absent ?? 0);
+                    $totalRetard = (int) ($attendance->total_retard ?? 0);
+                    $attendanceRate = $totalSessions > 0
+                        ? round(($totalPresent / $totalSessions) * 100, 1)
+                        : null;
+
+                    return [
+                        'id'              => $row->id,
+                        'employe_id'      => $row->employe_id,
+                        'matricule'       => $row->matricule,
+                        'employe'         => trim(($row->nom ?? '') . ' ' . ($row->prenom ?? '')),
+                        'departement'     => $row->departement_nom,
+                        'statut'          => $row->statut,
+                        'note'            => $row->note,
+                        'commentaire'     => $row->commentaire,
+                        'attestation'     => $row->attestation,
+                        'created_at'      => $row->created_at,
+                        'total_sessions'  => $totalSessions,
+                        'total_present'   => $totalPresent,
+                        'total_absent'    => $totalAbsent,
+                        'total_retard'    => $totalRetard,
+                        'attendance_rate' => $attendanceRate,
+                    ];
+                })->values()->all();
+            }
+        );
+
+        return response()->json($payload);
     }
 
     /**

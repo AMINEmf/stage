@@ -163,6 +163,41 @@ function AddCNSS({
     };
   }, []);
 
+  const normalizeAffiliationPayload = useCallback((rawPayload, fallbackPayload = {}) => {
+    if (!rawPayload || typeof rawPayload !== "object") {
+      return {
+        ...fallbackPayload,
+        departement_id: fallbackPayload.departement_id ?? selectedDepartementId,
+      };
+    }
+
+    const rawData = rawPayload.data && typeof rawPayload.data === "object"
+      ? rawPayload.data
+      : null;
+
+    const candidate =
+      (rawPayload.affiliation && typeof rawPayload.affiliation === "object" && rawPayload.affiliation) ||
+      (rawPayload.cnssAffiliation && typeof rawPayload.cnssAffiliation === "object" && rawPayload.cnssAffiliation) ||
+      (rawData?.affiliation && typeof rawData.affiliation === "object" && rawData.affiliation) ||
+      (rawData?.cnssAffiliation && typeof rawData.cnssAffiliation === "object" && rawData.cnssAffiliation) ||
+      rawData ||
+      rawPayload;
+
+    return {
+      ...candidate,
+      ...fallbackPayload,
+      id: candidate?.id ?? fallbackPayload.id,
+      employe_id: candidate?.employe_id ?? fallbackPayload.employe_id,
+      departement_id: candidate?.departement_id ?? fallbackPayload.departement_id ?? selectedDepartementId,
+      numero_cnss: candidate?.numero_cnss ?? fallbackPayload.numero_cnss,
+      salaire: candidate?.salaire ?? fallbackPayload.salaire,
+      date_debut: candidate?.date_debut ?? candidate?.date_affiliation ?? fallbackPayload.date_debut,
+      date_fin: candidate?.date_fin ?? fallbackPayload.date_fin ?? null,
+      statut: candidate?.statut ?? fallbackPayload.statut,
+      employe: candidate?.employe ?? fallbackPayload.employe,
+    };
+  }, [selectedDepartementId]);
+
   useEffect(() => {
     let isActive = true;
     if (!selectedEmployee) { setEmployeeDetails(null); return undefined; }
@@ -214,19 +249,26 @@ function AddCNSS({
         const response = await axios.put(`http://127.0.0.1:8000/api/cnss/affiliations/${selectedCnss.id}`, payload, {
           withCredentials: true,
         });
-        const updatedData = response.data?.data || response.data || { ...payload, id: selectedCnss.id };
+        const updatedData = normalizeAffiliationPayload(response.data, {
+          ...payload,
+          id: selectedCnss.id,
+        });
         if (onCnssUpdated) onCnssUpdated(updatedData);
         Swal.fire('Succès', 'Affiliation CNSS mise à jour', 'success');
       } else {
         const response = await axios.post('http://127.0.0.1:8000/api/cnss/affiliations', payload, {
           withCredentials: true,
         });
-        const newData = response.data?.data || response.data;
+        const newData = normalizeAffiliationPayload(response.data, payload);
         onCnssAdded(newData);
         Swal.fire('Succès', 'Affiliation CNSS ajoutée', 'success');
       }
       handleClose();
-      if (fetchCnss) await fetchCnss(true); // Force refresh from server
+      if (fetchCnss) {
+        Promise.resolve(fetchCnss(true)).catch(() => {
+          // Silent refresh failure should not block form close.
+        });
+      }
     } catch (error) {
       let errorMessage = 'Une erreur est survenue';
       if (error.response?.data?.errors) {

@@ -1,15 +1,17 @@
 /* AddConflit.css */
 
 .add-conflit-container {
-    width: 30%;
+    width: 40%;
     min-width: 340px;
     flex-shrink: 0;
-    height: 100%;
-    max-height: calc(100vh - 100px);
+    height: calc(100vh - 170px);
+    max-height: calc(100vh - 170px);
+    min-height: 0;
     background-color: #fff;
     border-radius: 10px;
     display: flex;
     flex-direction: column;
+    align-self: stretch;
     z-index: 1;
     animation: slideInConflit 0.3s ease-out;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
@@ -37,7 +39,7 @@
 .add-conflit-container .form-body {
     padding: 1.5rem;
     overflow-y: auto;
-    flex: 1;
+    flex-grow: 1;
     min-height: 0;
 }
 
@@ -69,8 +71,42 @@
     border-radius: 0.5rem !important;
     padding: 0.625rem 0.875rem !important;
     font-size: 0.875rem !important;
+    line-height: 1.35 !important;
+    min-height: 40px;
     transition: all 0.2s !important;
     color: #334155 !important;
+    background-color: #ffffff !important;
+}
+
+.add-conflit-container .custom-input.form-select,
+.add-conflit-container select.custom-input {
+    padding-right: 2.25rem !important;
+    background-position: right 0.78rem center !important;
+    background-size: 16px 12px !important;
+}
+
+.add-conflit-container .custom-input[type="date"],
+.add-conflit-container .custom-input[type="time"],
+.add-conflit-container .custom-input[type="number"],
+.add-conflit-container .custom-input[type="file"] {
+    line-height: 1.25 !important;
+}
+
+.add-conflit-container textarea.custom-input {
+    min-height: 86px;
+    line-height: 1.35 !important;
+    resize: vertical;
+}
+
+.add-conflit-container .custom-input::placeholder {
+    color: #94a3b8 !important;
+}
+
+.add-conflit-container .custom-input[readonly],
+.add-conflit-container .custom-input:disabled {
+    background-color: #f8fafc !important;
+    color: #64748b !important;
+    cursor: not-allowed;
 }
 
 .add-conflit-container .custom-input:focus {

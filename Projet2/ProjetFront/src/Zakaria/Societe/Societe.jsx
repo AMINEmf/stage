@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
 import { Form, Button, Card, Tabs, Tab } from "react-bootstrap";
@@ -312,12 +312,12 @@ const Societe = () => {
   };
 
   //------------------------- fournisseur export to excel ---------------------//
-  const exportToExcel = () => {
+  const exportToExcel = useCallback(() => {
     const ws = XLSX.utils.json_to_sheet(filteredProduits);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sociétés");
     XLSX.writeFile(wb, "societes.xlsx");
-  };
+  }, [filteredProduits]);
 
   const handleDeletecatgeorie = async (categorieId) => {
     try {
@@ -395,7 +395,7 @@ const Societe = () => {
   //   return String(text).replace(regex, '<mark>$1</mark>');
   // };
 
-  const exportToPDF = () => {
+  const exportToPDF = useCallback(() => {
     const doc = new jsPDF();
     const tableColumn = ['ID', 'Raison Sociale', 'ICE', 'Numéro CNSS', 'Numéro Fiscale', 'Registre Commercial', 'Adresse'];
     const tableRows = filteredProduits.map(societe => [
@@ -415,11 +415,11 @@ const Societe = () => {
     });
 
     doc.save('societes.pdf');
-  };
+  }, [filteredProduits]);
 
-  const handlePrint = () => {
+  const handlePrint = useCallback(() => {
     window.print();
-  };
+  }, []);
 
   const handleFilterChange = (key, value) => {
     setFilterOptions(prev => ({
@@ -508,7 +508,7 @@ const Societe = () => {
 
                 <div className="mt-4">
                   <div className="section-header mb-3">
-                    <div className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
                       <div style={{ flex: '1 1 300px', minWidth: 0 }}>
                         <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
                           <i className="fas fa-building me-2"></i>
@@ -518,16 +518,18 @@ const Societe = () => {
                           {produits.length} société{produits.length > 1 ? 's' : ''} actuellement enregistrée{produits.length > 1 ? 's' : ''}
                         </p>
                       </div>
-                      <Button
-                        onClick={handleShowFormButtonClick}
-                        className="btn btn-outline-primary d-flex align-items-center"
-                        size="sm"
-                        style={{ height: '45px' }}
+                      <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'end' }}>
+                        <Button
+                          onClick={handleShowFormButtonClick}
+                          className="btn btn-outline-primary d-flex align-items-center"
+                          size="sm"
+                          style={{ height: '45px' }}
 
-                      >
-                        <FaPlusCircle className="me-2" />
-                        Ajouter une société
-                      </Button>
+                        >
+                          <FaPlusCircle className="me-2" />
+                          Ajouter une société
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -577,7 +579,7 @@ const Societe = () => {
           </Box>
         </Box>
       </ThemeProvider>
-      <style jsx>{`     
+      <style>{`     
             
             /* Styles de section header */
             .section-header {

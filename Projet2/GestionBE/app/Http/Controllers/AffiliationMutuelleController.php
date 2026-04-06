@@ -6,6 +6,7 @@ use App\Models\AffiliationMutuelle;
 use App\Models\Employe;
 use App\Models\RegimeMutuelle;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -18,56 +19,83 @@ class AffiliationMutuelleController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = AffiliationMutuelle::with([
-                'employe:id,matricule,nom,prenom,departement_id,nb_enfants,situation_fm,cin,date_naiss,adresse,date_embauche,cnss',
-                'mutuelle:id,nom',
-                'regime:id,libelle,taux_couverture,cotisation_mensuelle,part_employeur_pct,part_employe_pct'
-            ]);
-
-            // Filtrer par département si spécifié
-            if ($request->has('departement_id') && $request->departement_id) {
-                $query->whereHas('employe', function($q) use ($request) {
-                    $q->where('departement_id', $request->departement_id);
-                });
+            $departementIds = $this->parseDepartementIds($request->input('departement_ids'));
+            if (empty($departementIds) && $request->filled('departement_id')) {
+                $departementIds = [(int) $request->departement_id];
             }
 
-            // FILTER: Mutuelle
-            if ($request->filled('mutuelle_id')) {
-                $query->where('mutuelle_id', $request->mutuelle_id);
-            }
+            $cachePayload = [
+                'departement_ids' => $departementIds,
+                'mutuelle_id' => $request->filled('mutuelle_id') ? (int) $request->mutuelle_id : null,
+                'statut' => $request->filled('statut') ? (string) $request->statut : null,
+                'search' => $request->filled('search') ? trim((string) $request->search) : null,
+                'date_adhesion_from' => $request->filled('date_adhesion_from') ? (string) $request->date_adhesion_from : null,
+                'date_adhesion_to' => $request->filled('date_adhesion_to') ? (string) $request->date_adhesion_to : null,
+                'date_resiliation_from' => $request->filled('date_resiliation_from') ? (string) $request->date_resiliation_from : null,
+                'date_resiliation_to' => $request->filled('date_resiliation_to') ? (string) $request->date_resiliation_to : null,
+            ];
 
-            // FILTER: Statut
-            if ($request->filled('statut')) {
-                $query->where('statut', $request->statut);
-            }
+            $cacheVersion = $this->getAffiliationsCacheVersion();
+            $cacheKey = 'mutuelle:affiliations:index:v' . $cacheVersion . ':' . sha1(json_encode($cachePayload));
 
-            // FILTER: Search (Nom/Prénom)
-            if ($request->filled('search')) {
-                $search = $request->search;
-                $query->whereHas('employe', function($q) use ($search) {
-                    $q->where('nom', 'LIKE', "%{$search}%")
-                      ->orWhere('prenom', 'LIKE', "%{$search}%")
-                      ->orWhere('matricule', 'LIKE', "%{$search}%");
-                });
-            }
+            $affiliations = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($request, $departementIds) {
+                $query = AffiliationMutuelle::with([
+                    'employe:id,matricule,nom,prenom,departement_id,nb_enfants,situation_fm,cin,date_naiss,adresse,date_embauche,cnss',
+                    'employe.departements:id',
+                    'mutuelle:id,nom',
+                    'regime:id,libelle,taux_couverture,cotisation_mensuelle,part_employeur_pct,part_employe_pct'
+                ]);
 
-            // FILTER: Date Adhésion (Range)
-            if ($request->filled('date_adhesion_from')) {
-                $query->whereDate('date_adhesion', '>=', $request->date_adhesion_from);
-            }
-            if ($request->filled('date_adhesion_to')) {
-                $query->whereDate('date_adhesion', '<=', $request->date_adhesion_to);
-            }
+                // Filtrer par départements (direct + relation employe_departement)
+                if (!empty($departementIds)) {
+                    $query->whereHas('employe', function ($q) use ($departementIds) {
+                        $q->where(function ($sq) use ($departementIds) {
+                            $sq->whereIn('departement_id', $departementIds)
+                                ->orWhereHas('departements', function ($dq) use ($departementIds) {
+                                    $dq->whereIn('departements.id', $departementIds);
+                                });
+                        });
+                    });
+                }
 
-            // FILTER: Date Résiliation (Range)
-            if ($request->filled('date_resiliation_from')) {
-                $query->whereDate('date_resiliation', '>=', $request->date_resiliation_from);
-            }
-            if ($request->filled('date_resiliation_to')) {
-                $query->whereDate('date_resiliation', '<=', $request->date_resiliation_to);
-            }
+                // FILTER: Mutuelle
+                if ($request->filled('mutuelle_id')) {
+                    $query->where('mutuelle_id', $request->mutuelle_id);
+                }
 
-            $affiliations = $query->orderBy('created_at', 'desc')->get();
+                // FILTER: Statut
+                if ($request->filled('statut')) {
+                    $query->where('statut', $request->statut);
+                }
+
+                // FILTER: Search (Nom/Prénom)
+                if ($request->filled('search')) {
+                    $search = $request->search;
+                    $query->whereHas('employe', function ($q) use ($search) {
+                        $q->where('nom', 'LIKE', "%{$search}%")
+                          ->orWhere('prenom', 'LIKE', "%{$search}%")
+                          ->orWhere('matricule', 'LIKE', "%{$search}%");
+                    });
+                }
+
+                // FILTER: Date Adhésion (Range)
+                if ($request->filled('date_adhesion_from')) {
+                    $query->whereDate('date_adhesion', '>=', $request->date_adhesion_from);
+                }
+                if ($request->filled('date_adhesion_to')) {
+                    $query->whereDate('date_adhesion', '<=', $request->date_adhesion_to);
+                }
+
+                // FILTER: Date Résiliation (Range)
+                if ($request->filled('date_resiliation_from')) {
+                    $query->whereDate('date_resiliation', '>=', $request->date_resiliation_from);
+                }
+                if ($request->filled('date_resiliation_to')) {
+                    $query->whereDate('date_resiliation', '<=', $request->date_resiliation_to);
+                }
+
+                return $query->orderBy('created_at', 'desc')->get();
+            });
 
             return response()->json([
                 'success' => true,
@@ -85,27 +113,46 @@ class AffiliationMutuelleController extends Controller
 
     /**
      * GET /api/employes/eligibles-mutuelle
-     * Employés éligibles pour affiliation (actifs et non affiliés)
+        * Employés éligibles pour affiliation (actifs sans aucune affiliation)
      */
     public function employesEligibles(Request $request)
     {
         try {
-            // On récupère uniquement les employés ACTIFS (active = 1)
-            // qui n'ont PAS encore d'affiliation ACTIVE ou RÉSILIÉE
-            $query = Employe::where('active', 1)
-                ->whereDoesntHave('affiliationsMutuelle', function($q) {
-                    $q->whereIn('statut', ['ACTIVE', 'RESILIE']);
-                });
+            $departementId = ($request->has('departement_id') && $request->departement_id)
+                ? (int) $request->departement_id
+                : null;
 
-            // Filtrer par département si spécifié
-            if ($request->has('departement_id') && $request->departement_id) {
-                $query->where('departement_id', $request->departement_id);
-            }
+            $cacheVersion = $this->getEligiblesCacheVersion();
+            $cacheKey = 'mutuelle:eligibles:v' . $cacheVersion . ':' . ($departementId ?? 'all');
 
-            $employes = $query->select('id', 'matricule', 'nom', 'prenom', 'nb_enfants', 'situation_fm', 'cin', 'date_naiss', 'date_embauche', 'adresse', 'departement_id')
-                ->orderBy('nom')
-                ->orderBy('prenom')
-                ->get();
+            $employes = Cache::remember($cacheKey, now()->addMinutes(2), function () use ($departementId) {
+                // Un employé est éligible s'il est actif et n'a aucune affiliation mutuelle.
+                $query = Employe::query()
+                    ->where('active', 1)
+                    ->whereNotExists(function ($subQuery) {
+                        $subQuery->select(DB::raw(1))
+                            ->from('affiliations_mutuelle')
+                            ->whereColumn('affiliations_mutuelle.employe_id', 'employes.id');
+                    });
+
+                // Filtrer par département si spécifié
+                if ($departementId) {
+                    $query->where(function ($q) use ($departementId) {
+                        $q->where('departement_id', $departementId)
+                            ->orWhereExists(function ($subQuery) use ($departementId) {
+                                $subQuery->select(DB::raw(1))
+                                    ->from('employe_departement')
+                                    ->whereColumn('employe_departement.employe_id', 'employes.id')
+                                    ->where('employe_departement.departement_id', $departementId);
+                            });
+                    });
+                }
+
+                return $query->select('id', 'matricule', 'nom', 'prenom', 'nb_enfants', 'situation_fm', 'cin', 'date_naiss', 'date_embauche', 'adresse', 'departement_id')
+                    ->orderBy('nom')
+                    ->orderBy('prenom')
+                    ->get();
+            });
 
             return response()->json([
                 'success' => true,
@@ -199,6 +246,8 @@ class AffiliationMutuelleController extends Controller
             $affiliation->load(['employe', 'mutuelle', 'regime']);
 
             DB::commit();
+            $this->forgetEligiblesCacheForEmploye((int) $validated['employe_id']);
+            $this->bumpAffiliationsCacheVersion();
 
             return response()->json([
                 'success' => true,
@@ -276,6 +325,8 @@ class AffiliationMutuelleController extends Controller
                 'date_resiliation' => $validated['date_resiliation'],
                 'commentaire' => $validated['commentaire'] ?? $affiliation->commentaire
             ]);
+            $this->forgetEligiblesCacheForEmploye((int) $affiliation->employe_id);
+            $this->bumpAffiliationsCacheVersion();
 
             // Charger les relations pour la réponse
             $affiliation->load(['employe', 'mutuelle', 'regime']);
@@ -342,6 +393,8 @@ class AffiliationMutuelleController extends Controller
             ]);
             
             DB::commit();
+            $this->forgetEligiblesCacheForEmploye((int) $affiliation->employe_id);
+            $this->bumpAffiliationsCacheVersion();
 
             return response()->json([
                 'success' => true,
@@ -375,7 +428,10 @@ class AffiliationMutuelleController extends Controller
                 ], 400);
             }
 
+            $employeId = (int) $affiliation->employe_id;
             $affiliation->delete();
+            $this->forgetEligiblesCacheForEmploye($employeId);
+            $this->bumpAffiliationsCacheVersion();
 
             return response()->json([
                 'success' => true,
@@ -409,5 +465,89 @@ class AffiliationMutuelleController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => 'Erreur serveur'], 500);
         }
+    }
+
+    private function forgetEligiblesCacheForEmploye(int $employeId): void
+    {
+        $currentVersion = $this->getEligiblesCacheVersion();
+        $keys = ['mutuelle:eligibles:v' . $currentVersion . ':all'];
+
+        $employe = Employe::with('departements:id')->find($employeId);
+        if (!$employe) {
+            Cache::forget('mutuelle:eligibles:v' . $currentVersion . ':all');
+            $this->bumpEligiblesCacheVersion();
+            return;
+        }
+
+        if (!empty($employe->departement_id)) {
+            $keys[] = 'mutuelle:eligibles:v' . $currentVersion . ':' . (int) $employe->departement_id;
+        }
+
+        foreach ($employe->departements as $departement) {
+            $keys[] = 'mutuelle:eligibles:v' . $currentVersion . ':' . (int) $departement->id;
+        }
+
+        foreach (array_unique($keys) as $key) {
+            Cache::forget($key);
+        }
+
+        // Bump version to invalidate any in-flight or non-targeted keys.
+        $this->bumpEligiblesCacheVersion();
+    }
+
+    private function getEligiblesCacheVersion(): int
+    {
+        $version = (int) Cache::get('mutuelle:eligibles:version', 1);
+        if ($version <= 0) {
+            $version = 1;
+            Cache::forever('mutuelle:eligibles:version', $version);
+        }
+
+        return $version;
+    }
+
+    private function bumpEligiblesCacheVersion(): void
+    {
+        $currentVersion = $this->getEligiblesCacheVersion();
+        Cache::forever('mutuelle:eligibles:version', $currentVersion + 1);
+    }
+
+    private function parseDepartementIds($rawDepartementIds): array
+    {
+        if (is_array($rawDepartementIds)) {
+            $source = $rawDepartementIds;
+        } elseif (is_string($rawDepartementIds) && trim($rawDepartementIds) !== '') {
+            $source = preg_split('/[\s,;]+/', trim($rawDepartementIds)) ?: [];
+        } else {
+            return [];
+        }
+
+        $ids = array_values(array_filter(array_map(function ($id) {
+            return is_numeric($id) ? (int) $id : null;
+        }, $source), function ($id) {
+            return !is_null($id) && $id > 0;
+        }));
+
+        $ids = array_values(array_unique($ids));
+        sort($ids);
+
+        return $ids;
+    }
+
+    private function getAffiliationsCacheVersion(): int
+    {
+        $version = (int) Cache::get('mutuelle:affiliations:version', 1);
+        if ($version <= 0) {
+            $version = 1;
+            Cache::forever('mutuelle:affiliations:version', $version);
+        }
+
+        return $version;
+    }
+
+    private function bumpAffiliationsCacheVersion(): void
+    {
+        $currentVersion = $this->getAffiliationsCacheVersion();
+        Cache::forever('mutuelle:affiliations:version', $currentVersion + 1);
     }
 }

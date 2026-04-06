@@ -107,13 +107,20 @@ class EmployeDepartementController extends Controller
         Log::info("Demande d'historique des employés");
     
         try {
-            $employeeHistory = EmployeeHistory::all();
+            $employeeId = request()->query('employeeId');
+
+            $query = EmployeeHistory::query();
+            if (!empty($employeeId)) {
+                $query->where('employe_id', $employeeId);
+            }
+
+            $employeeHistory = $query->get();
     
             Log::info("Données récupérées: ", $employeeHistory->toArray());
     
             if ($employeeHistory->isEmpty()) {
                 Log::warning("Aucun enregistrement d'employés trouvé");
-                return response()->json(['message' => "Aucun enregistrement d'employés trouvé"], 404);
+                return response()->json([], 200);
             }
     
             $formattedHistory = $employeeHistory->map(function ($history) {
@@ -243,8 +250,8 @@ public function updateOrCreate(Request $request)
     {
         Gate::authorize('delete_employee_histories');
         $employe = Employe::findOrFail($id);
-        $employe->departements()->detach();  
-        $employe->delete(); 
+        $employe->departements()->detach();
+        $employe->delete();
 
         return response()->json(['message' => 'Employee and all department relationships deleted successfully'], 200);
     }

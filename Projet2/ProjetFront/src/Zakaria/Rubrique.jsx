@@ -908,7 +908,7 @@ size={14} />
 
                 <div className="mt-4">
                     <div className="section-header mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
                             <div>
                                 <span className="section-title mb-1">
                                     <i className="fas fa-cogs me-2"></i>
@@ -919,7 +919,7 @@ size={14} />
                                 </p>
                             </div>
 
-                            <div className="d-flex align-items-center">
+                            <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'end' }}>
 
 <FontAwesomeIcon
 onClick={() => handleFiltersToggle && handleFiltersToggle(!showFilters)}
@@ -1253,7 +1253,7 @@ marginRight: "15px",
                     </button>
                 </Modal.Footer>
             </Modal>
-            <style jsx>{`
+            <style>{`
             /* Styles identiques à AbsenceTable */
             .expand-button {
                 background: transparent;

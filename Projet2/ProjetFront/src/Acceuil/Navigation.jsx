@@ -57,6 +57,8 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
+import apiClient from "../services/apiClient";
+import { API_ORIGIN } from "../services/apiConfig";
 import StoreIcon from "@mui/icons-material/Store";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import DescriptionIcon from "@mui/icons-material/Description";
@@ -131,6 +133,8 @@ const AppBar = styled(MuiAppBar, {
 
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
+  display: "flex",
+  alignItems: "center",
   borderRadius: theme.shape.borderRadius,
   backgroundColor: alpha(theme.palette.common.black, 0.05),
   "&:hover": {
@@ -142,6 +146,7 @@ const Search = styled("div")(({ theme }) => ({
   [theme.breakpoints.up("sm")]: {
     width: "400px",
   },
+  minHeight: 42,
 
 
 }));
@@ -162,6 +167,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   "& .MuiInputBase-input": {
     padding: theme.spacing(1, 1, 1, 0),
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
+    paddingRight: theme.spacing(6),
     transition: theme.transitions.create("width"),
     width: "100%",
   },
@@ -372,15 +378,80 @@ const Drawer = styled(MuiDrawer, {
 
 const defaultTheme = createTheme();
 
+const USER_CACHE_KEY = "NAV_USER_CACHE";
+const PERMISSIONS_CACHE_KEY = "NAV_PERMISSIONS_CACHE";
+
+const resolveScopedCacheKey = (baseKey) => {
+  const token = globalThis.localStorage?.getItem("API_TOKEN");
+  if (!token) {
+    return `${baseKey}_anon`;
+  }
+  return `${baseKey}_${token.slice(-16)}`;
+};
+
+const readJsonCache = (key, fallback) => {
+  try {
+    const raw = globalThis.localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
+    }
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn("Failed to read local cache:", key, error);
+    return fallback;
+  }
+};
+
+const normalizeUserPayload = (rawUser) => {
+  if (!rawUser) {
+    return null;
+  }
+  const normalized = Array.isArray(rawUser) ? rawUser : [rawUser];
+  return normalized.length > 0 ? normalized : null;
+};
+
+const extractPermissionNames = (normalizedUser) => {
+  const currentUser = normalizedUser?.[0] ?? {};
+  const roles = Array.isArray(currentUser.roles) ? currentUser.roles : [];
+
+  const rolePermissionNames = roles
+    .flatMap((role) => (Array.isArray(role?.permissions) ? role.permissions : []))
+    .map((permission) => permission?.name)
+    .filter(Boolean);
+
+  const directPermissionNames = (Array.isArray(currentUser.permissions) ? currentUser.permissions : [])
+    .map((permission) => (typeof permission === "string" ? permission : permission?.name))
+    .filter(Boolean);
+
+  return [...new Set([...rolePermissionNames, ...directPermissionNames])];
+};
+
+const resolveUserPhotoUrl = (photo) => {
+  if (!photo) return "";
+
+  const value = String(photo).trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+
+  if (value.startsWith("/storage/")) return `${API_ORIGIN}${value}`;
+  if (value.startsWith("storage/")) return `${API_ORIGIN}/${value}`;
+  if (value.startsWith("/")) return `${API_ORIGIN}${value}`;
+
+  return `${API_ORIGIN}/storage/${value.replace(/^\/+/, "")}`;
+};
+
 const Navigation = () => {
+  const userCacheKey = resolveScopedCacheKey(USER_CACHE_KEY);
+  const permissionsCacheKey = resolveScopedCacheKey(PERMISSIONS_CACHE_KEY);
+
   const [selectedOption, setSelectedOption] = useState("");
   const [isNavOpen, setIsNavOpen] = useState(false);
   // const [open, setOpen] = React.useState(true);
   const { open, toggleOpen } = useOpen();
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => normalizeUserPayload(readJsonCache(userCacheKey, null)));
   const [users, setUsers] = useState([]);
   const navigate = useNavigate();
-  const [permissions, setPermissions] = useState([]);
+  const [permissions, setPermissions] = useState(() => readJsonCache(permissionsCacheKey, []));
   const [isCommandsOpen, setIsCommandsOpen] = useState(false);
   const [isEmployeesOpen, setIsEmployeesOpen] = useState(false);
   const [isPlanificationOpen, setIsPlanificationOpen] = useState(false);
@@ -404,12 +475,26 @@ const Navigation = () => {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const openMenu = Boolean(anchorEl);
 
+  const [userMenuAnchorEl, setUserMenuAnchorEl] = React.useState(null);
+  const openUserMenu = Boolean(userMenuAnchorEl);
+  const currentUser = user?.[0] ?? null;
+  const currentUserName = currentUser?.name || "Utilisateur";
+  const currentUserPhoto = resolveUserPhotoUrl(currentUser?.photo);
+
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
   };
 
   const handleMenuClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleUserMenuOpen = (event) => {
+    setUserMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setUserMenuAnchorEl(null);
   };
 
 
@@ -550,38 +635,72 @@ const Navigation = () => {
   //   fetchUsersData();
   // }, []);
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await axios.get("http://localhost:8000/api/user", {
-          withCredentials: true,
-        });
-        const rawUser = response?.data?.user ?? response?.data;
+  const fetchUserData = async () => {
+    try {
+      const response = await apiClient.get("/user", {
+        withCredentials: true,
+      });
+      const rawUser = response?.data?.user ?? response?.data;
 
-        if (!rawUser) {
-          console.error("Empty user data in response:", response?.data);
-          return;
-        }
-
-        const normalizedUser = Array.isArray(rawUser) ? rawUser : [rawUser];
-        setUser(normalizedUser);
-
-        const permissionsData =
-          normalizedUser?.[0]?.roles?.[0]?.permissions ?? [];
-
-        const permissionNames = Array.isArray(permissionsData)
-          ? permissionsData.map((permission) => permission?.name).filter(Boolean)
-          : [];
-
-        setPermissions(permissionNames);
-        console.log(permissionNames);
-        console.log(normalizedUser);
-      } catch (error) {
-        console.error("Error fetching user data:", error);
+      const normalizedUser = normalizeUserPayload(rawUser);
+      if (!normalizedUser) {
+        console.error("Empty user data in response:", response?.data);
+        setUser(null);
+        setPermissions([]);
+        globalThis.localStorage.removeItem(userCacheKey);
+        globalThis.localStorage.removeItem(permissionsCacheKey);
+        return;
       }
+
+      setUser(normalizedUser);
+      globalThis.localStorage.setItem(userCacheKey, JSON.stringify(normalizedUser));
+
+      const permissionNames = extractPermissionNames(normalizedUser);
+
+      setPermissions(permissionNames);
+      globalThis.localStorage.setItem(permissionsCacheKey, JSON.stringify(permissionNames));
+      console.log(permissionNames);
+      console.log(normalizedUser);
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        setUser(null);
+        setPermissions([]);
+        globalThis.localStorage.removeItem(userCacheKey);
+        globalThis.localStorage.removeItem(permissionsCacheKey);
+        return;
+      }
+
+      const cachedUser = normalizeUserPayload(readJsonCache(userCacheKey, null));
+      const cachedPermissions = readJsonCache(permissionsCacheKey, []);
+
+      if (cachedUser) {
+        setUser(cachedUser);
+      } else {
+        setUser(null);
+      }
+      if (Array.isArray(cachedPermissions)) {
+        setPermissions(cachedPermissions);
+      } else {
+        setPermissions([]);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchUserData();
+
+    const handlePermissionsUpdated = () => {
+      fetchUserData();
     };
 
-    fetchUserData();
+    window.addEventListener("permissions-updated", handlePermissionsUpdated);
+
+    return () => {
+      window.removeEventListener("permissions-updated", handlePermissionsUpdated);
+    };
   }, []); // Dépendance vide pour que ce useEffect s'exécute une seule fois après le montage initial
 
 
@@ -612,6 +731,34 @@ const Navigation = () => {
   };
 
   const { title, searchQuery, setSearchQuery, onPrint, onExportPDF, onExportExcel } = useHeader();
+
+  const canAccessEmployeesMenu = permissions.some((permission) =>
+    [
+      "view_all_employes",
+      "create_employes",
+      "update_employes",
+      "delete_employes",
+      "view_all_employee_histories",
+    ].includes(permission)
+  );
+
+  const canAccessEmployeesList = permissions.some((permission) =>
+    [
+      "view_all_employes",
+      "create_employes",
+      "update_employes",
+      "delete_employes",
+    ].includes(permission)
+  );
+
+  const canAccessSocieteMenu = permissions.some((permission) =>
+    [
+      "view_all_societes",
+      "create_societes",
+      "update_societes",
+      "delete_societes",
+    ].includes(permission)
+  );
 
   return (
 
@@ -697,7 +844,7 @@ const Navigation = () => {
 
 
 
-            <Box sx={{ display: "flex", marginRight: '-1%' }}>
+            <Box sx={{ display: "flex", alignItems: "center", marginRight: 0 }}>
               <Search>
                 <SearchIconWrapper>
                   <SearchIcon />
@@ -709,7 +856,17 @@ const Navigation = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
                 {/* Icône ⋮ à l'intérieur de la barre */}
-                <IconButton color="#2c3e50" onClick={handleMenuOpen} size="small" style={{ marginLeft: '32%' }}>
+                <IconButton
+                  onClick={handleMenuOpen}
+                  size="small"
+                  sx={{
+                    position: "absolute",
+                    right: "4px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "#2c3e50",
+                  }}
+                >
                   <MoreVertIcon />
                 </IconButton>
               </Search>
@@ -751,22 +908,53 @@ const Navigation = () => {
 
 
 
-            <IconButton color="inherit">
+            <IconButton color="inherit" onClick={handleUserMenuOpen}>
               <Badge color="secondary">
-                {user && (
-                  <ListItem button style={{ color: "#2c3e50" }}>
+                {currentUser && (
+                  <ListItem button style={{ color: "#2c3e50", pointerEvents: "none" }}>
                     <ListItemIcon style={{ color: '#2c3e50' }}>
                       <Avatar
-                        alt={user[0].name}
-                        src={user[0].photo}
+                        alt={currentUserName}
+                        src={currentUserPhoto || undefined}
                         style={{ width: "40px", height: "40px", }}
-                      />
+                      >
+                        {!currentUserPhoto ? currentUserName.charAt(0).toUpperCase() : null}
+                      </Avatar>
                     </ListItemIcon>
                     {/* <ListItemText primary={`${user[0].name}`} />{" "} */}
                   </ListItem>
                 )}
               </Badge>
             </IconButton>
+
+            <Menu
+              anchorEl={userMenuAnchorEl}
+              open={openUserMenu}
+              onClose={handleUserMenuClose}
+              transformOrigin={{ horizontal: "right", vertical: "top" }}
+              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+            >
+              <MenuItem
+                onClick={() => {
+                  handleUserMenuClose();
+                  if (permissions.includes("view_all_users")) {
+                    navigate("/users");
+                  }
+                }}
+                disabled={!permissions.includes("view_all_users")}
+              >
+                Profil utilisateur
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  handleUserMenuClose();
+                  handleLogoutClick();
+                  logout();
+                }}
+              >
+                Se deconnecter
+              </MenuItem>
+            </Menu>
           </Toolbar>
         </AppBar>
 
@@ -839,319 +1027,346 @@ const Navigation = () => {
 
 
             {/*-------------------------------- Menu Gestion des Employés -------------------------------------- */}
+            {canAccessEmployeesMenu && (
+              <>
+                <ListItem
+                  button
+                  onClick={handleEmployeesClick}
+                  sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+                  style={{ color: "white", display: "flex" }}
+                >
+                  <ListItemIcon >
+                    <PeopleIcon style={{ fontSize: "1.6rem", color: "white" }} />
+                  </ListItemIcon>
+                  <ListItemText primary="Gestion employés" />
+                  {isEmployeesOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                </ListItem>
 
-
-            <ListItem
-              button
-              onClick={handleEmployeesClick}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-              style={{ color: "white", display: "flex" }}
-            >
-              <ListItemIcon >
-                <PeopleIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Gestion employés" />
-              {isEmployeesOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </ListItem>
-
-
-            <Collapse in={isEmployeesOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                {(permissions.length === 0 || permissions.includes("view_all_employes")) && (
-                  <SubMenuItem button component={Link} to="/employes">
-                    <ListItemIcon>
-                      <ListIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Gestion des Employés" />
-                  </SubMenuItem>
-                )}
-                {(permissions.length === 0 || permissions.includes("view_all_employee_histories")) && (
-                  <SubMenuItem button component={Link} to="/emphistorique">
-                    <ListItemIcon>
-                      <LocalShippingIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Historique" />
-                  </SubMenuItem>
-                )}
-              </List>
-            </Collapse>
+                <Collapse in={isEmployeesOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    {canAccessEmployeesList && (
+                      <SubMenuItem button component={Link} to="/employes">
+                        <ListItemIcon>
+                          <ListIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Gestion des Employés" />
+                      </SubMenuItem>
+                    )}
+                    {permissions.includes("view_all_employee_histories") && (
+                      <SubMenuItem button component={Link} to="/emphistorique">
+                        <ListItemIcon>
+                          <LocalShippingIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Historique" />
+                      </SubMenuItem>
+                    )}
+                  </List>
+                </Collapse>
+              </>
+            )}
 
             {/* Menu principal pour Accidents de travail */}
-            <ListItem
-              button
-              component={Link}
-              to="/employes2"
-              style={{ color: "white" }}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-            >
-              <ListItemIcon>
-                <ReportProblemIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Accidents de travail" />
-            </ListItem>
+            {permissions.includes("view_all_accidents") && (
+              <ListItem
+                button
+                component={Link}
+                to="/employes2"
+                style={{ color: "white" }}
+                sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+              >
+                <ListItemIcon>
+                  <ReportProblemIcon style={{ fontSize: "1.6rem", color: "white" }} />
+                </ListItemIcon>
+                <ListItemText primary="Accidents de travail" />
+              </ListItem>
+            )}
 
             {/* Menu Gestion CIMR */}
-            <ListItem
-              button
-              onClick={handleCimrClick}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-              style={{ color: "white", display: "flex" }}
-            >
-              <ListItemIcon >
-                <AssignmentIndIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Gestion CIMR" />
-              {isCimrOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </ListItem>
-
-            <Collapse in={isCimrOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                <SubMenuItem button component={Link} to="/cimr-dashboard">
-                  <ListItemIcon>
-                    <DashboardIcon />
+            {permissions.includes("view_all_cimr") && (
+              <>
+                <ListItem
+                  button
+                  onClick={handleCimrClick}
+                  sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+                  style={{ color: "white", display: "flex" }}
+                >
+                  <ListItemIcon >
+                    <AssignmentIndIcon style={{ fontSize: "1.6rem", color: "white" }} />
                   </ListItemIcon>
-                  <ListItemText primary="Dashboard CIMR" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/cimr-affiliations">
+                  <ListItemText primary="Gestion CIMR" />
+                  {isCimrOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                </ListItem>
+
+                <Collapse in={isCimrOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    <SubMenuItem button component={Link} to="/cimr-dashboard">
+                      <ListItemIcon>
+                        <DashboardIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Dashboard CIMR" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/cimr-affiliations">
+                      <ListItemIcon>
+                        <AssignmentIndIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Affiliations CIMR" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/cimr-declarations">
+                      <ListItemIcon>
+                        <AssignmentIndIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Déclarations CIMR" />
+                    </SubMenuItem>
+                  </List>
+                </Collapse>
+              </>
+            )}
+
+
+
+
+
+
+
+
+
+
+            {/* Menu Assurance */}
+            {permissions.includes("view_all_mutuelle") && (
+              <>
+                <ListItem
+                  button
+                  onClick={handleMutuelleClick}
+                  sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+                  style={{ color: "white", display: "flex" }}
+                >
                   <ListItemIcon>
-                    <AssignmentIndIcon />
+                    <LocalHospitalIcon style={{ fontSize: "1.6rem", color: "white" }} />
                   </ListItemIcon>
-                  <ListItemText primary="Affiliations CIMR" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/cimr-declarations">
-                  <ListItemIcon>
-                    <AssignmentIndIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Déclarations CIMR" />
-                </SubMenuItem>
-              </List>
-            </Collapse>
+                  <ListItemText primary="Assurance" />
+                  {isMutuelleOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                </ListItem>
 
-
-
-
-
-
-
-
-
-
-            {/* Menu Mutuelle / Assurance */}
-            <ListItem
-              button
-              onClick={handleMutuelleClick}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-              style={{ color: "white", display: "flex" }}
-            >
-              <ListItemIcon>
-                <LocalHospitalIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Mutuelle" />
-              {isMutuelleOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </ListItem>
-
-            <Collapse in={isMutuelleOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                <SubMenuItem button component={Link} to="/mutuelle/dashboard">
-                  <ListItemIcon>
-                    <DashboardIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Dashboard Mutuelle" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/affiliation-mutuelle">
-                  <ListItemIcon>
-                    <AssignmentIndIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Affiliations" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/mutuelle/dossiers">
-                  <ListItemIcon>
-                    <DescriptionIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Dossiers" />
-                </SubMenuItem>
-              </List>
-            </Collapse>
+                <Collapse in={isMutuelleOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    <SubMenuItem button component={Link} to="/mutuelle/dashboard">
+                      <ListItemIcon>
+                        <DashboardIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Dashboard Assurance" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/affiliation-mutuelle">
+                      <ListItemIcon>
+                        <AssignmentIndIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Affiliations" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/mutuelle/dossiers">
+                      <ListItemIcon>
+                        <DescriptionIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Opérations" />
+                    </SubMenuItem>
+                  </List>
+                </Collapse>
+              </>
+            )}
 
             {/* Menu CNSS / Sécurité Sociale */}
-            <ListItem
-              button
-              onClick={handleCnssClick}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-              style={{ color: "white", display: "flex" }}
-            >
-              <ListItemIcon>
-                <SecurityIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="CNSS" />
-              {isCnssOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </ListItem>
+            {permissions.includes("view_all_cnss") && (
+              <>
+                <ListItem
+                  button
+                  onClick={handleCnssClick}
+                  sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+                  style={{ color: "white", display: "flex" }}
+                >
+                  <ListItemIcon>
+                    <SecurityIcon style={{ fontSize: "1.6rem", color: "white" }} />
+                  </ListItemIcon>
+                  <ListItemText primary="CNSS" />
+                  {isCnssOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                </ListItem>
 
-            <Collapse in={isCnssOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                <SubMenuItem button component={Link} to="/cnss/dashboard">
-                  <ListItemIcon>
-                    <DashboardIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Dashboard CNSS" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/cnss-affiliations">
-                  <ListItemIcon>
-                    <AssignmentIndIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Affiliations" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/cnss/dossiers">
-                  <ListItemIcon>
-                    <DescriptionIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Dossiers" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/cnss/declarations">
-                  <ListItemIcon>
-                    <ListIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Déclarations" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/cnss/declarations-individuelles">
-                  <ListItemIcon>
-                    <ListIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Décl. Individuelles" />
-                </SubMenuItem>
-              </List>
-            </Collapse>
+                <Collapse in={isCnssOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    <SubMenuItem button component={Link} to="/cnss/dashboard">
+                      <ListItemIcon>
+                        <DashboardIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Dashboard CNSS" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/cnss-affiliations">
+                      <ListItemIcon>
+                        <AssignmentIndIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Affiliations" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/cnss/dossiers">
+                      <ListItemIcon>
+                        <DescriptionIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Opérations" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/cnss/declarations">
+                      <ListItemIcon>
+                        <ListIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Déclarations" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/cnss/declarations-individuelles">
+                      <ListItemIcon>
+                        <ListIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Décl. Individuelles" />
+                    </SubMenuItem>
+                  </List>
+                </Collapse>
+              </>
+            )}
 
-            <ListItem
-              button
-              onClick={handleCarriereFormationClick}
-              style={{ color: "white", display: "flex" }}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-            >
-              <ListItemIcon>
-                <SchoolIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Carrières & Formations" />
-              {isCarriereFormationOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </ListItem>
+            {permissions.includes("view_all_carrieres_formations") && (
+              <>
+                <ListItem
+                  button
+                  onClick={handleCarriereFormationClick}
+                  style={{ color: "white", display: "flex" }}
+                  sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+                >
+                  <ListItemIcon>
+                    <SchoolIcon style={{ fontSize: "1.6rem", color: "white" }} />
+                  </ListItemIcon>
+                  <ListItemText primary="Carrières & Formations" />
+                  {isCarriereFormationOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                </ListItem>
 
-            <Collapse in={isCarriereFormationOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                <SubMenuItem button component={Link} to="/carrieres-formations/dashboard-carrieres">
-                  <ListItemIcon>
-                    <DashboardIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Dashboard Carrières" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/carrieres-formations/carrieres">
-                  <ListItemIcon>
-                    <PeopleIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Carrières" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/carrieres-formations/postes-grades">
-                  <ListItemIcon>
-                    <WorkIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Postes & Grades" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/carrieres-formations/dashboard-formations">
-                  <ListItemIcon>
-                    <DashboardIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Dashboard Formations" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/carrieres-formations/formations">
-                  <ListItemIcon>
-                    <SchoolIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Formations" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/carrieres-formations/demandes-mobilite">
-                  <ListItemIcon>
-                    <SwapHorizIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Demandes Mobilité" />
-                </SubMenuItem>
-                <SubMenuItem button component={Link} to="/carrieres-formations/demandes-formation">
-                  <ListItemIcon>
-                    <DescriptionIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Demandes Formation" />
-                </SubMenuItem>
-              </List>
-            </Collapse>
+                <Collapse in={isCarriereFormationOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    <SubMenuItem button component={Link} to="/carrieres-formations/dashboard-carrieres">
+                      <ListItemIcon>
+                        <DashboardIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Dashboard Carrières" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/carrieres-formations/carrieres">
+                      <ListItemIcon>
+                        <PeopleIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Carrières" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/carrieres-formations/postes-grades">
+                      <ListItemIcon>
+                        <WorkIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Postes & Grades" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/carrieres-formations/dashboard-formations">
+                      <ListItemIcon>
+                        <DashboardIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Dashboard Formations" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/carrieres-formations/formations">
+                      <ListItemIcon>
+                        <SchoolIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Formations" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/carrieres-formations/demandes-mobilite">
+                      <ListItemIcon>
+                        <SwapHorizIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Demandes Mobilité" />
+                    </SubMenuItem>
+                    <SubMenuItem button component={Link} to="/carrieres-formations/demandes-formation">
+                      <ListItemIcon>
+                        <DescriptionIcon />
+                      </ListItemIcon>
+                      <ListItemText primary="Demandes Formation" />
+                    </SubMenuItem>
+                  </List>
+                </Collapse>
+              </>
+            )}
 
             {/* Menu Conflits */}
-            <ListItem
-              button
-              component={Link}
-              to="/conflits"
-              style={{ color: "white" }}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-            >
-              <ListItemIcon>
-                <WarningAmberIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Conflits" />
-            </ListItem>
+            {permissions.includes("view_all_conflits") && (
+              <ListItem
+                button
+                component={Link}
+                to="/conflits"
+                style={{ color: "white" }}
+                sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+              >
+                <ListItemIcon>
+                  <WarningAmberIcon style={{ fontSize: "1.6rem", color: "white" }} />
+                </ListItemIcon>
+                <ListItemText primary="Conflits" />
+              </ListItem>
+            )}
 
             {/* Menu Sanctions */}
-            <ListItem
-              button
-              component={Link}
-              to="/sanctions"
-              style={{ color: "white" }}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-            >
-              <ListItemIcon>
-                <GavelOutlinedIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Sanctions" />
-            </ListItem>
+            {permissions.includes("view_all_sanctions") && (
+              <ListItem
+                button
+                component={Link}
+                to="/sanctions"
+                style={{ color: "white" }}
+                sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+              >
+                <ListItemIcon>
+                  <GavelOutlinedIcon style={{ fontSize: "1.6rem", color: "white" }} />
+                </ListItemIcon>
+                <ListItemText primary="Sanctions" />
+              </ListItem>
+            )}
 
             {/*-------------------------------- MEnu Société  -------------------------------------- */}
-            <ListItem
-              button
-              style={{ color: "white", display: "flex" }}
-              sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
-              onClick={handleTraitementSocieteClick}
-            >
-              <ListItemIcon style={{ color: 'white' }}>
-                <BusinessIcon style={{ fontSize: "1.6rem", color: "white" }} />
-              </ListItemIcon>
-              <ListItemText primary="Société" />
-              {isSocieteOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </ListItem>
+            {canAccessSocieteMenu && (
+              <>
+                <ListItem
+                  button
+                  style={{ color: "white", display: "flex" }}
+                  sx={{ "& .MuiListItemIcon-root": { minWidth: 56 } }}
+                  onClick={handleTraitementSocieteClick}
+                >
+                  <ListItemIcon style={{ color: 'white' }}>
+                    <BusinessIcon style={{ fontSize: "1.6rem", color: "white" }} />
+                  </ListItemIcon>
+                  <ListItemText primary="Société" />
+                  {isSocieteOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                </ListItem>
 
-            <Collapse in={isSocieteOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                {(permissions.length === 0 || permissions.includes("view_all_societes")) && (
-                  <SubMenuItem button component={Link} to="/societes">
-                    <ListItemIcon style={{ color: 'white' }}>
-                      <ListIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Société" />
-                  </SubMenuItem>
-                )}
+                <Collapse in={isSocieteOpen} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    {canAccessSocieteMenu && (
+                      <SubMenuItem button component={Link} to="/societes">
+                        <ListItemIcon style={{ color: 'white' }}>
+                          <ListIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Société" />
+                      </SubMenuItem>
+                    )}
+                  </List>
+                </Collapse>
+              </>
+            )}
 
 
-              </List>
-            </Collapse>
 
-
-
-            <ListItem
-              button
-              component={Link}
-              to="/users"
-              style={{ color: "white" }}
-            >
-              <ListItemIcon style={{ color: 'white' }}>
-                <StarHalfIcon />
-              </ListItemIcon>
-              <ListItemText primary="Users" />
-            </ListItem>
+            {permissions.includes("view_all_users") && (
+              <ListItem
+                button
+                component={Link}
+                to="/users"
+                style={{ color: "white" }}
+              >
+                <ListItemIcon style={{ color: 'white' }}>
+                  <StarHalfIcon />
+                </ListItemIcon>
+                <ListItemText primary="Users" />
+              </ListItem>
+            )}
 
 
 

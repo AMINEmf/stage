@@ -84,6 +84,31 @@ const formatDuration = (startDate, endDate = new Date()) => {
     if (!employee) return null;
   
     const history = Array.isArray(employee.historique) ? employee.historique : [];
+      const getHistoryStartDate = (step) => (
+        step?.start ||
+        step?.date_debut ||
+        step?.dateDebut ||
+        step?.date ||
+        step?.created_at ||
+        step?.createdAt ||
+        null
+      );
+      const getHistoryEndDate = (step) => (
+        step?.end ||
+        step?.date_fin ||
+        step?.dateFin ||
+        null
+      );
+      const orderedHistory = useMemo(() => {
+        if (history.length <= 1) return history;
+        const toTimestamp = (value) => {
+          if (!value) return Number.MAX_SAFE_INTEGER;
+          const date = new Date(value);
+          const time = date.getTime();
+          return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+        };
+        return [...history].sort((a, b) => toTimestamp(getHistoryStartDate(a)) - toTimestamp(getHistoryStartDate(b)));
+      }, [history]);
     const email =
       employee.email ??
       employee.mail ??
@@ -157,6 +182,107 @@ const formatDuration = (startDate, endDate = new Date()) => {
           .parcours-historique-scroll::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
           }
+
+          .history-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: clamp(320px, calc(100vh - 360px), 560px);
+            overflow-y: scroll;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            padding-right: 8px;
+            margin-right: 0;
+            padding-bottom: 8px;
+          }
+
+          @media (max-width: 992px) {
+            .history-timeline {
+              height: clamp(260px, calc(100vh - 420px), 440px);
+            }
+          }
+
+          .history-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+          }
+
+          .history-marker-col {
+            width: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-shrink: 0;
+          }
+
+          .history-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            margin-top: 6px;
+            box-shadow: 0 0 0 2px #fff;
+          }
+
+          .history-dot-poste {
+            background: #0ea5e9;
+          }
+
+          .history-dot-formation {
+            background: #6366f1;
+          }
+
+          .history-line {
+            width: 2px;
+            flex: 1;
+            margin-top: 2px;
+            border-radius: 99px;
+            background: linear-gradient(180deg, #cbd5e1 0%, #e2e8f0 100%);
+          }
+
+          .history-card {
+            flex: 1;
+            min-width: 0;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 12px;
+          }
+
+          .history-title {
+            font-weight: 700;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            line-height: 1.3;
+          }
+
+          .history-meta {
+            color: #64748b;
+            font-size: 0.8rem;
+            margin-top: 3px;
+            line-height: 1.35;
+          }
+
+          .history-tag {
+            display: inline-block;
+            margin-top: 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #0f766e;
+            background: #ccfbf1;
+            border: 1px solid #99f6e4;
+            border-radius: 999px;
+            padding: 2px 8px;
+          }
+
+          @media (max-width: 576px) {
+            .history-timeline {
+              height: clamp(220px, calc(100vh - 500px), 320px);
+            }
+          }
         `}</style>
         <div
           style={{
@@ -206,7 +332,7 @@ const formatDuration = (startDate, endDate = new Date()) => {
             </button>
           </div>
   
-          <div className="form-body" style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", padding: "16px" }}>
+          <div className="form-body" style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", padding: "16px 16px 28px" }}>
             <div className="career-drawer-section">
               <h6>Informations générales</h6>
               <div className="row g-2">
@@ -301,35 +427,40 @@ const formatDuration = (startDate, endDate = new Date()) => {
                 <span className="text-muted">Aucun historique disponible.</span>
               )}
               {history.length > 0 && (
-                <div 
-                  className="parcours-historique-scroll"
-                  style={{ 
-                    display: "flex", 
-                    flexDirection: "column", 
-                    gap: "12px",
-                    paddingRight: "4px",
-                  }}
+                <div
+                  className="parcours-historique-scroll history-timeline"
+                  onWheel={(event) => event.stopPropagation()}
                 >
-                  {history.map((step, index) => {
-                    // Déterminer si c'est un poste ou une formation
-                    const isFormation = step.type === 'formation';
+                  {orderedHistory.map((step, index) => {
+                    const normalizedType = normalizeValue(step?.type);
+                    const isFormation = normalizedType.includes("formation");
                     const title = isFormation ? step.formation : step.poste;
-                    const subtitle = isFormation ? `Domaine: ${step.domaine || '—'}` : step.evolution || "—";
-                    const borderColor = isFormation ? "#3b82f6" : "#e5e7eb";
-                    const icon = isFormation ? "📚" : "";
+                    const subtitle = isFormation ? `Domaine: ${step.domaine || "—"}` : step.evolution || "—";
+                    const start = getHistoryStartDate(step);
+                    const end = getHistoryEndDate(step);
+                    const dateStartLabel = start || "—";
+                    const dateEndLabel = end || (isFormation ? "—" : "Aujourd'hui");
+                    const durationLabel = isFormation ? "" : formatDuration(start, end);
 
                     return (
-                      <div key={`${title}-${index}`} style={{ borderLeft: `3px solid ${borderColor}`, paddingLeft: 12 }}>
-                        <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-                          {icon && <span>{icon}</span>}
-                          {title || "—"}
+                      <div key={`${title || "etape"}-${index}`} className="history-row">
+                        <div className="history-marker-col">
+                          <span className={`history-dot ${isFormation ? "history-dot-formation" : "history-dot-poste"}`} />
+                          {index < orderedHistory.length - 1 && <span className="history-line" />}
                         </div>
-                        <div className="text-muted" style={{ fontSize: "0.8rem" }}>
-                          {step.start || step.date_debut || "—"} → {step.end || step.date_fin || (isFormation ? step.date_fin : "Aujourd'hui")}
-                        </div>
-                        <div className="text-muted" style={{ fontSize: "0.8rem" }}>
-                          {subtitle}
-                          {!isFormation && ` · ${formatDuration(step.start, step.end)}`}
+                        <div className="history-card">
+                          <div className="history-title">
+                            {isFormation && <span aria-hidden="true">📚</span>}
+                            <span>{title || "—"}</span>
+                          </div>
+                          <div className="history-meta">
+                            {dateStartLabel} → {dateEndLabel}
+                          </div>
+                          <div className="history-meta">
+                            {subtitle}
+                            {durationLabel ? ` · ${durationLabel}` : ""}
+                          </div>
+                          <span className="history-tag">{isFormation ? "Formation" : "Poste"}</span>
                         </div>
                       </div>
                     );
@@ -1597,14 +1728,15 @@ const CarrieresTable = forwardRef((props, ref) => {
           gap: "24px",
           boxSizing: "border-box",
           alignItems: "stretch",
-          height: "calc(100vh - 150px)",
+          height: "100%",
+          minHeight: 0,
           overflow: "hidden",
         }}
       >
         <div
           className="career-table-panel"
           style={{
-            gridColumn: (showAddForm || selectedEmployee) ? "span 8" : "span 12",
+            gridColumn: showAddForm ? "span 7" : (selectedEmployee ? "span 8" : "span 12"),
             border: "1px solid #e2e8f0",
             borderRadius: "10px",
             boxShadow: "0 2px 12px rgba(0,0,0,0.07)",
@@ -1617,12 +1749,20 @@ const CarrieresTable = forwardRef((props, ref) => {
         >
           <div className="mt-4">
             <div className="section-header mb-3">
-              <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
-                <div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  alignItems: "center",
+                  columnGap: "16px",
+                  width: "100%",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
                   <SectionTitle icon="fas fa-briefcase" text="Carrières" />
                 </div>
 
-                <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", justifySelf: "end" }}>
                   {true && (
                     <FontAwesomeIcon
                       onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
@@ -2006,9 +2146,12 @@ const CarrieresTable = forwardRef((props, ref) => {
           <div
             className="career-form-panel"
             style={{
-              gridColumn: "span 4",
+              gridColumn: "span 5",
               height: "100%",
-              overflowY: "auto",
+              minHeight: 0,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
               backgroundColor: "#ffffff",
               border: "1px solid #e2e8f0",
               borderRadius: "10px",
@@ -2029,6 +2172,7 @@ const CarrieresTable = forwardRef((props, ref) => {
           </div>
         )}
       </div>
+
     </>
   );
 });

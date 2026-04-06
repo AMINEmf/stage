@@ -1,6 +1,7 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 import './App.css'
+import './Zakaria/Style.css'
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './AuthContext';
 import Navigation from './Acceuil/Navigation';

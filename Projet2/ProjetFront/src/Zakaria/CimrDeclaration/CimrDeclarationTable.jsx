@@ -885,7 +885,7 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                 }} className="container_employee">
                     <div className="mt-4">
                         <div className="section-header mb-3">
-                            <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
                                 <div style={{ flex: '1 1 300px', minWidth: 0 }}>
                                     <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
                                         <i className="fas fa-file-invoice-dollar me-2"></i>
@@ -897,7 +897,7 @@ const CimrDeclarationTable = forwardRef((props, ref) => {
                                         {filteredData.reduce((sum, d) => sum + parseFloat(d.total_montant || 0), 0).toLocaleString()} DH
                                     </p>
                                 </div>
-                                <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{ display: "flex", gap: "10px", alignItems: 'center', justifySelf: 'end' }}>
                                     <FontAwesomeIcon
                                         onClick={() => handleFiltersToggle ? handleFiltersToggle(!filtersVisible) : setFiltersVisibleLocal(!filtersVisibleLocal)}
                                         icon={(handleFiltersToggle ? filtersVisible : filtersVisibleLocal) ? faClose : faFilter}

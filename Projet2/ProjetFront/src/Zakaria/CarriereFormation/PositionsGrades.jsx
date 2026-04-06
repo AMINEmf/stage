@@ -52,6 +52,75 @@ const normalizeDepartmentTree = (items) => {
 const hasDepartments = (items) =>
   Array.isArray(items) && items.length > 0 && items.some((item) => item?.id != null);
 
+const ASSIGNMENTS_HISTORY_STORAGE_KEY = "postes_assignations_history_v1";
+const MAX_ASSIGNMENT_HISTORY_ITEMS = 40;
+const AI_SUGGESTIONS_CACHE_KEY = "postes_ai_suggestions_cache_v1";
+const AI_SUGGESTIONS_CACHE_TTL_MS = 2 * 60 * 1000;
+const MAX_AI_SUGGESTION_CACHE_ITEMS = 60;
+const AI_SUGGESTIONS_PREFETCH_LIMIT = 12;
+const AI_SUGGESTIONS_PREFETCH_CONCURRENCY = 3;
+
+const formatDateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const normalizeSuggestionRow = (row, index = 0) => {
+  const scoreValue = Number(
+    row?.score ?? row?.score_global?.score ?? row?.ai_score_details?.globalScore ?? 0
+  );
+
+  return {
+    ...row,
+    id: row?.id ?? row?.employee_id ?? row?.employe_id ?? `suggestion-${index}`,
+    employee_id: row?.employee_id ?? row?.employe_id ?? row?.id ?? null,
+    full_name:
+      row?.full_name ??
+      row?.name ??
+      `${row?.nom ?? ""} ${row?.prenom ?? ""}`.trim() ??
+      "Employé",
+    score: Number.isFinite(scoreValue) ? Math.max(0, Math.min(100, scoreValue)) : 0,
+  };
+};
+
+const normalizeSuggestionsPayload = (responseData) => {
+  const candidates = [
+    responseData?.data,
+    responseData?.suggestions,
+    responseData?.results,
+    responseData,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.map((item, index) => normalizeSuggestionRow(item, index));
+    }
+
+    if (candidate && typeof candidate === "object") {
+      if (Array.isArray(candidate?.data)) {
+        return candidate.data.map((item, index) => normalizeSuggestionRow(item, index));
+      }
+
+      const objectValues = Object.values(candidate).filter(
+        (item) => item && typeof item === "object" && !Array.isArray(item)
+      );
+      if (objectValues.length > 0) {
+        return objectValues.map((item, index) => normalizeSuggestionRow(item, index));
+      }
+    }
+  }
+
+  return [];
+};
+
 const DEBUG_POSTES = false;
 const DEBUG_PROFILE = false;
 
@@ -90,8 +159,25 @@ const PositionsGrades = () => {
   const [assigningEmployeeId, setAssigningEmployeeId] = useState(null);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [loadingAiSuggestions, setLoadingAiSuggestions] = useState(false);
+  const [aiSuggestionsError, setAiSuggestionsError] = useState("");
+  const [suggestionSearch, setSuggestionSearch] = useState("");
+  const [suggestionMinScore, setSuggestionMinScore] = useState("");
+  const [assignmentHistory, setAssignmentHistory] = useState([]);
 
   const dropdownRef = useRef(null);
+  const aiSuggestionsCacheRef = useRef(new Map());
+  const aiSuggestionsInFlightRef = useRef(new Map());
+  const prefetchSignatureRef = useRef("");
+  const detailsPosteIdRef = useRef(null);
+  const isSuggestionOpenRef = useRef(false);
+
+  useEffect(() => {
+    detailsPosteIdRef.current = detailsPosteId;
+  }, [detailsPosteId]);
+
+  useEffect(() => {
+    isSuggestionOpenRef.current = isSuggestionOpen;
+  }, [isSuggestionOpen]);
 
   const allColumns = useMemo(
     () => [
@@ -150,6 +236,51 @@ const PositionsGrades = () => {
       raw_competences: poste?.competences || [],
     };
   }, []);
+
+  const persistAiSuggestionsCache = useCallback(() => {
+    try {
+      const sortedEntries = Array.from(aiSuggestionsCacheRef.current.entries())
+        .sort((a, b) => (b[1]?.updatedAt ?? 0) - (a[1]?.updatedAt ?? 0))
+        .slice(0, MAX_AI_SUGGESTION_CACHE_ITEMS);
+
+      const payload = {};
+      sortedEntries.forEach(([posteKey, value]) => {
+        payload[String(posteKey)] = {
+          rows: Array.isArray(value?.rows) ? value.rows : [],
+          updatedAt: Number(value?.updatedAt) || Date.now(),
+        };
+      });
+
+      localStorage.setItem(AI_SUGGESTIONS_CACHE_KEY, JSON.stringify(payload));
+      aiSuggestionsCacheRef.current = new Map(sortedEntries);
+    } catch (error) {
+      console.warn("AI_SUGGESTIONS_CACHE_WRITE_ERROR", error);
+    }
+  }, []);
+
+  const getAiSuggestionCacheEntry = useCallback((posteId) => {
+    if (!posteId) return null;
+    const cacheKey = String(posteId);
+    const entry = aiSuggestionsCacheRef.current.get(cacheKey);
+    if (!entry || !Array.isArray(entry.rows)) return null;
+    return {
+      key: cacheKey,
+      rows: entry.rows,
+      updatedAt: Number(entry.updatedAt) || 0,
+    };
+  }, []);
+
+  const setAiSuggestionCacheEntry = useCallback(
+    (posteId, rows) => {
+      if (!posteId || !Array.isArray(rows)) return;
+      aiSuggestionsCacheRef.current.set(String(posteId), {
+        rows,
+        updatedAt: Date.now(),
+      });
+      persistAiSuggestionsCache();
+    },
+    [persistAiSuggestionsCache]
+  );
 
   const fetchPostes = useCallback(async () => {
     let hasCachedData = false;
@@ -228,21 +359,119 @@ const PositionsGrades = () => {
     }
   }, []);
 
-  const fetchAiSuggestions = useCallback(async (posteId) => {
-    if (!posteId) return;
-    setLoadingAiSuggestions(true);
-    try {
-      const response = await apiClient.get(`/postes/${posteId}/suggestions`);
-      const payload = response?.data?.data ?? response?.data ?? [];
-      const rows = Array.isArray(payload) ? payload : [];
-      setAiSuggestions(rows);
-    } catch (error) {
-      console.error("AI_SUGGESTIONS_ERROR", error);
-      setAiSuggestions([]);
-    } finally {
-      setLoadingAiSuggestions(false);
-    }
-  }, []);
+  const fetchAiSuggestions = useCallback(
+    async (posteId, options = {}) => {
+      if (!posteId) return [];
+
+      const { force = false, silent = false, applyToPanel = true } = options;
+      const posteKey = String(posteId);
+      const cachedEntry = getAiSuggestionCacheEntry(posteId);
+      const hasCachedEntry = Boolean(cachedEntry);
+      const hasCachedRows = Boolean(cachedEntry && cachedEntry.rows.length > 0);
+
+      const applyIfCurrentPanel = (callback) => {
+        if (!applyToPanel) return;
+        if (!isSuggestionOpenRef.current) return;
+        if (String(detailsPosteIdRef.current) !== posteKey) return;
+        callback();
+      };
+
+      if (hasCachedEntry) {
+        applyIfCurrentPanel(() => {
+          setAiSuggestions(cachedEntry.rows);
+          setAiSuggestionsError("");
+        });
+      }
+
+      const isFresh =
+        hasCachedEntry && Date.now() - cachedEntry.updatedAt <= AI_SUGGESTIONS_CACHE_TTL_MS;
+
+      if (isFresh && !force) {
+        applyIfCurrentPanel(() => setLoadingAiSuggestions(false));
+        return cachedEntry.rows;
+      }
+
+      const inFlightRequest = aiSuggestionsInFlightRef.current.get(posteKey);
+      if (inFlightRequest) {
+        if (applyToPanel && !silent && !hasCachedRows) {
+          applyIfCurrentPanel(() => setLoadingAiSuggestions(true));
+        }
+
+        try {
+          const rows = await inFlightRequest;
+          applyIfCurrentPanel(() => {
+            setAiSuggestions(rows);
+            setAiSuggestionsError("");
+          });
+          return rows;
+        } catch (error) {
+          if (!hasCachedRows) {
+            const message =
+              error?.response?.data?.message ||
+              error?.message ||
+              "Impossible de charger les suggestions pour ce poste.";
+            applyIfCurrentPanel(() => {
+              setAiSuggestions([]);
+              setAiSuggestionsError(message);
+            });
+          }
+          return cachedEntry?.rows ?? [];
+        } finally {
+          if (applyToPanel && !silent) {
+            applyIfCurrentPanel(() => setLoadingAiSuggestions(false));
+          }
+        }
+      }
+
+      if (applyToPanel && !silent && !hasCachedRows) {
+        applyIfCurrentPanel(() => {
+          setLoadingAiSuggestions(true);
+          setAiSuggestionsError("");
+        });
+      }
+
+      const requestPromise = apiClient
+        .get(`/postes/${posteId}/suggestions`)
+        .then((response) => {
+          const rows = normalizeSuggestionsPayload(response?.data);
+          setAiSuggestionCacheEntry(posteId, rows);
+          return rows;
+        })
+        .finally(() => {
+          aiSuggestionsInFlightRef.current.delete(posteKey);
+        });
+
+      aiSuggestionsInFlightRef.current.set(posteKey, requestPromise);
+
+      try {
+        const rows = await requestPromise;
+        applyIfCurrentPanel(() => {
+          setAiSuggestions(rows);
+          setAiSuggestionsError("");
+        });
+        return rows;
+      } catch (error) {
+        console.error("AI_SUGGESTIONS_ERROR", error);
+        const message =
+          error?.response?.data?.message ||
+          error?.message ||
+          "Impossible de charger les suggestions pour ce poste.";
+
+        if (!hasCachedRows) {
+          applyIfCurrentPanel(() => {
+            setAiSuggestions([]);
+            setAiSuggestionsError(message);
+          });
+        }
+        return cachedEntry?.rows ?? [];
+      } finally {
+        if (applyToPanel && !silent) {
+          applyIfCurrentPanel(() => setLoadingAiSuggestions(false));
+        }
+      }
+    },
+    [getAiSuggestionCacheEntry, setAiSuggestionCacheEntry]
+  );
 
   useEffect(() => {
     fetchCompetences();
@@ -343,6 +572,42 @@ const PositionsGrades = () => {
       localStorage.setItem("postesColumnVisibility", JSON.stringify(defaultVisibility));
     }
   }, [allColumns]);
+
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem(ASSIGNMENTS_HISTORY_STORAGE_KEY);
+      if (!savedHistory) return;
+      const parsedHistory = JSON.parse(savedHistory);
+      if (Array.isArray(parsedHistory)) {
+        setAssignmentHistory(parsedHistory);
+      }
+    } catch (error) {
+      console.warn("ASSIGNMENT_HISTORY_READ_ERROR", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const cachedSuggestions = localStorage.getItem(AI_SUGGESTIONS_CACHE_KEY);
+      if (!cachedSuggestions) return;
+
+      const parsedCache = JSON.parse(cachedSuggestions);
+      if (!parsedCache || typeof parsedCache !== "object") return;
+
+      const cacheMap = new Map();
+      Object.entries(parsedCache).forEach(([posteKey, value]) => {
+        if (!value || !Array.isArray(value.rows)) return;
+        cacheMap.set(String(posteKey), {
+          rows: value.rows,
+          updatedAt: Number(value.updatedAt) || 0,
+        });
+      });
+
+      aiSuggestionsCacheRef.current = cacheMap;
+    } catch (error) {
+      console.warn("AI_SUGGESTIONS_CACHE_READ_ERROR", error);
+    }
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -557,6 +822,7 @@ const PositionsGrades = () => {
   );
 
   const normalizedGlobalSearch = normalizeValue(searchQuery);
+  const normalizedSuggestionSearch = normalizeValue(suggestionSearch);
 
   const filteredPositions = useMemo(() => {
     let filtered = scopedPositions;
@@ -573,6 +839,84 @@ const PositionsGrades = () => {
 
     return filtered;
   }, [scopedPositions, applyFilters, normalizedGlobalSearch]);
+
+  const filteredAiSuggestions = useMemo(() => {
+    const minScore = suggestionMinScore === "" ? null : Number(suggestionMinScore);
+
+    return aiSuggestions.filter((employee) => {
+      const employeeScore = Number(employee?.score ?? employee?.score_global?.score ?? 0);
+      const employeeText = [
+        employee?.full_name,
+        employee?.nom,
+        employee?.prenom,
+        employee?.matricule,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const matchesSearch =
+        !normalizedSuggestionSearch ||
+        normalizeValue(employeeText).includes(normalizedSuggestionSearch);
+      const matchesScore = minScore == null || employeeScore >= minScore;
+
+      return matchesSearch && matchesScore;
+    });
+  }, [aiSuggestions, normalizedSuggestionSearch, suggestionMinScore]);
+
+  useEffect(() => {
+    if (!hasSelectedDepartement) {
+      prefetchSignatureRef.current = "";
+      return;
+    }
+
+    const prefetchIds = scopedPositions
+      .map((item) => item?.id)
+      .filter((id) => id != null)
+      .slice(0, AI_SUGGESTIONS_PREFETCH_LIMIT);
+
+    if (!prefetchIds.length) return;
+
+    const signature = `${selectedDepartementId ?? "none"}|${includeSubDepartments ? "1" : "0"}|${prefetchIds.join(",")}`;
+    if (prefetchSignatureRef.current === signature) return;
+    prefetchSignatureRef.current = signature;
+
+    let isCancelled = false;
+
+    const runPrefetch = async () => {
+      for (let i = 0; i < prefetchIds.length; i += AI_SUGGESTIONS_PREFETCH_CONCURRENCY) {
+        if (isCancelled) return;
+        const chunk = prefetchIds.slice(i, i + AI_SUGGESTIONS_PREFETCH_CONCURRENCY);
+        await Promise.allSettled(
+          chunk.map((posteId) =>
+            fetchAiSuggestions(posteId, {
+              silent: true,
+              applyToPanel: false,
+            })
+          )
+        );
+      }
+    };
+
+    runPrefetch();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    hasSelectedDepartement,
+    scopedPositions,
+    selectedDepartementId,
+    includeSubDepartments,
+    fetchAiSuggestions,
+  ]);
+
+  const selectedPosteAssignmentHistory = useMemo(() => {
+    if (!selectedPoste?.id) return [];
+
+    return assignmentHistory
+      .filter((entry) => Number(entry?.poste_id) === Number(selectedPoste.id))
+      .slice(0, 6);
+  }, [assignmentHistory, selectedPoste]);
 
   const visibleColumns = useMemo(() => {
     return allColumns.filter((col) => columnVisibility[col.key]);
@@ -639,6 +983,10 @@ const PositionsGrades = () => {
 
     setAssigningEmployeeId(employeeId);
     try {
+        const assignedEmployee = aiSuggestions.find(
+          (employee) => (employee.id ?? employee.employee_id) === employeeId
+        );
+
         await apiClient.post(`/postes/${selectedPoste.id}/assign-employe`, {
             employe_id: employeeId
         });
@@ -652,10 +1000,40 @@ const PositionsGrades = () => {
         
         // Refresh positions to reflect changes
         fetchPostes();
-        setAiSuggestions((prev) =>
-          prev.filter((employee) => (employee.id ?? employee.employee_id) !== employeeId)
-        );
-        fetchAiSuggestions(selectedPoste.id);
+        setAiSuggestions((prev) => {
+          const nextRows = prev.filter(
+            (employee) => (employee.id ?? employee.employee_id) !== employeeId
+          );
+          setAiSuggestionCacheEntry(selectedPoste.id, nextRows);
+          return nextRows;
+        });
+        fetchAiSuggestions(selectedPoste.id, {
+          force: true,
+          silent: true,
+          applyToPanel: true,
+        });
+
+        setAssignmentHistory((prev) => {
+          const historyEntry = {
+            id: `${Date.now()}-${employeeId}-${selectedPoste.id}`,
+            poste_id: selectedPoste.id,
+            poste_nom: selectedPoste.poste ?? selectedPoste.nom ?? "Poste",
+            employee_id: employeeId,
+            employee_nom: employeeName,
+            score: Number(assignedEmployee?.score ?? 0),
+            assigned_at: new Date().toISOString(),
+          };
+
+          const nextHistory = [historyEntry, ...prev].slice(0, MAX_ASSIGNMENT_HISTORY_ITEMS);
+
+          try {
+            localStorage.setItem(ASSIGNMENTS_HISTORY_STORAGE_KEY, JSON.stringify(nextHistory));
+          } catch (storageError) {
+            console.warn("ASSIGNMENT_HISTORY_WRITE_ERROR", storageError);
+          }
+
+          return nextHistory;
+        });
         
         // Remove employee from suggestions if desired (optional)
         // For now just refresh
@@ -665,7 +1043,7 @@ const PositionsGrades = () => {
     } finally {
         setAssigningEmployeeId(null);
     }
-  }, [selectedPoste, fetchPostes, fetchAiSuggestions]);
+  }, [selectedPoste, aiSuggestions, fetchPostes, fetchAiSuggestions, setAiSuggestionCacheEntry]);
   const handleAddNewPoste = useCallback(() => {
     if (!hasSelectedDepartement || showAddForm) return;
     setSelectedPoste(null);
@@ -695,16 +1073,26 @@ const PositionsGrades = () => {
     setShowAddForm(false);
   }, []);
 
-  const handleOpenSuggestionPanel = useCallback((poste) => {
-    if (!poste) return;
-    setSelectedPoste(poste);
-    setDetailsPosteId(poste.id);
-    setIsSuggestionOpen(true);
-    setShowProfileDrawer(false);
-    setSelectedAiEmployee(null);
-    setShowAiDetailsDrawer(false);
-    setSelectedAiPosteEmployee(null);
-  }, []);
+  const handleOpenSuggestionPanel = useCallback(
+    (poste) => {
+      if (!poste) return;
+      const cachedEntry = getAiSuggestionCacheEntry(poste.id);
+
+      setSelectedPoste(poste);
+      setDetailsPosteId(poste.id);
+      setIsSuggestionOpen(true);
+      setShowProfileDrawer(false);
+      setSelectedAiEmployee(null);
+      setShowAiDetailsDrawer(false);
+      setSelectedAiPosteEmployee(null);
+      setAiSuggestions(cachedEntry?.rows ?? []);
+      setLoadingAiSuggestions(!cachedEntry);
+      setAiSuggestionsError("");
+      setSuggestionSearch("");
+      setSuggestionMinScore("");
+    },
+    [getAiSuggestionCacheEntry]
+  );
 
   const handleCloseSuggestionPanel = useCallback(() => {
     setIsSuggestionOpen(false);
@@ -715,6 +1103,10 @@ const PositionsGrades = () => {
     setShowAiDetailsDrawer(false);
     setSelectedAiPosteEmployee(null);
     setAiSuggestions([]);
+    setLoadingAiSuggestions(false);
+    setAiSuggestionsError("");
+    setSuggestionSearch("");
+    setSuggestionMinScore("");
   }, []);
 
 
@@ -973,7 +1365,7 @@ const PositionsGrades = () => {
       if (!employeeId) return;
 
       try {
-        const response = await apiClient.get(`/employes/${employeeId}`);
+        const response = await apiClient.get(`/employees/${employeeId}`);
         if (DEBUG_PROFILE) {
           console.log("EMPLOYEE_PROFILE_RESPONSE", response?.data);
         }
@@ -983,9 +1375,10 @@ const PositionsGrades = () => {
           ...payload,
         }));
       } catch (error) {
-        if (error?.response?.status === 404) {
+        const statusCode = error?.response?.status;
+        if (statusCode === 404 || statusCode === 405) {
           try {
-            const fallbackResponse = await apiClient.get(`/employees/${employeeId}`);
+            const fallbackResponse = await apiClient.get(`/employes/${employeeId}`);
             if (DEBUG_PROFILE) {
               console.log("EMPLOYEE_PROFILE_FALLBACK_RESPONSE", fallbackResponse?.data);
             }
@@ -1013,9 +1406,10 @@ const PositionsGrades = () => {
   useEffect(() => {
     if (!isSuggestionOpen || !detailsPosteId) {
       setAiSuggestions([]);
+      setLoadingAiSuggestions(false);
       return;
     }
-    fetchAiSuggestions(detailsPosteId);
+    fetchAiSuggestions(detailsPosteId, { applyToPanel: true });
   }, [isSuggestionOpen, detailsPosteId, fetchAiSuggestions]);
 
   useEffect(() => {
@@ -1045,6 +1439,9 @@ const PositionsGrades = () => {
 
   const showAICard = !showAddForm && !showProfileDrawer && !showAiDetailsDrawer && isSuggestionOpen;
   const isSidePanelOpen = showAddForm || showProfileDrawer || showAICard || showAiDetailsDrawer;
+  const showAiSuggestionsLoading = Boolean(
+    selectedPoste && loadingAiSuggestions && aiSuggestions.length === 0
+  );
   return (
     <ThemeProvider theme={createTheme()}>
       <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#ffffff" }}>
@@ -1124,8 +1521,16 @@ const PositionsGrades = () => {
                   }}
                 >
                   <div className="section-header mb-3">
-                    <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
-                      <div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                        alignItems: "center",
+                        columnGap: "16px",
+                        width: "100%",
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
                         {/* <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span style={{
                           width: "10px",
@@ -1145,7 +1550,7 @@ const PositionsGrades = () => {
                         )}
                       </div>
 
-                      <div style={{ display: "flex", gap: "12px" }}>
+                      <div style={{ display: "flex", gap: "12px", alignItems: "center", justifySelf: "end" }}>
                         <FontAwesomeIcon
                           onClick={() => handleFiltersToggle(!filtersVisible)}
                           icon={filtersVisible ? faClose : faFilter}
@@ -1333,21 +1738,46 @@ const PositionsGrades = () => {
                     handleChangeRowsPerPage={handleChangeRowsPerPage}
                     handleEdit={handleEditPoste}
                     handleDelete={handleDeletePoste}
-                    renderActions={(item) => (
+                    renderCustomActions={(item) => (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenSuggestionPanel(item);
                         }}
-                        aria-label="Voir détails"
-                        title="Voir détails"
+                        onMouseEnter={() => {
+                          if (item?.id) {
+                            fetchAiSuggestions(item.id, {
+                              silent: true,
+                              applyToPanel: false,
+                            });
+                          }
+                        }}
+                        onFocus={() => {
+                          if (item?.id) {
+                            fetchAiSuggestions(item.id, {
+                              silent: true,
+                              applyToPanel: false,
+                            });
+                          }
+                        }}
+                        aria-label="Voir suggestions"
+                        title="Voir suggestions"
                         style={{
-                          border: "none",
-                          backgroundColor: "transparent",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          border: "1px solid #c7e3e4",
+                          backgroundColor: "#eef8f8",
+                          color: "#2c767c",
+                          borderRadius: "999px",
+                          padding: "4px 8px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
                           cursor: "pointer",
                         }}
                       >
                         <FontAwesomeIcon icon={faEye} style={{ color: "#2c767c", fontSize: "14px" }} />
+                        <span>Suggestions</span>
                       </button>
                     )}
                     onRowClick={(item) => toggleRowExpansion(item.id)}
@@ -1466,19 +1896,142 @@ const PositionsGrades = () => {
                             <span className="text-muted" style={{ fontSize: "0.9rem" }}>Sélectionnez un poste pour voir les suggestions .</span>
                           </div>
                         )}
-                        {selectedPoste && loadingAiSuggestions && (
+                        {selectedPoste && showAiSuggestionsLoading && (
                           <div className="text-center py-4">
                             <span className="text-muted" style={{ fontSize: "0.9rem" }}>Chargement des suggestions...</span>
                           </div>
                         )}
-                        {selectedPoste && !loadingAiSuggestions && aiSuggestions.length === 0 && (
+                        {selectedPoste && !showAiSuggestionsLoading && aiSuggestionsError && (
+                          <div
+                            style={{
+                              border: "1px solid #fecaca",
+                              background: "#fef2f2",
+                              color: "#991b1b",
+                              borderRadius: "10px",
+                              padding: "14px",
+                              fontSize: "0.85rem",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "8px",
+                            }}
+                          >
+                            <span>{aiSuggestionsError}</span>
+                            <button
+                              type="button"
+                              onClick={() => fetchAiSuggestions(selectedPoste.id)}
+                              style={{
+                                alignSelf: "flex-start",
+                                border: "1px solid #fca5a5",
+                                background: "#fff",
+                                color: "#991b1b",
+                                borderRadius: "6px",
+                                padding: "4px 10px",
+                                fontSize: "0.8rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Réessayer
+                            </button>
+                          </div>
+                        )}
+                        {selectedPoste && !showAiSuggestionsLoading && !aiSuggestionsError && aiSuggestions.length === 0 && (
                           <div className="text-center py-4">
                             <span className="text-muted" style={{ fontSize: "0.9rem" }}>Aucune suggestion disponible pour ce poste.</span>
                           </div>
                         )}
-                        {selectedPoste && !loadingAiSuggestions && aiSuggestions.length > 0 && (
+                        {selectedPoste && !showAiSuggestionsLoading && !aiSuggestionsError && aiSuggestions.length > 0 && (
                           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                            {aiSuggestions.map((employee) => {
+                            <div
+                              style={{
+                                border: "1px solid #e2e8f0",
+                                background: "#f8fafc",
+                                borderRadius: "10px",
+                                padding: "12px",
+                              }}
+                            >
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 130px", gap: "8px", marginBottom: "8px" }}>
+                                <input
+                                  type="text"
+                                  value={suggestionSearch}
+                                  onChange={(event) => setSuggestionSearch(event.target.value)}
+                                  placeholder="Rechercher employé ou matricule"
+                                  style={{
+                                    width: "100%",
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: "8px",
+                                    padding: "7px 10px",
+                                    fontSize: "0.84rem",
+                                    color: "#334155",
+                                    background: "#fff",
+                                  }}
+                                />
+                                <select
+                                  value={suggestionMinScore}
+                                  onChange={(event) => setSuggestionMinScore(event.target.value)}
+                                  style={{
+                                    width: "100%",
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: "8px",
+                                    padding: "7px 10px",
+                                    fontSize: "0.84rem",
+                                    color: "#334155",
+                                    background: "#fff",
+                                  }}
+                                >
+                                  <option value="">Tous scores</option>
+                                  <option value="40">Score &gt;= 40%</option>
+                                  <option value="60">Score &gt;= 60%</option>
+                                  <option value="80">Score &gt;= 80%</option>
+                                </select>
+                              </div>
+
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                                <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>
+                                  {filteredAiSuggestions.length} / {aiSuggestions.length} suggestion{aiSuggestions.length > 1 ? "s" : ""}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSuggestionSearch("");
+                                    setSuggestionMinScore("");
+                                  }}
+                                  style={{
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: "6px",
+                                    background: "#fff",
+                                    color: "#334155",
+                                    fontSize: "0.78rem",
+                                    fontWeight: 600,
+                                    padding: "4px 10px",
+                                  }}
+                                >
+                                  Réinitialiser
+                                </button>
+                              </div>
+                            </div>
+
+                            {filteredAiSuggestions.length === 0 && (
+                              <div
+                                style={{
+                                  border: "1px dashed #cbd5e1",
+                                  borderRadius: "10px",
+                                  background: "#f8fafc",
+                                  padding: "14px",
+                                  textAlign: "center",
+                                  color: "#64748b",
+                                  fontSize: "0.85rem",
+                                }}
+                              >
+                                Aucune suggestion ne correspond aux filtres appliqués.
+                              </div>
+                            )}
+
+                            {filteredAiSuggestions.map((employee) => {
+                              const employeeId = employee.id ?? employee.employee_id;
+                              const employeeName =
+                                employee.full_name ||
+                                `${employee.nom ?? ""} ${employee.prenom ?? ""}`.trim() ||
+                                "Employé";
                               const matchLevel =
                                 employee.match_level ||
                                 (employee.score >= 71 ? "high" : employee.score >= 31 ? "medium" : "low");
@@ -1491,7 +2044,7 @@ const PositionsGrades = () => {
 
                               return (
                                 <div
-                                  key={employee.id}
+                                    key={employeeId ?? `${employeeName}-${employee.score}`}
                                   style={{
                                     border: "1px solid #f1f5f9",
                                     borderRadius: "12px",
@@ -1503,7 +2056,7 @@ const PositionsGrades = () => {
                                 >
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
                                     <div>
-                                      <div style={{ fontWeight: 700, color: "#334155", fontSize: "0.95rem" }}>{employee.full_name || employee.nom}</div>
+                                        <div style={{ fontWeight: 700, color: "#334155", fontSize: "0.95rem" }}>{employeeName}</div>
                                       <div className="text-muted" style={{ fontSize: "0.82rem", marginTop: "4px" }}>
                                         Compatibilité : <span style={{ fontWeight: 600, color: "#2c767c" }}>{employee.score}%</span>
                                       </div>
@@ -1545,8 +2098,8 @@ const PositionsGrades = () => {
                                     <button
                                       type="button"
                                       className="btn btn-sm"
-                                      onClick={() => handleAssignEmployee(employee.id, `${employee.full_name || employee.nom}`)}
-                                      disabled={assigningEmployeeId === employee.id}
+                                        onClick={() => handleAssignEmployee(employeeId, employeeName)}
+                                        disabled={!employeeId || assigningEmployeeId === employeeId}
                                       style={{
                                         backgroundColor: "#2c767c",
                                         color: "white",
@@ -1555,15 +2108,49 @@ const PositionsGrades = () => {
                                         border: "none",
                                         fontSize: "0.85rem",
                                         fontWeight: 600,
-                                        opacity: assigningEmployeeId === employee.id ? 0.7 : 1,
+                                          opacity: assigningEmployeeId === employeeId ? 0.7 : 1,
                                       }}
                                     >
-                                      {assigningEmployeeId === employee.id ? "..." : "Assigner"}
+                                        {assigningEmployeeId === employeeId ? "..." : "Assigner"}
                                     </button>
                                   </div>
                                 </div>
                               );
                             })}
+
+                            {selectedPosteAssignmentHistory.length > 0 && (
+                              <div
+                                style={{
+                                  marginTop: "2px",
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: "10px",
+                                  background: "#f8fafc",
+                                  padding: "12px",
+                                }}
+                              >
+                                <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#334155", marginBottom: "10px" }}>
+                                  Historique assignations récentes
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                  {selectedPosteAssignmentHistory.map((entry) => (
+                                    <div
+                                      key={entry.id}
+                                      style={{
+                                        border: "1px solid #e2e8f0",
+                                        borderRadius: "8px",
+                                        background: "#fff",
+                                        padding: "8px 10px",
+                                      }}
+                                    >
+                                      <div style={{ fontSize: "0.84rem", fontWeight: 600, color: "#1e293b" }}>{entry.employee_nom}</div>
+                                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                                        Score: {entry.score}% • {formatDateTime(entry.assigned_at)}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

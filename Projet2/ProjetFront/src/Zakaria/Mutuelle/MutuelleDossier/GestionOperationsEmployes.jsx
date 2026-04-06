@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useCallback, useMemo, Component } from "react";
 import PropTypes from "prop-types";
-import axios from "axios";
+import apiClient from "../../../services/apiClient";
 import { Button, Badge, Dropdown, Form } from "react-bootstrap";
 import { FaPlusCircle, FaEye } from "react-icons/fa";
 import { BarChart2 } from "lucide-react";
@@ -59,10 +59,7 @@ ErrorBoundary.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-const api = axios.create({
-  baseURL: "http://localhost:8000/api",
-  withCredentials: true,
-});
+const api = apiClient;
 
 const OPERATION_TYPE_OPTIONS = [
   { value: "", label: "Tous" },
@@ -253,9 +250,7 @@ function GestionOperationsEmployes() {
   useEffect(() => {
     const fetchAllEmployees = async () => {
       try {
-        const response = await axios.get("http://127.0.0.1:8000/api/departements/employes", {
-          withCredentials: true,
-        });
+        const response = await api.get("/departements/employes");
         const data = response.data;
         const employees = Array.isArray(data) ? data : [];
         setAllEmployees(employees);
@@ -271,9 +266,7 @@ function GestionOperationsEmployes() {
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
-        const response = await axios.get("http://127.0.0.1:8000/api/departements/hierarchy", {
-          withCredentials: true,
-        });
+        const response = await api.get("/departements/hierarchy");
         setDepartments(response.data || []);
       } catch (err) {
         setDepartments([]);
@@ -322,14 +315,6 @@ function GestionOperationsEmployes() {
     return filtered;
   }, [selectedDepartmentId, includeSubDeps, allEmployees, departments, getSubDepartmentIds]);
 
-  // Debug: Track operations state changes
-  useEffect(() => {
-    console.log("📊 State 'operations' mis à jour:", {
-      count: operations.length,
-      operations: operations
-    });
-  }, [operations]);
-
   const filteredEmployees = useMemo(() => {
     if (!selectedDepartmentId) return [];
     let list = departmentEmployees;
@@ -342,32 +327,48 @@ function GestionOperationsEmployes() {
     return list;
   }, [departmentEmployees, normalizedSearch, selectedDepartmentId]);
 
-  const fetchEmployeeOperations = useCallback(async (employeId, currentFilters = filters, showLoading = true) => {
+  const hasActiveFilters = useCallback((f = initialFilters) => {
+    return Boolean(
+      f?.dateOperationFrom ||
+      f?.dateOperationTo ||
+      f?.type ||
+      f?.statut ||
+      f?.dateRemboursementFrom ||
+      f?.dateRemboursementTo
+    );
+  }, []);
+
+  const fetchEmployeeOperations = useCallback(async (
+    employeId,
+    currentFilters = filters,
+    showLoading = false,
+    forceRefresh = false
+  ) => {
     const employeeId = typeof employeId === "object" ? employeId?.id : employeId;
     if (!employeeId) {
       console.warn("[OPS] fetchEmployeeOperations appelé sans employeId");
       return;
     }
 
-    // Tenter de charger depuis le cache pour une réactivité instantanée
     const cacheKey = `ops_cache_${employeeId}`;
-    const cachedData = localStorage.getItem(cacheKey);
+    const noFilters = !hasActiveFilters(currentFilters);
+    const cachedData = noFilters ? localStorage.getItem(cacheKey) : null;
 
-    if (cachedData && !currentFilters.dateOperationFrom && !currentFilters.type) { // On utilise le cache seulement si pas de filtres actifs
+    // Si le cache existe (même tableau vide), on l'utilise immédiatement sans requête réseau.
+    if (!forceRefresh && cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
         if (Array.isArray(parsed)) {
-          console.log("[OPS] Chargement depuis le cache pour l'employé:", employeeId);
           setOperations(parsed);
-          // On ne met pas loadingOperations à true si on a déjà des données à montrer
-          if (showLoading) showLoading = false;
+          setPage(0);
+          setLoadingOperations(false);
+          return;
         }
       } catch (e) {
         console.warn("[OPS] Erreur lecture cache:", e);
       }
     }
 
-    console.log("[OPS] Chargement des opérations (API) pour l'employé ID:", employeeId);
     if (showLoading) setLoadingOperations(true);
 
     try {
@@ -386,15 +387,13 @@ function GestionOperationsEmployes() {
 
       setOperations(list);
 
-      // Mettre à jour le cache seulement si on n'a pas de filtres (état de base)
-      if (!currentFilters.dateOperationFrom && !currentFilters.type && !currentFilters.statut) {
+      if (noFilters) {
         localStorage.setItem(cacheKey, JSON.stringify(list));
       }
 
       setPage(0);
     } catch (err) {
       console.error("❌ Erreur lors du chargement des opérations:", err);
-      // Ne réinitialiser à vide que si on n'a vraiment rien (pas même le cache)
       if (!localStorage.getItem(cacheKey)) {
         setOperations([]);
       }
@@ -402,9 +401,9 @@ function GestionOperationsEmployes() {
         console.error("Détails de l'erreur:", err.response?.data);
       }
     } finally {
-      setLoadingOperations(false);
+      if (showLoading) setLoadingOperations(false);
     }
-  }, [filters]);
+  }, [filters, hasActiveFilters]);
 
   const handleEmployeeSelect = useCallback(
     (employee) => {
@@ -412,19 +411,23 @@ function GestionOperationsEmployes() {
         console.warn("[OPS] handleEmployeeSelect appelé avec un employé invalide:", employee);
         return;
       }
-      try {
-        console.log("[OPS] Employé sélectionné:", employee.id, employee.nom, employee.prenom);
-        setSelectedEmployee(employee);
-        setFilters(initialFilters);
-        setFiltersVisible(false);
-        setShowAddOperation(false);
-        setPage(0);
-        setSelectedOperations([]);
-        fetchEmployeeOperations(employee.id, initialFilters);
-        setSelectedEmployeesSet(new Set([employee.id]));
-      } catch (error) {
-        console.error("[OPS] Erreur lors de la sélection de l'employé:", error);
+      setSelectedEmployee(employee);
+      setFilters(initialFilters);
+      setFiltersVisible(false);
+      setShowAddOperation(false);
+      setPage(0);
+      setSelectedOperations([]);
+      setOperations([]);
+      setLoadingOperations(false);
+      setSelectedEmployeesSet(new Set([employee.id]));
+
+      const affiliationsCount = Number(employee.affiliations_mutuelle_count);
+      if (Number.isFinite(affiliationsCount) && affiliationsCount === 0) {
+        localStorage.setItem(`ops_cache_${employee.id}`, JSON.stringify([]));
+        return;
       }
+
+      fetchEmployeeOperations(employee.id, initialFilters, false, false);
     },
     [fetchEmployeeOperations]
   );
@@ -471,6 +474,8 @@ function GestionOperationsEmployes() {
     setShowStats(false);
   };
 
+  const canAddOperation = Boolean(selectedEmployee);
+
 
   const handleEditOperation = (operationId) => {
     // Find the original operation object
@@ -486,8 +491,7 @@ function GestionOperationsEmployes() {
   };
 
   const handleOperationSaved = () => {
-    console.log("💾 Opération enregistrée - Fermeture du formulaire");
-    if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id, filters, false);
+    if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id, filters, false, true);
     setShowAddOperation(false);
     setShowOperationDetails(false);
     setSelectedOperation(null);
@@ -506,12 +510,9 @@ function GestionOperationsEmployes() {
   };
 
   const handleFilterChange = (patch) => {
-    if (Object.prototype.hasOwnProperty.call(patch, "type")) {
-      console.log("[OPS] Filtre type sélectionné :", patch.type);
-    }
     setFilters((prev) => {
       const next = { ...prev, ...patch };
-      if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id, next);
+      if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id, next, false, true);
       return next;
     });
   };
@@ -550,11 +551,6 @@ function GestionOperationsEmployes() {
       );
     });
   }, [operations, normalizedSearch, selectedEmployee]);
-
-  // Debug: comparer nombre brut vs affiché
-  useEffect(() => {
-    console.log("[OPS][DEBUG] operations (API) :", operations.length, " | filteredOperations (affichées) :", filteredOperations.length);
-  }, [operations, filteredOperations]);
 
   const tableColumns = OPERATION_COLUMNS;
 
@@ -695,7 +691,7 @@ function GestionOperationsEmployes() {
                           try {
                             await api.delete(`/mutuelles/documents/${doc.id}`);
                             showSuccessMessage('Supprimé', 'Document supprimé avec succès.');
-                            if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id);
+                            if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id, filters, false, true);
                           } catch (err) {
                             showErrorMessage('Erreur', 'Impossible de supprimer le document.');
                           }
@@ -715,7 +711,6 @@ function GestionOperationsEmployes() {
   };
 
   const mappedOperations = useMemo(() => {
-    console.log("🗺️ Mapping des opérations - Filtrées:", filteredOperations.length);
     const mapped = filteredOperations.map((op) => ({
       id: op.id,
       date_operation: formatDate(op.date_operation),
@@ -759,7 +754,6 @@ function GestionOperationsEmployes() {
         </span>
       ) : "-",
     }));
-    console.log("✅ Opérations mappées:", mapped.length);
     return mapped;
   }, [filteredOperations, selectedEmployee]);
 
@@ -793,7 +787,7 @@ function GestionOperationsEmployes() {
         );
         showSuccessMessage("Suppression réussie", "Les opérations ont été supprimées avec succès.");
         setSelectedOperations([]);
-        if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id, filters, false);
+        if (selectedEmployee) fetchEmployeeOperations(selectedEmployee.id, filters, false, true);
       } catch (err) {
         console.error("Erreur lors de la suppression groupée:", err);
         showErrorFromResponse(err, "Erreur de suppression");
@@ -884,7 +878,7 @@ function GestionOperationsEmployes() {
         await api.delete(`/mutuelles/operations/${operationId}`);
         showSuccessMessage("Suppression réussie", "L'opération a été supprimée avec succès.");
         if (selectedEmployee) {
-          fetchEmployeeOperations(selectedEmployee.id, filters, false);
+          fetchEmployeeOperations(selectedEmployee.id, filters, false, true);
         }
       } catch (err) {
         console.error("Erreur lors de la suppression:", err);
@@ -975,9 +969,17 @@ function GestionOperationsEmployes() {
           {/* Header section */}
           <div className="mt-0 px-3">
             <div className="operations-header mb-3">
-              <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  alignItems: "center",
+                  columnGap: "16px",
+                  rowGap: "10px",
+                }}
+              >
                 {/* Bloc titre */}
-                <div style={{ flex: "1 1 300px", minWidth: 0 }}>
+                <div style={{ minWidth: 0 }}>
                   <span className="operations-title mb-1">
                     <span className="title-dot"></span>
                     Opérations Assurance
@@ -989,10 +991,7 @@ function GestionOperationsEmployes() {
                         <>
                           <span className="fw-bold text-dark">{selectedEmployee.nom} {selectedEmployee.prenom}</span>
                           <span className="ms-2 text-muted" style={{ fontSize: '0.9rem' }}>
-                            {loadingOperations && operations.length === 0
-                              ? "— Recherche des opérations..."
-                              : `(${operations.length} opération${operations.length > 1 ? 's' : ''} trouvée${operations.length > 1 ? 's' : ''})`
-                            }
+                            {`(${operations.length} opération${operations.length > 1 ? 's' : ''} trouvée${operations.length > 1 ? 's' : ''})`}
                           </span>
                         </>
                       )
@@ -1001,7 +1000,43 @@ function GestionOperationsEmployes() {
                 </div>
 
                 {/* Bloc actions */}
-                <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", justifySelf: "end", flexWrap: "wrap" }}>
+                  <Button
+                    onClick={() => {
+                      handleAddOperation();
+                      setShowStats(false);
+                    }}
+                    className="btn btn-outline-primary d-flex align-items-center"
+                    size="sm"
+                    disabled={!canAddOperation}
+                    style={{
+                      width: "210px",
+                      flex: "0 0 auto",
+                      whiteSpace: "nowrap",
+                      color: "white",
+                      opacity: 1,
+                      backgroundColor: canAddOperation ? "#2c767c" : "#8cb8bc",
+                      borderColor: canAddOperation ? "#2c767c" : "#8cb8bc",
+                      cursor: canAddOperation ? "pointer" : "not-allowed",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseOver={(e) => {
+                      if (!canAddOperation) return;
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
+                      e.currentTarget.style.backgroundColor = "#2c767c";
+                    }}
+                    onMouseOut={(e) => {
+                      if (!canAddOperation) return;
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                    title={!canAddOperation ? "Sélectionnez un employé pour ajouter une opération." : ""}
+                  >
+                    <FaPlusCircle className="me-2" />
+                    Ajouter une opération
+                  </Button>
+
                   <FontAwesomeIcon
                     onClick={() => setFiltersVisible((v) => !v)}
                     icon={filtersVisible ? faClose : faFilter}
@@ -1046,36 +1081,6 @@ function GestionOperationsEmployes() {
                   >
                     <BarChart2 size={24} strokeWidth={2.5} />
                   </div>
-                  <Button
-                    onClick={() => {
-                      handleAddOperation();
-                      setShowStats(false);
-                    }}
-                    className={`btn btn-outline-primary d-flex align-items-center ${!selectedEmployee ? "disabled-btn" : ""}`}
-                    size="sm"
-                    disabled={!selectedEmployee}
-                    style={{
-                      width: "210px",
-                      flex: "0 0 auto",
-                      whiteSpace: "nowrap",
-                      color: "white",
-                      backgroundColor: "#2c767c",
-                      borderColor: "#2c767c",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-                      e.currentTarget.style.backgroundColor = '#2c767c';
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    <FaPlusCircle className="me-2" />
-                    Ajouter une opération
-                  </Button>
 
                   <Dropdown
                     show={showDropdown}

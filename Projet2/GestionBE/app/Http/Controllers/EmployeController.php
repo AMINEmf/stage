@@ -21,10 +21,10 @@ class EmployeController extends Controller
 
     public function index()
     {
-        Log::info('Request to fetch employees received.'); // Added logging
         // if (Gate::allows('view_all_employes')) {
-            $employes = Employe::with('departements', 'contrat')->get();
-            Log::info('Employees found: ' . $employes->count());
+            $employes = Employe::with('departements', 'contrat')
+                ->withCount('affiliationsMutuelle')
+                ->get();
             return response()->json($employes);
         // } else {
         //     abort(403, 'Vous n\'avez pas l\'autorisation de voir la liste des employés.');
@@ -650,6 +650,57 @@ class EmployeController extends Controller
         })->values();
 
         return response()->json($rows);
+    }
+
+    /**
+     * Récupère les compétences pour plusieurs employés en une seule requête.
+     */
+    public function getCompetencesBatch(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'employee_ids.*' => ['integer', 'distinct', 'exists:employes,id'],
+        ]);
+
+        $employeeIds = collect($validated['employee_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($employeeIds->isEmpty()) {
+            return response()->json(['data' => []]);
+        }
+
+        $employes = Employe::with('competences')
+            ->whereIn('id', $employeeIds->all())
+            ->get()
+            ->keyBy('id');
+
+        $rowsByEmployee = [];
+        foreach ($employeeIds as $employeeId) {
+            $employe = $employes->get($employeeId);
+
+            if (!$employe) {
+                $rowsByEmployee[(string) $employeeId] = [];
+                continue;
+            }
+
+            $rowsByEmployee[(string) $employeeId] = $employe->competences
+                ->map(function ($c) {
+                    return [
+                        'id' => $c->id,
+                        'nom' => $c->nom,
+                        'categorie' => $c->categorie,
+                        'description' => $c->description,
+                        'niveau' => $c->pivot->niveau ?? $c->pivot->niveau_acquis,
+                        'niveau_acquis' => $c->pivot->niveau_acquis,
+                        'date_acquisition' => $c->pivot->date_acquisition,
+                    ];
+                })
+                ->values();
+        }
+
+        return response()->json(['data' => $rowsByEmployee]);
     }
 
     /**

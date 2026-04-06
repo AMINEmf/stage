@@ -1,652 +1,999 @@
-import React, { useEffect, useState } from "react";
-import { 
-  Card, 
-  CardContent, 
-  Typography, 
-  ThemeProvider, 
-  createTheme,
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
   Box,
-  Grid,
-  Toolbar,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
   Chip,
-  Avatar,
   Divider,
+  Grid,
   LinearProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper
+  Stack,
+  ThemeProvider,
+  Typography,
+  createTheme,
 } from "@mui/material";
-import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
-import WomanIcon from "@mui/icons-material/Woman";
-import ManIcon from "@mui/icons-material/Man";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import AssessmentIcon from "@mui/icons-material/Assessment";
 import BusinessIcon from "@mui/icons-material/Business";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import WarningIcon from "@mui/icons-material/Warning";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import InfoIcon from "@mui/icons-material/Info";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import ScheduleIcon from "@mui/icons-material/Schedule";
+import GavelIcon from "@mui/icons-material/Gavel";
+import HealthAndSafetyIcon from "@mui/icons-material/HealthAndSafety";
+import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
+import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
+import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
+import SecurityIcon from "@mui/icons-material/Security";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import SchoolIcon from "@mui/icons-material/School";
+import { Link as RouterLink } from "react-router-dom";
+import apiClient from "../services/apiClient";
+import { useOpen } from "./OpenProvider";
+import { useHeader } from "./HeaderContext";
+
+const theme = createTheme();
+const HOME_DASHBOARD_CACHE_KEY = "HOME_DASHBOARD_CACHE_V4";
+const NAV_PERMISSIONS_CACHE_KEY = "NAV_PERMISSIONS_CACHE";
+const DASHBOARD_CACHE_TTL_MS = 2 * 60 * 1000;
+
+const DASHBOARD_COLORS = {
+  teal: "#2c767c",
+  tealLight: "#4db6ac",
+  blue: "#0284c7",
+  indigo: "#0369a1",
+  cardShadow: "0 8px 32px rgba(0,0,0,0.12)",
+  cardShadowHover: "0 16px 48px rgba(0,0,0,0.18)",
+  pageBg: "#ffffff",
+  textPrimary: "#1e293b",
+  textSecondary: "#64748b",
+};
+
+const EMPLOYEE_MENU_PERMISSIONS = [
+  "view_all_employes",
+  "create_employes",
+  "update_employes",
+  "delete_employes",
+  "view_all_employee_histories",
+];
+
+const SOCIETE_MENU_PERMISSIONS = [
+  "view_all_societes",
+  "create_societes",
+  "update_societes",
+  "delete_societes",
+];
+
+const INITIAL_SUMMARY = {
+  totalEmployees: 0,
+  femmes: 0,
+  hommes: 0,
+  departements: 0,
+};
+
+const INITIAL_MODULE_STATS = {
+  accidents: null,
+  carrieres: null,
+  cimr: null,
+  cnss: null,
+  conflits: null,
+  formations: null,
+  mutuelle: null,
+  sanctions: null,
+  societes: null,
+  users: null,
+};
+
+const resolveScopedCacheKey = (baseKey) => {
+  const token = globalThis.localStorage?.getItem("API_TOKEN");
+  if (!token) return `${baseKey}_anon`;
+  return `${baseKey}_${token.slice(-16)}`;
+};
+
+const readJsonCache = (key, fallback) => {
+  try {
+    const raw = globalThis.localStorage?.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+};
+
+const writeJsonCache = (key, value) => {
+  try {
+    globalThis.localStorage?.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore cache write errors (quota/private mode)
+  }
+};
+
+const normalizeUserPayload = (rawUser) => {
+  if (!rawUser) return null;
+  const normalized = Array.isArray(rawUser) ? rawUser : [rawUser];
+  return normalized.length > 0 ? normalized : null;
+};
+
+const extractPermissionNames = (normalizedUser) => {
+  const currentUser = normalizedUser?.[0] ?? {};
+  const roles = Array.isArray(currentUser.roles) ? currentUser.roles : [];
+
+  const rolePermissionNames = roles
+    .flatMap((role) => (Array.isArray(role?.permissions) ? role.permissions : []))
+    .map((permission) => permission?.name)
+    .filter(Boolean);
+
+  const directPermissionNames = (Array.isArray(currentUser.permissions) ? currentUser.permissions : [])
+    .map((permission) => (typeof permission === "string" ? permission : permission?.name))
+    .filter(Boolean);
+
+  return [...new Set([...rolePermissionNames, ...directPermissionNames])];
+};
+
+const toSafeNumber = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const toCollectionCount = (payload) => {
+  if (Array.isArray(payload)) return payload.length;
+  if (Array.isArray(payload?.data)) return payload.data.length;
+  if (Array.isArray(payload?.items)) return payload.items.length;
+  if (typeof payload?.total === "number") return payload.total;
+  if (typeof payload?.count === "number") return payload.count;
+  return 0;
+};
+
+const countCurrentMonthItems = (list, dateField) => {
+  if (!Array.isArray(list)) return 0;
+
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+
+  return list.filter((item) => {
+    const raw = item?.[dateField];
+    if (!raw) return false;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.getMonth() === month && parsed.getFullYear() === year;
+  }).length;
+};
+
+const formatMetricValue = (value, format) => {
+  const numericValue = toSafeNumber(value);
+  if (format === "currency") {
+    return `${numericValue.toLocaleString("fr-FR")} DH`;
+  }
+  if (format === "percent") {
+    return `${numericValue}%`;
+  }
+  return numericValue.toLocaleString("fr-FR");
+};
+
+const TopStatCard = ({ title, value, icon: Icon, bgGradient }) => (
+  <Card
+    sx={{
+      background: bgGradient,
+      borderRadius: "20px",
+      boxShadow: DASHBOARD_COLORS.cardShadow,
+      position: "relative",
+      overflow: "hidden",
+      minHeight: 132,
+      transition: "all 0.3s ease",
+      cursor: "pointer",
+      "&:hover": {
+        transform: "translateY(-5px)",
+        boxShadow: DASHBOARD_COLORS.cardShadowHover,
+      },
+    }}
+  >
+    <CardContent sx={{ p: 2.5, position: "relative", zIndex: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box>
+          <Typography
+            sx={{
+              color: "rgba(255,255,255,0.85)",
+              fontWeight: 500,
+              fontSize: "0.82rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+              mb: 0.8,
+            }}
+          >
+            {title}
+          </Typography>
+          <Typography sx={{ color: "#ffffff", fontWeight: 700, fontSize: "2.1rem", lineHeight: 1.1 }}>
+            {value}
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            width: 48,
+            height: 48,
+            borderRadius: 2,
+            bgcolor: "rgba(255,255,255,0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <Icon sx={{ color: "#ffffff", fontSize: 28 }} />
+        </Box>
+      </Box>
+    </CardContent>
+
+    <Box
+      sx={{
+        position: "absolute",
+        top: -50,
+        right: -50,
+        width: 150,
+        height: 150,
+        borderRadius: "50%",
+        background: "rgba(255,255,255,0.1)",
+      }}
+    />
+    <Box
+      sx={{
+        position: "absolute",
+        bottom: -30,
+        right: 30,
+        width: 80,
+        height: 80,
+        borderRadius: "50%",
+        background: "rgba(255,255,255,0.08)",
+      }}
+    />
+  </Card>
+);
+
+const InterfaceCard = ({ title, description, icon: Icon, color, route, metrics, loading, error }) => (
+  <Card
+    sx={{
+      height: "100%",
+      borderRadius: "20px",
+      border: `1px solid ${color}25`,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+      display: "flex",
+      flexDirection: "column",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        transform: "translateY(-4px)",
+        boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
+      },
+    }}
+  >
+    <CardContent sx={{ flex: 1, p: 2.5 }}>
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+        <Box
+          sx={{
+            width: 38,
+            height: 38,
+            borderRadius: 2,
+            bgcolor: `${color}15`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Icon sx={{ color, fontSize: 22 }} />
+        </Box>
+        <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "1rem" }}>{title}</Typography>
+      </Stack>
+
+      <Typography sx={{ color: DASHBOARD_COLORS.textSecondary, fontSize: "0.86rem", mb: 2 }}>{description}</Typography>
+
+      <Stack spacing={1}>
+        {metrics.map((metric) => (
+          <Stack key={metric.label} direction="row" justifyContent="space-between" alignItems="center">
+            <Typography sx={{ color: DASHBOARD_COLORS.textSecondary, fontSize: "0.84rem" }}>{metric.label}</Typography>
+            <Typography sx={{ color: DASHBOARD_COLORS.textPrimary, fontWeight: 700, fontSize: "0.9rem" }}>
+              {formatMetricValue(metric.value, metric.format)}
+            </Typography>
+          </Stack>
+        ))}
+      </Stack>
+    </CardContent>
+
+    <Divider />
+
+    <CardActions sx={{ px: 2.5, py: 1.4, justifyContent: "space-between" }}>
+      {loading ? (
+        <Chip size="small" label="Chargement" sx={{ bgcolor: "#eef2ff", color: "#334155" }} />
+      ) : error ? (
+        <Chip size="small" label="Donnees indisponibles" sx={{ bgcolor: "#fff1f2", color: "#be123c" }} />
+      ) : (
+        <Chip size="small" label="Donnees synchronisees" sx={{ bgcolor: "#ecfdf5", color: "#065f46" }} />
+      )}
+
+      <Button
+        size="small"
+        component={RouterLink}
+        to={route}
+        endIcon={<ArrowForwardIcon fontSize="small" />}
+        sx={{ textTransform: "none", fontWeight: 700 }}
+      >
+        Ouvrir
+      </Button>
+    </CardActions>
+  </Card>
+);
 
 const Dashboard = () => {
-  const [totalEmployees, setTotalEmployees] = useState(0);
-  const [femmes, setFemmes] = useState(0);
-  const [hommes, setHommes] = useState(0);
-  const [departements, setDepartements] = useState(0);
+  const { dynamicStyles } = useOpen();
+  const { setTitle, clearActions } = useHeader();
+
   const [loading, setLoading] = useState(true);
-  
-  // Couleurs du thème de l'application
-  const theme = {
-    primary: '#00695c', // Vert teal principal de la barre latérale
-    primaryLight: '#4db6ac',
-    primaryDark: '#004d40',
-    secondary: '#26a69a',
-    accent: '#00bcd4',
-    success: '#4caf50',
-    warning: '#ff9800',
-    error: '#f44336',
-    info: '#2196f3'
-  };
-  
-  // Date actuelle
-  const today = new Date();
-  const formatDate = (date) => {
-    return date.toLocaleDateString('fr-FR', { 
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long', 
-      day: 'numeric'
-    });
-  };
-
-  // Données simulées pour l'aperçu des activités
-  const recentActivities = [
-    { id: 1, employee: "Marie Dupont", action: "Arrivée", time: "08:30", department: "RH", avatar: "MD" },
-    { id: 2, employee: "Jean Martin", action: "Congé approuvé", time: "09:15", department: "IT", avatar: "JM" },
-    { id: 3, employee: "Sophie Bernard", action: "Nouveau recrutement", time: "10:00", department: "Marketing", avatar: "SB" },
-    { id: 4, employee: "Pierre Durand", action: "Formation complétée", time: "11:30", department: "Ventes", avatar: "PD" },
-    { id: 5, employee: "Claire Moreau", action: "Évaluation soumise", time: "14:20", department: "Finance", avatar: "CM" }
-  ];
-
-  const departmentStats = [
-    { name: "Ressources Humaines", employees: 12, percentage: 15, color: theme.primary },
-    { name: "Informatique", employees: 25, percentage: 31, color: theme.secondary },
-    { name: "Marketing", employees: 18, percentage: 22, color: theme.accent },
-    { name: "Ventes", employees: 20, percentage: 25, color: theme.primaryLight },
-    { name: "Finance", employees: 6, percentage: 7, color: theme.primaryDark }
-  ];
-
-  // Fonction pour récupérer les statistiques du dashboard
-  const fetchDashboardStats = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('http://127.0.0.1:8000/api/employes/dashboard-stats', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTotalEmployees(data.totalEmployees);
-        setFemmes(data.femmes);
-        setHommes(data.hommes);
-      } else {
-        console.error('Erreur lors de la récupération des statistiques');
-      }
-    } catch (error) {
-      console.error('Erreur de connexion:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTotalDepartements = async () => {
-    try {
-      const response = await fetch('http://127.0.0.1:8000/api/total-departemet', {
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        console.error('Erreur lors de la récupération des départements:', response.status);
-        return;
-      }
-      const data = await response.json();
-      setDepartements(data.totalDepartements);
-    } catch (error) {
-      console.error('Erreur de connexion:', error);
-    }
-  };
+  const [error, setError] = useState("");
+  const [permissions, setPermissions] = useState([]);
+  const [summary, setSummary] = useState(INITIAL_SUMMARY);
+  const [moduleStats, setModuleStats] = useState(INITIAL_MODULE_STATS);
+  const [moduleErrors, setModuleErrors] = useState({});
 
   useEffect(() => {
-    fetchDashboardStats();
-    fetchTotalDepartements();
+    setTitle("Accueil");
+    clearActions();
+    return () => {
+      clearActions();
+    };
+  }, [setTitle, clearActions]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolvePermissions = async () => {
+      const scopedPermissionsKey = resolveScopedCacheKey(NAV_PERMISSIONS_CACHE_KEY);
+      const cachedScoped = readJsonCache(scopedPermissionsKey, []);
+      const cachedLegacy = readJsonCache(NAV_PERMISSIONS_CACHE_KEY, []);
+
+      const mergedCached = [
+        ...(Array.isArray(cachedScoped) ? cachedScoped : []),
+        ...(Array.isArray(cachedLegacy) ? cachedLegacy : []),
+      ];
+
+      const dedupedCached = [...new Set(mergedCached.filter(Boolean))];
+      if (dedupedCached.length > 0) {
+        return dedupedCached;
+      }
+
+      try {
+        const response = await apiClient.get("/user", {
+          withCredentials: true,
+          timeout: 15000,
+        });
+        const normalizedUser = normalizeUserPayload(response?.data?.user ?? response?.data);
+        const permissionNames = extractPermissionNames(normalizedUser);
+
+        if (permissionNames.length > 0) {
+          writeJsonCache(scopedPermissionsKey, permissionNames);
+          writeJsonCache(NAV_PERMISSIONS_CACHE_KEY, permissionNames);
+        }
+
+        return permissionNames;
+      } catch {
+        return [];
+      }
+    };
+
+    const fetchDashboardData = async () => {
+      const scopedDashboardCacheKey = resolveScopedCacheKey(HOME_DASHBOARD_CACHE_KEY);
+      const cachedSnapshot = readJsonCache(scopedDashboardCacheKey, null);
+
+      let hasCachedSnapshot = false;
+      if (cachedSnapshot && typeof cachedSnapshot === "object") {
+        const cachedSummary = cachedSnapshot.summary && typeof cachedSnapshot.summary === "object"
+          ? { ...INITIAL_SUMMARY, ...cachedSnapshot.summary }
+          : INITIAL_SUMMARY;
+
+        const cachedModules = cachedSnapshot.moduleStats && typeof cachedSnapshot.moduleStats === "object"
+          ? { ...INITIAL_MODULE_STATS, ...cachedSnapshot.moduleStats }
+          : INITIAL_MODULE_STATS;
+
+        if (isMounted) {
+          setPermissions(Array.isArray(cachedSnapshot.permissions) ? cachedSnapshot.permissions : []);
+          setSummary(cachedSummary);
+          setModuleStats(cachedModules);
+          setModuleErrors(cachedSnapshot.moduleErrors && typeof cachedSnapshot.moduleErrors === "object" ? cachedSnapshot.moduleErrors : {});
+          setLoading(false);
+        }
+
+        hasCachedSnapshot = true;
+        const isFresh = cachedSnapshot.timestamp && Date.now() - Number(cachedSnapshot.timestamp) < DASHBOARD_CACHE_TTL_MS;
+        if (isFresh) {
+          return;
+        }
+      }
+
+      if (!hasCachedSnapshot && isMounted) {
+        setLoading(true);
+      }
+      if (isMounted) {
+        setError("");
+      }
+
+      const resolvedPermissions = await resolvePermissions();
+      if (!isMounted) return;
+
+      setPermissions(resolvedPermissions);
+
+      const canAccessEmployeesMenu = resolvedPermissions.some((permission) => EMPLOYEE_MENU_PERMISSIONS.includes(permission));
+      const canAccessSocieteMenu = resolvedPermissions.some((permission) => SOCIETE_MENU_PERMISSIONS.includes(permission));
+
+      const [employeeStatsResult, departementStatsResult] = await Promise.allSettled([
+        apiClient.get("/employes/dashboard-stats", { timeout: 30000 }),
+        apiClient.get("/total-departemet", { timeout: 30000 }),
+      ]);
+
+      const nextSummary = {
+        totalEmployees: employeeStatsResult.status === "fulfilled"
+          ? toSafeNumber(employeeStatsResult.value?.data?.totalEmployees)
+          : 0,
+        femmes: employeeStatsResult.status === "fulfilled"
+          ? toSafeNumber(employeeStatsResult.value?.data?.femmes)
+          : 0,
+        hommes: employeeStatsResult.status === "fulfilled"
+          ? toSafeNumber(employeeStatsResult.value?.data?.hommes)
+          : 0,
+        departements: departementStatsResult.status === "fulfilled"
+          ? toSafeNumber(departementStatsResult.value?.data?.totalDepartements)
+          : 0,
+      };
+
+      const requestDefs = [];
+
+      if (resolvedPermissions.includes("view_all_accidents")) {
+        requestDefs.push({ key: "accidents", request: apiClient.get("/accidents", { timeout: 30000 }) });
+      }
+      if (resolvedPermissions.includes("view_all_cimr")) {
+        requestDefs.push({ key: "cimr", request: apiClient.get("/cimr-declarations/dashboard-stats", { timeout: 30000 }) });
+      }
+      if (resolvedPermissions.includes("view_all_mutuelle")) {
+        requestDefs.push({ key: "mutuelle", request: apiClient.get("/mutuelle/dashboard-stats", { timeout: 30000 }) });
+      }
+      if (resolvedPermissions.includes("view_all_cnss")) {
+        const today = new Date();
+        requestDefs.push({
+          key: "cnss",
+          request: apiClient.get("/cnss/dashboard", {
+            params: { mois: today.getMonth() + 1, annee: today.getFullYear() },
+            timeout: 30000,
+          }),
+        });
+      }
+      if (resolvedPermissions.includes("view_all_carrieres_formations")) {
+        requestDefs.push({ key: "carrieres", request: apiClient.get("/dashboard/carrieres", { timeout: 30000 }) });
+        requestDefs.push({ key: "formations", request: apiClient.get("/dashboard/formations", { timeout: 30000 }) });
+      }
+      if (resolvedPermissions.includes("view_all_conflits")) {
+        requestDefs.push({ key: "conflits", request: apiClient.get("/conflits", { timeout: 30000 }) });
+      }
+      if (resolvedPermissions.includes("view_all_sanctions")) {
+        requestDefs.push({ key: "sanctions", request: apiClient.get("/sanctions", { timeout: 30000 }) });
+      }
+      if (canAccessSocieteMenu) {
+        requestDefs.push({ key: "societes", request: apiClient.get("/societes", { timeout: 30000 }) });
+      }
+      if (resolvedPermissions.includes("view_all_users")) {
+        requestDefs.push({ key: "users", request: apiClient.get("/users", { timeout: 30000 }) });
+      }
+
+      const moduleResults = await Promise.allSettled(requestDefs.map((definition) => definition.request));
+
+      const nextModuleStats = { ...INITIAL_MODULE_STATS };
+      const nextModuleErrors = {};
+
+      moduleResults.forEach((result, index) => {
+        const key = requestDefs[index]?.key;
+        if (!key) return;
+
+        if (result.status === "rejected") {
+          nextModuleErrors[key] = "Erreur de recuperation";
+          return;
+        }
+
+        const payload = result.value?.data;
+
+        if (key === "accidents") {
+          nextModuleStats.accidents = { total: toCollectionCount(payload) };
+          return;
+        }
+        if (key === "cimr") {
+          nextModuleStats.cimr = {
+            totalAffiliations: toSafeNumber(payload?.totalAffiliations),
+            declarationsThisMonth: toSafeNumber(payload?.declarationsThisMonth),
+            totalAmountThisMonth: toSafeNumber(payload?.totalAmountThisMonth),
+          };
+          return;
+        }
+        if (key === "mutuelle") {
+          const kpis = payload?.kpis ?? {};
+          nextModuleStats.mutuelle = {
+            affiliationsActives: toSafeNumber(kpis.affiliations_actives),
+            affiliationsInactives: toSafeNumber(kpis.affiliations_inactives),
+            dossiersEnCours: toSafeNumber(kpis.dossiers_en_cours),
+            dossiersTermines: toSafeNumber(kpis.dossiers_termines),
+          };
+          return;
+        }
+        if (key === "cnss") {
+          const kpis = payload?.kpis ?? {};
+          nextModuleStats.cnss = {
+            affiliationsActif: toSafeNumber(kpis.affiliations_actif),
+            declarationsEnAttente: toSafeNumber(kpis.declarations_en_attente),
+            masseSalariale: toSafeNumber(kpis.masse_salariale),
+            montantCnss: toSafeNumber(kpis.montant_cnss),
+          };
+          return;
+        }
+        if (key === "carrieres") {
+          const kpis = payload?.kpis ?? {};
+          nextModuleStats.carrieres = {
+            totalEmployes: toSafeNumber(kpis.total_employes),
+            promotions: toSafeNumber(kpis.promotions),
+            postesOccupes: toSafeNumber(kpis.postes_occupes),
+          };
+          return;
+        }
+        if (key === "formations") {
+          const kpis = payload?.kpis ?? {};
+          nextModuleStats.formations = {
+            formationsActives: toSafeNumber(kpis.formations_actives),
+            participantsTotal: toSafeNumber(kpis.participants_total),
+            tauxReussite: toSafeNumber(kpis.taux_reussite),
+          };
+          return;
+        }
+        if (key === "conflits") {
+          const conflitsList = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+
+          nextModuleStats.conflits = {
+            total: Array.isArray(conflitsList) && conflitsList.length > 0
+              ? conflitsList.length
+              : toSafeNumber(payload?.totalConflits),
+            thisMonth: Array.isArray(conflitsList) && conflitsList.length > 0
+              ? countCurrentMonthItems(conflitsList, "date_incident")
+              : toSafeNumber(payload?.conflitsThisMonth),
+          };
+          return;
+        }
+        if (key === "sanctions") {
+          const sanctionsList = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+
+          nextModuleStats.sanctions = {
+            total: Array.isArray(sanctionsList) && sanctionsList.length > 0
+              ? sanctionsList.length
+              : toSafeNumber(payload?.total),
+            thisMonth: Array.isArray(sanctionsList) && sanctionsList.length > 0
+              ? countCurrentMonthItems(sanctionsList, "date_sanction")
+              : toSafeNumber(payload?.this_month),
+          };
+          return;
+        }
+        if (key === "societes") {
+          nextModuleStats.societes = { total: toCollectionCount(payload) };
+          return;
+        }
+        if (key === "users") {
+          nextModuleStats.users = { total: toCollectionCount(payload) };
+        }
+      });
+
+      if (!isMounted) return;
+
+      setSummary(nextSummary);
+      setModuleStats(nextModuleStats);
+      setModuleErrors(nextModuleErrors);
+
+      if (
+        employeeStatsResult.status === "rejected" &&
+        departementStatsResult.status === "rejected" &&
+        Object.keys(nextModuleErrors).length > 0
+      ) {
+        setError("Impossible de charger les donnees du dashboard.");
+      }
+
+      writeJsonCache(scopedDashboardCacheKey, {
+        timestamp: Date.now(),
+        permissions: resolvedPermissions,
+        summary: nextSummary,
+        moduleStats: nextModuleStats,
+        moduleErrors: nextModuleErrors,
+      });
+
+      setLoading(false);
+    };
+
+    fetchDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const actualites = [
-    {
-      type: "info",
-      title: "Nouvelle politique congés",
-      color: theme.info
-    },
-    {
-      type: "warning", 
-      title: "Formation obligatoire",
-      color: theme.warning
-    },
-    {
-      type: "success",
-      title: "Objectifs atteints",
-      color: theme.success
-    },
-    {
-      type: "urgent",
-      title: "Demandes en attente",
-      color: theme.error
-    }
-  ];
-
-  const getIcon = (type) => {
-    switch(type) {
-      case 'success': return <CheckCircleIcon sx={{ color: theme.success, fontSize: 20 }} />;
-      case 'warning': return <WarningIcon sx={{ color: theme.warning, fontSize: 20 }} />;
-      case 'info': return <InfoIcon sx={{ color: theme.info, fontSize: 20 }} />;
-      case 'urgent': return <NotificationsIcon sx={{ color: theme.error, fontSize: 20 }} />;
-      default: return <InfoIcon sx={{ color: theme.info, fontSize: 20 }} />;
-    }
-  };
-
-  const getActionColor = (action) => {
-    switch(action.toLowerCase()) {
-      case 'arrivée': return { bg: `${theme.success}20`, color: theme.success };
-      case 'congé approuvé': return { bg: `${theme.info}20`, color: theme.info };
-      case 'nouveau recrutement': return { bg: `${theme.primary}20`, color: theme.primary };
-      case 'formation complétée': return { bg: `${theme.warning}20`, color: theme.warning };
-      case 'évaluation soumise': return { bg: `${theme.secondary}20`, color: theme.secondary };
-      default: return { bg: '#f3f4f6', color: '#374151' };
-    }
-  };
-
-  
-  // Composant pour les cartes statistiques améliorées
-  const StatCard = ({ title, value, icon: Icon, bgColor, textColor, iconBg, trend }) => (
-    <Card sx={{ 
-      background: `linear-gradient(135deg, ${bgColor}08 0%, ${bgColor}04 100%)`,
-      borderRadius: 3,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-      border: `1px solid ${bgColor}15`,
-      position: 'relative',
-      overflow: 'hidden',
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      '&:hover': { 
-        transform: 'translateY(-4px)',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.12)' 
-      },
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '4px',
-        background: `linear-gradient(90deg, ${bgColor}, ${bgColor}80)`,
-      }
-    }}>
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="body2" sx={{ 
-              color: '#64748b', 
-              mb: 1.5,
-              fontWeight: 500,
-              fontSize: '0.875rem'
-            }}>
-              {title}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1 }}>
-              <Typography variant="h2" sx={{ 
-                fontWeight: 700, 
-                color: textColor,
-                fontSize: { xs: '2rem', sm: '2.5rem' },
-                lineHeight: 1
-              }}>
-                {loading ? '...' : value}
-              </Typography>
-              {trend && (
-                <Box sx={{ ml: 2, display: 'flex', alignItems: 'center' }}>
-                  {trend > 0 ? (
-                    <TrendingUpIcon sx={{ color: theme.success, fontSize: 18 }} />
-                  ) : (
-                    <TrendingDownIcon sx={{ color: theme.error, fontSize: 18 }} />
-                  )}
-                  <Typography variant="body2" sx={{ 
-                    color: trend > 0 ? theme.success : theme.error,
-                    fontWeight: 600,
-                    ml: 0.5,
-                    fontSize: '0.75rem'
-                  }}>
-                    {Math.abs(trend)}%
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          </Box>
-          <Box sx={{ 
-            backgroundColor: iconBg,
-            borderRadius: '16px',
-            p: 2.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: `0 8px 16px ${bgColor}20`
-          }}>
-            <Icon sx={{ fontSize: 32, color: textColor }} />
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
+  const canAccessEmployeesMenu = useMemo(
+    () => permissions.some((permission) => EMPLOYEE_MENU_PERMISSIONS.includes(permission)),
+    [permissions]
   );
 
+  const canAccessSocieteMenu = useMemo(
+    () => permissions.some((permission) => SOCIETE_MENU_PERMISSIONS.includes(permission)),
+    [permissions]
+  );
+
+  const interfaces = useMemo(() => {
+    const items = [];
+
+    if (canAccessEmployeesMenu) {
+      items.push({
+        key: "employees",
+        title: "Gestion employes",
+        description: "Vue globale des employes et de la structure RH.",
+        icon: PeopleAltIcon,
+        color: "#2c767c",
+        route: "/employes",
+        metrics: [
+          { label: "Total employes", value: summary.totalEmployees },
+          { label: "Femmes", value: summary.femmes },
+          { label: "Hommes", value: summary.hommes },
+          { label: "Departements", value: summary.departements },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_accidents")) {
+      items.push({
+        key: "accidents",
+        title: "Accidents de travail",
+        description: "Suivi des incidents et du volume declare.",
+        icon: WarningAmberIcon,
+        color: "#f59e0b",
+        route: "/employes2",
+        metrics: [
+          { label: "Total dossiers", value: moduleStats.accidents?.total ?? 0 },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_cimr")) {
+      items.push({
+        key: "cimr",
+        title: "Gestion CIMR",
+        description: "Affiliations, declarations et montant mensuel CIMR.",
+        icon: AssessmentIcon,
+        color: "#2563eb",
+        route: "/cimr-dashboard",
+        metrics: [
+          { label: "Affiliations actives", value: moduleStats.cimr?.totalAffiliations ?? 0 },
+          { label: "Declarations du mois", value: moduleStats.cimr?.declarationsThisMonth ?? 0 },
+          { label: "Montant du mois", value: moduleStats.cimr?.totalAmountThisMonth ?? 0, format: "currency" },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_mutuelle")) {
+      items.push({
+        key: "mutuelle",
+        title: "Assurance",
+        description: "Suivi des affiliations et operations mutuelle.",
+        icon: LocalHospitalIcon,
+        color: "#0ea5a3",
+        route: "/mutuelle/dashboard",
+        metrics: [
+          { label: "Affiliations actives", value: moduleStats.mutuelle?.affiliationsActives ?? 0 },
+          { label: "Affiliations resiliees", value: moduleStats.mutuelle?.affiliationsInactives ?? 0 },
+          { label: "Operations en cours", value: moduleStats.mutuelle?.dossiersEnCours ?? 0 },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_cnss")) {
+      items.push({
+        key: "cnss",
+        title: "CNSS",
+        description: "Affiliations, declarations et cotisations CNSS.",
+        icon: SecurityIcon,
+        color: "#0284c7",
+        route: "/cnss/dashboard",
+        metrics: [
+          { label: "Affiliations actives", value: moduleStats.cnss?.affiliationsActif ?? 0 },
+          { label: "Declarations en attente", value: moduleStats.cnss?.declarationsEnAttente ?? 0 },
+          { label: "Montant CNSS", value: moduleStats.cnss?.montantCnss ?? 0, format: "currency" },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_carrieres_formations")) {
+      items.push({
+        key: "carrieres-formations",
+        title: "Carrieres & Formations",
+        description: "Consolidation des indicateurs de mobilite et formation.",
+        icon: SchoolIcon,
+        color: "#7c3aed",
+        route: "/carrieres-formations/dashboard-carrieres",
+        metrics: [
+          { label: "Nombre de postes", value: moduleStats.carrieres?.postesOccupes ?? 0 },
+          { label: "Formations actives", value: moduleStats.formations?.formationsActives ?? 0 },
+          { label: "Participants", value: moduleStats.formations?.participantsTotal ?? 0 },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_conflits")) {
+      items.push({
+        key: "conflits",
+        title: "Conflits",
+        description: "Etat global des dossiers de conflits.",
+        icon: HealthAndSafetyIcon,
+        color: "#d97706",
+        route: "/conflits",
+        metrics: [
+          { label: "Total conflits", value: moduleStats.conflits?.total ?? 0 },
+          { label: "Ce mois", value: moduleStats.conflits?.thisMonth ?? 0 },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_sanctions")) {
+      items.push({
+        key: "sanctions",
+        title: "Sanctions",
+        description: "Suivi des sanctions enregistrees.",
+        icon: GavelIcon,
+        color: "#dc2626",
+        route: "/sanctions",
+        metrics: [
+          { label: "Total sanctions", value: moduleStats.sanctions?.total ?? 0 },
+          { label: "Ce mois", value: moduleStats.sanctions?.thisMonth ?? 0 },
+        ],
+      });
+    }
+
+    if (canAccessSocieteMenu) {
+      items.push({
+        key: "societes",
+        title: "Societe",
+        description: "Referentiel des societes et structures associees.",
+        icon: BusinessIcon,
+        color: "#334155",
+        route: "/societes",
+        metrics: [
+          { label: "Total societes", value: moduleStats.societes?.total ?? 0 },
+        ],
+      });
+    }
+
+    if (permissions.includes("view_all_users")) {
+      items.push({
+        key: "users",
+        title: "Utilisateurs",
+        description: "Pilotage des acces et comptes applicatifs.",
+        icon: PersonAddAlt1Icon,
+        color: "#6d28d9",
+        route: "/users",
+        metrics: [
+          { label: "Total utilisateurs", value: moduleStats.users?.total ?? 0 },
+        ],
+      });
+    }
+
+    return items;
+  }, [canAccessEmployeesMenu, canAccessSocieteMenu, moduleStats, permissions, summary]);
+
+  const topSecondaryCards = useMemo(() => {
+    const cards = [];
+
+    if (permissions.includes("view_all_mutuelle") && moduleStats.mutuelle) {
+      cards.push({
+        key: "mutuelle-affiliations",
+        title: "Affiliations assurance",
+        value: moduleStats.mutuelle.affiliationsActives ?? 0,
+        icon: LocalHospitalIcon,
+        bgGradient: "linear-gradient(135deg, #26a69a 0%, #00897b 100%)",
+      });
+    }
+
+    if (permissions.includes("view_all_cnss") && moduleStats.cnss) {
+      cards.push({
+        key: "cnss-attente",
+        title: "CNSS en attente",
+        value: moduleStats.cnss.declarationsEnAttente ?? 0,
+        icon: SecurityIcon,
+        bgGradient: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+      });
+    }
+
+    if (permissions.includes("view_all_cimr") && moduleStats.cimr) {
+      cards.push({
+        key: "cimr-declarations",
+        title: "CIMR declarations",
+        value: moduleStats.cimr.declarationsThisMonth ?? 0,
+        icon: AssessmentIcon,
+        bgGradient: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+      });
+    }
+
+    if (permissions.includes("view_all_carrieres_formations") && moduleStats.formations) {
+      cards.push({
+        key: "formations-actives",
+        title: "Formations actives",
+        value: moduleStats.formations.formationsActives ?? 0,
+        icon: SchoolIcon,
+        bgGradient: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
+      });
+    }
+
+    if (permissions.includes("view_all_conflits") && moduleStats.conflits) {
+      cards.push({
+        key: "conflits-total",
+        title: "Total conflits",
+        value: moduleStats.conflits.total ?? 0,
+        icon: HealthAndSafetyIcon,
+        bgGradient: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
+      });
+    }
+
+    if (permissions.includes("view_all_sanctions") && moduleStats.sanctions) {
+      cards.push({
+        key: "sanctions-total",
+        title: "Total sanctions",
+        value: moduleStats.sanctions.total ?? 0,
+        icon: GavelIcon,
+        bgGradient: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+      });
+    }
+
+    if (permissions.includes("view_all_users") && moduleStats.users) {
+      cards.push({
+        key: "users-total",
+        title: "Utilisateurs",
+        value: moduleStats.users.total ?? 0,
+        icon: PersonAddAlt1Icon,
+        bgGradient: "linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%)",
+      });
+    }
+
+    if (canAccessSocieteMenu && moduleStats.societes) {
+      cards.push({
+        key: "societes-total",
+        title: "Societes",
+        value: moduleStats.societes.total ?? 0,
+        icon: BusinessIcon,
+        bgGradient: "linear-gradient(135deg, #334155 0%, #1e293b 100%)",
+      });
+    }
+
+    if (cards.length < 2) {
+      cards.push({
+        key: "interfaces-disponibles",
+        title: "Interfaces disponibles",
+        value: interfaces.length,
+        icon: AssessmentIcon,
+        bgGradient: "linear-gradient(135deg, #0ea5a3 0%, #0f766e 100%)",
+      });
+    }
+
+    if (cards.length < 2) {
+      cards.push({
+        key: "modules-synchronises",
+        title: "Modules synchronises",
+        value: Object.values(moduleStats).filter(Boolean).length,
+        icon: ArrowForwardIcon,
+        bgGradient: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
+      });
+    }
+
+    return cards.slice(0, 2);
+  }, [canAccessSocieteMenu, interfaces.length, moduleStats, permissions]);
+
   return (
-    <ThemeProvider theme={createTheme()}>
-      <Box sx={{
-        position: 'absolute',
-        top: '0px',
-        left: '220px',
-        width: '90%',
-        backgroundColor: '#ffffff',
-        minHeight: '100vh'
-      }}>
-        <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-          <Toolbar />
-          
-          <Grid container spacing={4}>
-            {/* Section principale */}
-            <Grid item xs={12} md={9}>
-              {/* Cartes statistiques améliorées */}
-              <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} sm={6} md={3}>
-                  <StatCard
-                    title="Total employés"
-                    value={totalEmployees}
-                    icon={PeopleAltIcon}
-                    bgColor={theme.primary}
-                    textColor={theme.primaryDark}
-                    iconBg={`${theme.primary}15`}
-                    trend={5.2}
-                  />
-                </Grid>
+    <ThemeProvider theme={theme}>
+      <Box
+        sx={{
+          ...dynamicStyles,
+          mt: "80px",
+          bgcolor: DASHBOARD_COLORS.pageBg,
+          height: "calc(100vh - 80px)",
+          overflowY: "auto",
+          overflowX: "hidden",
+          p: { xs: 2, md: 4 },
+          transition: "margin-left 0.3s ease, width 0.3s ease",
+          scrollbarColor: `${DASHBOARD_COLORS.teal} #e6eef0`,
+          "&::-webkit-scrollbar": {
+            width: "8px",
+          },
+          "&::-webkit-scrollbar-thumb": {
+            backgroundColor: DASHBOARD_COLORS.teal,
+            borderRadius: "8px",
+          },
+          "&::-webkit-scrollbar-track": {
+            backgroundColor: "#e6eef0",
+          },
+        }}
+      >
+        <Stack spacing={2.5}>
+          <Box>
+            <Typography sx={{ fontSize: "1.6rem", fontWeight: 700, color: DASHBOARD_COLORS.textPrimary }}>
+              Tableau de bord Accueil
+            </Typography>
+            <Typography sx={{ color: DASHBOARD_COLORS.textSecondary, mt: 0.5, fontSize: "0.92rem" }}>
+              Donnees consolidees selon les interfaces visibles dans la navigation.
+            </Typography>
+          </Box>
 
-                <Grid item xs={12} sm={6} md={3}>
-                  <StatCard
-                    title="Nombre de femmes"
-                    value={femmes}
-                    icon={WomanIcon}
-                    bgColor={theme.secondary}
-                    textColor={theme.primaryDark}
-                    iconBg={`${theme.secondary}15`}
-                    trend={2.1}
-                  />
-                </Grid>
+          {error ? <Alert severity="warning">{error}</Alert> : null}
 
-                <Grid item xs={12} sm={6} md={3}>
-                  <StatCard
-                    title="Nombre d'hommes"
-                    value={hommes}
-                    icon={ManIcon}
-                    bgColor={theme.accent}
-                    textColor={theme.primaryDark}
-                    iconBg={`${theme.accent}15`}
-                    trend={-1.3}
-                  />
-                </Grid>
+          {loading ? <LinearProgress sx={{ borderRadius: 2 }} /> : null}
 
-                <Grid item xs={12} sm={6} md={3}>
-                  <StatCard
-                    title="Départements"
-                    value={departements}
-                    icon={BusinessIcon}
-                    bgColor={theme.primaryLight}
-                    textColor={theme.primaryDark}
-                    iconBg={`${theme.primaryLight}15`}
-                  />
-                </Grid>
-              </Grid>
-
-              {/* Aperçu des activités amélioré */}
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={8}>
-                  <Card sx={{ 
-                    borderRadius: 3, 
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                    border: `1px solid ${theme.primary}20`
-                  }}>
-                    <CardContent sx={{ p: 3 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                        <Box sx={{ 
-                          backgroundColor: `${theme.primary}15`,
-                          borderRadius: 2,
-                          p: 1.5,
-                          mr: 2
-                        }}>
-                          <PersonAddIcon sx={{ color: theme.primary, fontSize: 24 }} />
-                        </Box>
-                        <Typography variant="h5" sx={{ 
-                          fontWeight: 700, 
-                          color: '#1e293b',
-                          fontSize: '1.25rem'
-                        }}>
-                          Activités récentes
-                        </Typography>
-                      </Box>
-                      
-                      <TableContainer>
-                        <Table>
-                          <TableHead>
-                            <TableRow>
-                              <TableCell sx={{ fontWeight: 600, color: '#64748b', border: 'none', pb: 2 }}>
-                                Employé
-                              </TableCell>
-                              <TableCell sx={{ fontWeight: 600, color: '#64748b', border: 'none', pb: 2 }}>
-                                Action
-                              </TableCell>
-                              <TableCell sx={{ fontWeight: 600, color: '#64748b', border: 'none', pb: 2 }}>
-                                Heure
-                              </TableCell>
-                              <TableCell sx={{ fontWeight: 600, color: '#64748b', border: 'none', pb: 2 }}>
-                                Département
-                              </TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {recentActivities.map((activity) => {
-                              const actionStyle = getActionColor(activity.action);
-                              return (
-                                <TableRow 
-                                  key={activity.id} 
-                                  sx={{ 
-                                    '&:hover': { backgroundColor: '#f8fafc' },
-                                    '& td': { border: 'none', py: 2 }
-                                  }}
-                                >
-                                  <TableCell>
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                      <Avatar sx={{ 
-                                        width: 32, 
-                                        height: 32, 
-                                        fontSize: '0.75rem',
-                                        backgroundColor: theme.primary,
-                                        mr: 1.5
-                                      }}>
-                                        {activity.avatar}
-                                      </Avatar>
-                                      <Typography sx={{ 
-                                        color: '#1e293b', 
-                                        fontWeight: 500,
-                                        fontSize: '0.875rem'
-                                      }}>
-                                        {activity.employee}
-                                      </Typography>
-                                    </Box>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Chip 
-                                      label={activity.action} 
-                                      size="small" 
-                                      sx={{ 
-                                        backgroundColor: actionStyle.bg,
-                                        color: actionStyle.color,
-                                        fontWeight: 500,
-                                        fontSize: '0.75rem'
-                                      }} 
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                      <ScheduleIcon sx={{ fontSize: 16, color: '#64748b', mr: 0.5 }} />
-                                      <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
-                                        {activity.time}
-                                      </Typography>
-                                    </Box>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
-                                      {activity.department}
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                <Grid item xs={12} md={4}>
-                  <Card sx={{ 
-                    borderRadius: 3, 
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                    border: `1px solid ${theme.primary}20`
-                  }}>
-                    <CardContent sx={{ p: 3 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                        <Box sx={{ 
-                          backgroundColor: `${theme.secondary}15`,
-                          borderRadius: 2,
-                          p: 1.5,
-                          mr: 2
-                        }}>
-                          <BusinessIcon sx={{ color: theme.secondary, fontSize: 24 }} />
-                        </Box>
-                        <Typography variant="h6" sx={{ 
-                          fontWeight: 700, 
-                          color: '#1e293b',
-                          fontSize: '1.1rem'
-                        }}>
-                          Départements
-                        </Typography>
-                      </Box>
-                      
-                      {departmentStats.map((dept, index) => (
-                        <Box key={index} sx={{ mb: 3 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                            <Typography variant="body2" sx={{ 
-                              fontWeight: 500, 
-                              color: '#1e293b',
-                              fontSize: '0.875rem'
-                            }}>
-                              {dept.name}
-                            </Typography>
-                            <Typography variant="body2" sx={{ 
-                              color: '#64748b',
-                              fontSize: '0.875rem'
-                            }}>
-                              {dept.employees}
-                            </Typography>
-                          </Box>
-                          <LinearProgress
-                            variant="determinate"
-                            value={dept.percentage}
-                            sx={{
-                              height: 6,
-                              borderRadius: 3,
-                              backgroundColor: '#e2e8f0',
-                              '& .MuiLinearProgress-bar': {
-                                backgroundColor: dept.color,
-                                borderRadius: 3,
-                              },
-                            }}
-                          />
-                        </Box>
-                      ))}
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </Grid>
+          <Grid container spacing={2.5}>
+            <Grid item xs={12} sm={6} md={3}>
+              <TopStatCard
+                title="Total employes"
+                value={summary.totalEmployees}
+                icon={PeopleAltIcon}
+                bgGradient={`linear-gradient(135deg, ${DASHBOARD_COLORS.teal} 0%, ${DASHBOARD_COLORS.tealLight} 100%)`}
+              />
             </Grid>
-
-            {/* Section droite - Calendrier et actualités */}
-            <Grid item xs={12} md={3}>
-              {/* Calendrier d'aujourd'hui */}
-              <Card sx={{ 
-                mb: 3, 
-                borderRadius: 3,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                border: `1px solid ${theme.primary}20`
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Box sx={{ 
-                      backgroundColor: `${theme.primary}15`,
-                      borderRadius: 2,
-                      p: 1,
-                      mr: 1.5
-                    }}>
-                      <CalendarTodayIcon sx={{ color: theme.primary, fontSize: 20 }} />
-                    </Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
-                      Aujourd'hui
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'center', py: 2 }}>
-                    <Typography variant="h1" sx={{ 
-                      fontWeight: 800, 
-                      color: theme.primary,
-                      fontSize: '3rem',
-                      lineHeight: 1
-                    }}>
-                      {today.getDate()}
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: '#64748b', fontWeight: 600 }}>
-                      {today.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-                    </Typography>
-                    <Typography variant="body2" sx={{ 
-                      color: '#94a3b8', 
-                      mt: 1, 
-                      textTransform: 'capitalize' 
-                    }}>
-                      {today.toLocaleDateString('fr-FR', { weekday: 'long' })}
-                    </Typography>
-                  </Box>
-                  
-                  {/* Statistiques du jour */}
-                  <Divider sx={{ my: 2 }} />
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                      <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 500 }}>
-                        Présents
-                      </Typography>
-                      <Chip 
-                        label="76" 
-                        size="small" 
-                        sx={{ 
-                          backgroundColor: theme.success, 
-                          color: '#fff', 
-                          fontWeight: 600,
-                          fontSize: '0.75rem'
-                        }} 
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                      <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 500 }}>
-                        Absents
-                      </Typography>
-                      <Chip 
-                        label="3" 
-                        size="small" 
-                        sx={{ 
-                          backgroundColor: theme.error, 
-                          color: '#fff', 
-                          fontWeight: 600,
-                          fontSize: '0.75rem'
-                        }} 
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 500 }}>
-                        En congé
-                      </Typography>
-                      <Chip 
-                        label="2" 
-                        size="small" 
-                        sx={{ 
-                          backgroundColor: theme.warning, 
-                          color: '#fff', 
-                          fontWeight: 600,
-                          fontSize: '0.75rem'
-                        }} 
-                      />
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-
-              {/* Fiche d'actualité */}
-              <Card sx={{ 
-                borderRadius: 3,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                border: `1px solid ${theme.primary}20`
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Typography 
-                    variant="h6" 
-                    sx={{ 
-                      fontWeight: 700, 
-                      color: '#1e293b',
-                      mb: 3,
-                      textAlign: 'center',
-                      fontSize: '1.1rem'
-                    }}
-                  >
-                    Actualités RH
-                  </Typography>
-                  
-                  <Box>
-                    {actualites.map((item, index) => (
-                      <Box 
-                        key={index}
-                        sx={{ 
-                          mb: 2,
-                          p: 2.5,
-                          backgroundColor: '#ffffff',
-                          borderRadius: 2,
-                          border: `2px solid ${item.color}15`,
-                          borderLeft: `4px solid ${item.color}`,
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            transform: 'translateX(4px)',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                          }
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                          {getIcon(item.type)}
-                          <Box sx={{ ml: 1.5, flex: 1 }}>
-                            <Typography 
-                              variant="subtitle2" 
-                              sx={{ 
-                                fontWeight: 600, 
-                                color: '#1e293b', 
-                                fontSize: '0.9rem',
-                                lineHeight: 1.4
-                              }}
-                            >
-                              {item.title}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                </CardContent>
-              </Card>
+            <Grid item xs={12} sm={6} md={3}>
+              <TopStatCard
+                title="Departements"
+                value={summary.departements}
+                icon={BusinessIcon}
+                bgGradient="linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)"
+              />
             </Grid>
+            {topSecondaryCards.map((card) => (
+              <Grid item xs={12} sm={6} md={3} key={card.key}>
+                <TopStatCard
+                  title={card.title}
+                  value={card.value}
+                  icon={card.icon}
+                  bgGradient={card.bgGradient}
+                />
+              </Grid>
+            ))}
           </Grid>
-        </Box>
+
+          <Box sx={{ mt: 1.5 }}>
+            <Typography sx={{ fontSize: "1.1rem", fontWeight: 700, color: DASHBOARD_COLORS.textPrimary, mb: 1.5 }}>
+              Interfaces disponibles ({interfaces.length})
+            </Typography>
+
+            {interfaces.length === 0 ? (
+              loading ? (
+                <Alert severity="info">Chargement des interfaces...</Alert>
+              ) : (
+                <Alert severity="info">Aucune interface disponible pour ce profil utilisateur.</Alert>
+              )
+            ) : (
+              <Grid container spacing={2.2}>
+                {interfaces.map((item) => (
+                  <Grid item xs={12} md={6} xl={4} key={item.key}>
+                    <InterfaceCard
+                      title={item.title}
+                      description={item.description}
+                      icon={item.icon}
+                      color={item.color}
+                      route={item.route}
+                      metrics={item.metrics}
+                      loading={loading}
+                      error={Boolean(moduleErrors[item.key])}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        </Stack>
       </Box>
     </ThemeProvider>
   );

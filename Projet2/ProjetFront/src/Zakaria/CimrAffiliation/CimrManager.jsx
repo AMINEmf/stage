@@ -54,6 +54,10 @@ function CimrManager() {
     const canCreate = permissions.includes('create_departements');
     const canUpdate = permissions.includes('update_departements');
     const canDelete = permissions.includes('delete_departements');
+    const canViewCimr = permissions.includes('view_all_cimr');
+    const canCreateCimr = permissions.includes('create_cimr');
+    const canUpdateCimr = permissions.includes('update_cimr');
+    const canDeleteCimr = permissions.includes('delete_cimr');
 
     const employeTableRef = useRef(null);
 
@@ -410,9 +414,21 @@ function CimrManager() {
 
                         {contextMenu.visible && (
                             <div className="context-menu" style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}>
-                                <button onClick={() => handleAddEmployeClick(contextMenu.departementId)}>Ajouter un employé</button>
                                 <button
-                                    onClick={() => { if (!canCreate) return; handleAddSousDepartement(contextMenu.departementId); }}
+                                    onClick={() => {
+                                        if (!canCreateCimr) return;
+                                        handleAddEmployeClick(contextMenu.departementId);
+                                    }}
+                                    className={!canCreateCimr ? 'disabled-btn' : ''}
+                                    style={{ cursor: canCreateCimr ? 'pointer' : 'not-allowed', opacity: canCreateCimr ? 1 : 0.5 }}
+                                >
+                                    Ajouter un employé
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (!canCreate) return;
+                                        handleAddSousDepartement(contextMenu.departementId);
+                                    }}
                                     className={!canCreate ? 'disabled-btn' : ''}
                                     style={{ cursor: canCreate ? 'pointer' : 'not-allowed', opacity: canCreate ? 1 : 0.5 }}
                                 >
@@ -469,6 +485,10 @@ function CimrManager() {
                             filtersVisible={filtersVisible}
                             handleFiltersToggle={handleFiltersToggle}
                             preloadedEmployees={preloadedEmployees}
+                            canViewCimr={canViewCimr}
+                            canCreateCimr={canCreateCimr}
+                            canUpdateCimr={canUpdateCimr}
+                            canDeleteCimr={canDeleteCimr}
                         />
                     </div>
                 </Box>

@@ -75,6 +75,24 @@ export default function Login() {
 
       const userData = response.data.user;
 
+      const normalizedUser = Array.isArray(userData) ? userData : [userData];
+      const currentUser = normalizedUser?.[0] ?? {};
+      const roles = Array.isArray(currentUser.roles) ? currentUser.roles : [];
+
+      const rolePermissionNames = roles
+        .flatMap((role) => (Array.isArray(role?.permissions) ? role.permissions : []))
+        .map((permission) => permission?.name)
+        .filter(Boolean);
+
+      const directPermissionNames = (Array.isArray(currentUser.permissions) ? currentUser.permissions : [])
+        .map((permission) => (typeof permission === "string" ? permission : permission?.name))
+        .filter(Boolean);
+
+      const permissionNames = [...new Set([...rolePermissionNames, ...directPermissionNames])];
+
+      localStorage.setItem("NAV_USER_CACHE", JSON.stringify(normalizedUser));
+      localStorage.setItem("NAV_PERMISSIONS_CACHE", JSON.stringify(permissionNames));
+
       login(userData);
       navigate("/");
     } catch (error) {

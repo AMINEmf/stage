@@ -223,7 +223,6 @@ function DeclarationDetails({ declaration, onClose }) {
               {loading ? (
                 <div className="d-flex align-items-center gap-2 text-muted" style={{ padding: "20px" }}>
                   <Spinner animation="border" size="sm" style={{ color: "#00afaa" }} />
-                  <span>Chargement des détails...</span>
                 </div>
               ) : (
                 <div style={{ 

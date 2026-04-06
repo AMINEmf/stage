@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import apiClient from "../../../services/apiClient";
 import { useRef } from "react";
 import Select from "react-select";
 import { Form } from "react-bootstrap";
@@ -16,10 +16,7 @@ import {
 import "../AffiliationMutuelle/AddAffiliationMutuelle.css";
 import ManageResourceModal from "./ManageResourceModal";
 
-const api = axios.create({
-  baseURL: "http://localhost:8000/api",
-  withCredentials: true,
-});
+const api = apiClient;
 
 const DEFAULT_DOCUMENT_TYPE = "AUTRE";
 
@@ -213,7 +210,7 @@ function AddMutuelleOperation({ employe, operation, dossierFixed, affiliationIdP
   useEffect(() => {
     if (activeEmploye?.id) {
       api.get(`/employes/${activeEmploye.id}`)
-        .then((res) => setEmployeDetails(res.data))
+        .then((res) => setEmployeDetails(res.data?.data || res.data || null))
         .catch((err) => console.error("Erreur chargement détails employé:", err));
     } else {
       setEmployeDetails(null);
@@ -226,10 +223,12 @@ function AddMutuelleOperation({ employe, operation, dossierFixed, affiliationIdP
     if (activeEmploye?.id) {
       api.get(`/employes/${activeEmploye.id}/affiliations-mutuelle`)
         .then((res) => {
-          const list = res.data || [];
+          const list = Array.isArray(res.data?.data)
+            ? res.data.data
+            : (Array.isArray(res.data) ? res.data : []);
           const mapped = list.map((aff) => ({
             value: aff.id,
-            label: `${aff.mutuelle?.nom || 'Mutuelle inconnue'} - ${aff.regime?.nom || ''} (${aff.statut})`,
+            label: `${aff.mutuelle?.nom || 'Mutuelle inconnue'} - ${aff.regime?.libelle || aff.regime?.nom || ''} (${aff.statut})`,
             affiliation: aff,
           }));
           setAffiliationsList(mapped);

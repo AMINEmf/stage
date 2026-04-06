@@ -254,7 +254,9 @@ const FormationParticipantsListPage = () => {
         title="Voir les participants"
         onClick={(e) => {
           e.stopPropagation();
-          navigate(`/carrieres-formations/formations/${item.id}/participants`);
+          navigate(`/carrieres-formations/formations/${item.id}/participants`, {
+            state: { formation: item },
+          });
         }}
         style={{
           border: "none",

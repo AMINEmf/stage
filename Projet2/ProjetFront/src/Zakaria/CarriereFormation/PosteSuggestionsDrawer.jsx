@@ -1,10 +1,47 @@
-import React from 'react';
-import { X, User, Award, TrendingUp } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import jsPDF from 'jspdf';
+import { X, User, Award, TrendingUp, Printer, FileDown, Mail, Save } from 'lucide-react';
+
+const COMMENT_STORAGE_KEY = 'poste_suggestion_comment_v1';
+
+const toSafeText = (value, fallback = 'N/A') => {
+  if (value == null) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+};
+
+const toSafeDate = (value) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('fr-FR');
+};
+
+const toSafeDateTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const toSlug = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'analyse';
 
 const PosteSuggestionsDrawer = ({ employee, poste, onClose }) => {
   // Fallback to empty objects if props are null or undefined
   const currentEmployee = employee || {};
   const currentPoste = poste || {};
+  const analysisRef = useRef(null);
 
   // Utilise les scores calculés par le backend (dans ai_score_details)
   const aiScoreDetails = currentEmployee.ai_score_details || {};
@@ -23,10 +60,189 @@ const PosteSuggestionsDrawer = ({ employee, poste, onClose }) => {
   // Pour l'affichage des badges de compétences du poste
   const posteSkills = currentPoste.raw_competences || [];
 
+  const employeeId = currentEmployee.id ?? currentEmployee.employee_id ?? null;
+  const posteId = currentPoste.id ?? null;
+  const employeeDisplayName =
+    currentEmployee.full_name || `${currentEmployee.nom || ''} ${currentEmployee.prenom || ''}`.trim() || 'Employé';
+  const posteDisplayName = currentPoste.poste || currentPoste.nom || 'Poste';
+
+  const commentStorageKey = useMemo(
+    () => `${COMMENT_STORAGE_KEY}_${posteId ?? 'none'}_${employeeId ?? 'none'}`,
+    [posteId, employeeId]
+  );
+
+  const [commentText, setCommentText] = useState('');
+  const [commentSavedAt, setCommentSavedAt] = useState('');
+
   const getSkillName = (skill) => {
     if (!skill) return "";
     if (typeof skill === "string") return skill;
     return skill.nom ?? skill.label ?? skill.name ?? "";
+  };
+
+  const missingSkills = useMemo(
+    () => requiredSkills.filter((skill) => skill.match_status === 'none'),
+    [requiredSkills]
+  );
+
+  useEffect(() => {
+    try {
+      const savedComment = localStorage.getItem(commentStorageKey);
+      if (!savedComment) {
+        setCommentText('');
+        setCommentSavedAt('');
+        return;
+      }
+
+      const parsed = JSON.parse(savedComment);
+      setCommentText(parsed?.text ?? '');
+      setCommentSavedAt(parsed?.updated_at ?? '');
+    } catch {
+      setCommentText('');
+      setCommentSavedAt('');
+    }
+  }, [commentStorageKey]);
+
+  const handleSaveComment = () => {
+    const payload = {
+      text: commentText,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      localStorage.setItem(commentStorageKey, JSON.stringify(payload));
+      setCommentSavedAt(payload.updated_at);
+    } catch (error) {
+      console.error('SUGGESTION_COMMENT_SAVE_ERROR', error);
+    }
+  };
+
+  const handleShareByEmail = () => {
+    const subject = `Analyse poste - ${posteDisplayName} - ${employeeDisplayName}`;
+    const bodyLines = [
+      `Analyse de compatibilite`,
+      `Employe: ${employeeDisplayName}`,
+      `Poste: ${posteDisplayName}`,
+      `Score global: ${scoreGlobal}%`,
+      `Competences validees: ${validatedSkills.length}/${requiredSkills.length}`,
+      `Competences manquantes: ${missingSkills.map((skill) => skill.skill).join(', ') || 'Aucune'}`,
+      '',
+      `Commentaire: ${commentText || 'Aucun commentaire'}`,
+    ];
+
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join('\n'))}`;
+  };
+
+  const handlePrint = () => {
+    if (!analysisRef.current) return;
+
+    const printableHtml = analysisRef.current.innerHTML;
+    const printWindow = window.open('', '_blank', 'width=1100,height=850');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Analyse ${posteDisplayName} - ${employeeDisplayName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #0f172a; }
+            .cnss-form-body { padding: 0; }
+            .cnss-section-title { font-size: 16px; font-weight: 700; margin: 18px 0 10px; color: #1e293b; }
+            .cnss-form-label { font-weight: 600; color: #334155; display: block; margin-bottom: 6px; }
+            .cnss-field-group { break-inside: avoid; margin-bottom: 14px; }
+          </style>
+        </head>
+        <body>
+          <h2>Analyse de compatibilite</h2>
+          <p><strong>Employe:</strong> ${employeeDisplayName}</p>
+          <p><strong>Poste:</strong> ${posteDisplayName}</p>
+          ${printableHtml}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
+
+  const handleExportPdf = () => {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const maxWidth = pageWidth - (margin * 2);
+    let y = 14;
+
+    const ensureSpace = (requiredHeight = 8) => {
+      if (y + requiredHeight > pageHeight - margin) {
+        doc.addPage();
+        y = 14;
+      }
+    };
+
+    const writeLine = (text, size = 10, color = [31, 41, 55], lineHeight = 6) => {
+      ensureSpace(lineHeight + 2);
+      doc.setTextColor(color[0], color[1], color[2]);
+      doc.setFontSize(size);
+      const wrapped = doc.splitTextToSize(toSafeText(text, ''), maxWidth);
+      doc.text(wrapped, margin, y);
+      y += Math.max(lineHeight, wrapped.length * 5.2);
+    };
+
+    const writeSection = (title, lines) => {
+      ensureSpace(12);
+      doc.setDrawColor(219, 234, 254);
+      doc.setFillColor(239, 246, 255);
+      doc.roundedRect(margin, y - 4, maxWidth, 8, 1.5, 1.5, 'FD');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 64, 175);
+      doc.text(title, margin + 3, y + 1.5);
+      y += 9;
+
+      lines.forEach((line) => writeLine(line));
+      y += 1;
+    };
+
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Analyse de compatibilite employe / poste', margin, y);
+    y += 8;
+
+    writeSection('Informations generales', [
+      `Employe: ${employeeDisplayName}`,
+      `Poste: ${posteDisplayName}`,
+      `Date: ${new Date().toLocaleString('fr-FR')}`,
+      `Score global: ${scoreGlobal}%`,
+      `Adequation competences: ${Math.round(scoreCompetences)}%`,
+      `Compatibilite grade: ${scoreGrade}%`,
+      `Anciennete: ${scoreAnciennete}%`,
+    ]);
+
+    writeSection('Competences', [
+      `Competences requises: ${requiredSkills.length}`,
+      `Competences validees: ${validatedSkills.length}`,
+      `Competences manquantes: ${missingSkills.length}`,
+      `Liste manquantes: ${missingSkills.map((skill) => skill.skill).join(', ') || 'Aucune'}`,
+    ]);
+
+    const historyRows = (currentEmployee.historique_postes || []).slice(0, 5).map((hist) => {
+      const period = `${toSafeDate(hist.date_debut)} - ${hist.date_fin ? toSafeDate(hist.date_fin) : 'En cours'}`;
+      return `${toSafeText(hist.poste_nom)} | ${period}`;
+    });
+
+    writeSection('Historique postes (5 derniers)', historyRows.length ? historyRows : ['Aucun historique disponible']);
+
+    const formationRows = (currentEmployee.formations || []).slice(0, 5).map((formation) => {
+      const period = `${toSafeDate(formation.date_debut)}${formation.date_fin ? ` - ${toSafeDate(formation.date_fin)}` : ''}`;
+      return `${toSafeText(formation.intitule)} | ${period}`;
+    });
+
+    writeSection('Formations recentes (5 dernieres)', formationRows.length ? formationRows : ['Aucune formation enregistree']);
+
+    writeSection('Commentaire', [commentText || 'Aucun commentaire']);
+
+    doc.save(`analyse_${toSlug(employeeDisplayName)}_${toSlug(posteDisplayName)}.pdf`);
   };
 
   return (
@@ -59,20 +275,86 @@ const PosteSuggestionsDrawer = ({ employee, poste, onClose }) => {
       <div className="cnss-side-panel" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="cnss-form-header">
-        <div style={{ width: '24px' }}></div>
-        <h5>Analyse - {currentEmployee.full_name || `${currentEmployee.nom || ''} ${currentEmployee.prenom || ''}`.trim()}</h5>
-        <button
-          type="button"
-          className="cnss-close-btn"
-          onClick={onClose}
-          aria-label="Fermer"
+          <div style={{ minWidth: '24px' }}></div>
+          <h5>Analyse - {employeeDisplayName}</h5>
+          <button
+            type="button"
+            className="cnss-close-btn"
+            onClick={onClose}
+            aria-label="Fermer"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            flexWrap: 'wrap',
+            padding: '10px 16px',
+            borderBottom: '1px solid #e2e8f0',
+            backgroundColor: '#f8fafc',
+          }}
         >
-          <X size={20} />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={handlePrint}
+            style={{
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              backgroundColor: '#ffffff',
+              color: '#334155',
+              padding: '6px 12px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Printer size={15} /> Imprimer
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            style={{
+              border: '1px solid #93c5fd',
+              borderRadius: '8px',
+              backgroundColor: '#eff6ff',
+              color: '#1d4ed8',
+              padding: '6px 12px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <FileDown size={15} /> Export PDF
+          </button>
+          <button
+            type="button"
+            onClick={handleShareByEmail}
+            style={{
+              border: '1px solid #bbf7d0',
+              borderRadius: '8px',
+              backgroundColor: '#f0fdf4',
+              color: '#166534',
+              padding: '6px 12px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Mail size={15} /> Partager email
+          </button>
+        </div>
 
       {/* Body with scroll */}
-      <div className="cnss-form-body">
+      <div className="cnss-form-body" ref={analysisRef}>
         {/* Section: Info du poste */}
         <div className="cnss-section-title">
           <User size={14} />
@@ -82,7 +364,7 @@ const PosteSuggestionsDrawer = ({ employee, poste, onClose }) => {
         <div className="cnss-field-group" style={{ marginBottom: '1.5rem' }}>
           <label className="cnss-form-label">Poste concerné</label>
           <div style={{ padding: '0.75rem 1rem', backgroundColor: '#f0f9ff', border: '1px solid #bfdbfe', borderRadius: '0.375rem' }}>
-            <span style={{ color: '#1e40af', fontWeight: 600 }}>{currentPoste.poste || currentPoste.nom}</span>
+            <span style={{ color: '#1e40af', fontWeight: 600 }}>{posteDisplayName}</span>
           </div>
         </div>
 
@@ -360,6 +642,57 @@ const PosteSuggestionsDrawer = ({ employee, poste, onClose }) => {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Section: Commentaires */}
+        <div className="cnss-section-title">
+          <User size={14} />
+          <span>Commentaires recruteur</span>
+        </div>
+
+        <div className="cnss-field-group" style={{ marginBottom: '1.5rem' }}>
+          <label className="cnss-form-label">Note interne</label>
+          <textarea
+            value={commentText}
+            onChange={(event) => setCommentText(event.target.value)}
+            rows={4}
+            placeholder="Ajouter un commentaire sur ce candidat pour ce poste..."
+            style={{
+              width: '100%',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              fontSize: '0.88rem',
+              color: '#334155',
+              backgroundColor: '#ffffff',
+              resize: 'vertical',
+            }}
+          />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.6rem', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleSaveComment}
+              style={{
+                border: '1px solid #2c767c',
+                borderRadius: '8px',
+                backgroundColor: '#ffffff',
+                color: '#2c767c',
+                padding: '6px 12px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Save size={15} /> Enregistrer
+            </button>
+
+            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+              {commentSavedAt ? `Dernière sauvegarde: ${toSafeDateTime(commentSavedAt)}` : 'Aucune note sauvegardée'}
+            </span>
           </div>
         </div>
       </div>

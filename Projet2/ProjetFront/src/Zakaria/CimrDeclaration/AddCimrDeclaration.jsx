@@ -5,6 +5,7 @@ import { FileText, User, Calendar, Save, CheckSquare, Square, Search } from 'luc
 import "../Accidents/AddAccident.css";
 
 const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, preloadedEmployees = [], declarationRows = [] }) => {
+    const ELIGIBLE_CACHE_KEY = 'eligibleEmployeesCacheV2';
     const [employees, setEmployees] = useState([]);
     const [selectedEmployees, setSelectedEmployees] = useState([]);
     const [declaredMatricules, setDeclaredMatricules] = useState(new Set());
@@ -15,6 +16,51 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
 
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
+
+    const hasValue = (value) => value !== undefined && value !== null && String(value).trim() !== "";
+
+    const parseNumeric = (value) => {
+        if (!hasValue(value)) return 0;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+        const normalized = String(value).replace(/\s+/g, '').replace(',', '.');
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const resolveMontantCotisation = (employee = {}, affiliation = {}) => {
+        const directAmount = [
+            affiliation.montant_cotisation,
+            affiliation.montantCotisation,
+            affiliation.montant,
+            employee.montant_cotisation,
+            employee.montantCotisation,
+            employee.montant,
+        ].find(hasValue);
+
+        if (hasValue(directAmount)) {
+            return parseNumeric(directAmount);
+        }
+
+        const salaire = parseNumeric(
+            affiliation.salaire_cotisable ??
+            affiliation.salaireCotisable ??
+            employee.salaire_cotisable ??
+            employee.salaireCotisable ??
+            employee.salaire_base ??
+            employee.salaireBase
+        );
+
+        const taux = parseNumeric(
+            affiliation.taux_employeur ??
+            affiliation.tauxEmployeur ??
+            affiliation.taux_patronal ??
+            employee.taux_employeur ??
+            employee.tauxEmployeur
+        );
+
+        if (!salaire || !taux) return 0;
+        return Number(((salaire * taux) / 100).toFixed(2));
+    };
 
     const [form, setForm] = useState({
         employe: initialData?.employe || "",
@@ -48,7 +94,7 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
                 label: `${e.employe || (e.nom + ' ' + e.prenom)}`,
                 displayLabel: `${e.employe || (e.nom + ' ' + e.prenom)} (${e.matricule})`,
                 value: e.id,
-                montant: e.montant_cotisation || 0
+                montant: resolveMontantCotisation(e, e)
             }));
             setEmployees(emps);
 
@@ -83,61 +129,87 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
         // Fonction qui calcule les éligibles localement en joignant employés + affiliations actives
         const buildEligibleLocally = (empList, affList) => {
             const affByMatricule = {};
+            const affByEmployeeId = {};
             (affList || []).forEach(a => {
-                if (a.statut === 'actif') affByMatricule[String(a.matricule)] = a;
+                const statut = String(a.statut || '').toLowerCase();
+                if (statut && statut !== 'actif') return;
+                if (hasValue(a.matricule)) affByMatricule[String(a.matricule)] = a;
+                if (hasValue(a.employe_id)) affByEmployeeId[String(a.employe_id)] = a;
             });
+
             return empList.map(emp => {
-                const aff = affByMatricule[String(emp.matricule)] || {};
+                const aff = affByMatricule[String(emp.matricule)] || affByEmployeeId[String(emp.id)] || {};
+                const montant = resolveMontantCotisation(emp, aff);
                 return {
                     ...emp,
                     employe: emp.employe || (emp.nom + ' ' + emp.prenom),
-                    salaire_cotisable: aff.salaire_cotisable || 0,
-                    taux_employeur: aff.taux_employeur || 0,
-                    montant_cotisation: aff.montant_cotisation || 0,
+                    salaire_cotisable: aff.salaire_cotisable ?? aff.salaireCotisable ?? 0,
+                    taux_employeur: aff.taux_employeur ?? aff.tauxEmployeur ?? aff.taux_patronal ?? 0,
+                    montant_cotisation: montant,
+                    montantCotisation: montant,
+                    montant,
                 };
             });
         };
 
-        // 1. Essayer le cache eligibleEmployees (déjà calculé)
-        const eligibleCached = localStorage.getItem('eligibleEmployeesCache');
-        if (eligibleCached) {
-            try { processEmployees(JSON.parse(eligibleCached)); return; } catch (e) { /* ignore */ }
-        }
-
-        // 2. Calculer localement depuis les caches existants (évite tout appel serveur)
+        // 1. Calculer localement depuis les caches existants si possible (évite tout appel serveur)
         const empCached = localStorage.getItem('employeesLightCache');
         const affCached = localStorage.getItem('cimrAffiliationsCache');
-        if (empCached) {
+        if (empCached && affCached) {
             try {
                 const empList = JSON.parse(empCached);
-                const affList = affCached ? JSON.parse(affCached) : [];
+                const affList = JSON.parse(affCached);
                 const eligible = buildEligibleLocally(empList, affList);
-                localStorage.setItem('eligibleEmployeesCache', JSON.stringify(eligible));
+                localStorage.setItem(ELIGIBLE_CACHE_KEY, JSON.stringify(eligible));
                 processEmployees(eligible);
                 return;
             } catch (e) { /* ignore */ }
         }
 
-        // 3. Fallback API — uniquement si aucun cache disponible
+        // 2. Fallback cache eligibleEmployees (déjà calculé)
+        const eligibleCached = localStorage.getItem(ELIGIBLE_CACHE_KEY);
+        if (eligibleCached) {
+            try {
+                const parsed = JSON.parse(eligibleCached);
+                if (Array.isArray(parsed)) {
+                    processEmployees(parsed);
+                    return;
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        // 3. Fallback API — endpoint dédié qui inclut directement montant_cotisation
         if (fetchingRef.current) return;
         fetchingRef.current = true;
         if (abortRef.current) abortRef.current.abort();
         abortRef.current = new AbortController();
 
-        axios.get("http://127.0.0.1:8000/api/employes/light", { withCredentials: true, signal: abortRef.current.signal })
+        axios.get("http://127.0.0.1:8000/api/cimr-declarations/eligible-employees", { withCredentials: true, signal: abortRef.current.signal })
             .then(res => {
                 if (!Array.isArray(res.data)) return;
-                localStorage.setItem('employeesLightCache', JSON.stringify(res.data));
-                const affList = (() => {
-                    try { return JSON.parse(localStorage.getItem('cimrAffiliationsCache') || '[]'); } catch { return []; }
-                })();
-                const eligible = buildEligibleLocally(res.data, affList);
-                localStorage.setItem('eligibleEmployeesCache', JSON.stringify(eligible));
-                processEmployees(eligible);
+                localStorage.setItem(ELIGIBLE_CACHE_KEY, JSON.stringify(res.data));
+                processEmployees(res.data);
             })
             .catch(err => {
                 if (axios.isCancel(err)) return;
-                console.error("Error fetching employees", err);
+                // Dernier fallback: reconstruire depuis employés + affiliations API
+                Promise.all([
+                    axios.get("http://127.0.0.1:8000/api/employes/light", { withCredentials: true, signal: abortRef.current.signal }),
+                    axios.get("http://127.0.0.1:8000/api/cimr-affiliations", { withCredentials: true, signal: abortRef.current.signal })
+                ])
+                    .then(([empRes, affRes]) => {
+                        const empList = Array.isArray(empRes.data) ? empRes.data : [];
+                        const affList = Array.isArray(affRes.data) ? affRes.data : [];
+                        localStorage.setItem('employeesLightCache', JSON.stringify(empList));
+                        localStorage.setItem('cimrAffiliationsCache', JSON.stringify(affList));
+                        const eligible = buildEligibleLocally(empList, affList);
+                        localStorage.setItem(ELIGIBLE_CACHE_KEY, JSON.stringify(eligible));
+                        processEmployees(eligible);
+                    })
+                    .catch(fallbackErr => {
+                        if (axios.isCancel(fallbackErr)) return;
+                        console.error("Error fetching employees", fallbackErr);
+                    });
             })
             .finally(() => { fetchingRef.current = false; });
 
@@ -176,7 +248,7 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
     useEffect(() => {
         if (!initialData) {
             const total = selectedEmployees.reduce((sum, emp) => {
-                const val = parseFloat(emp.montant) || 0;
+                const val = resolveMontantCotisation(emp, emp);
                 return sum + val;
             }, 0);
 
@@ -238,7 +310,7 @@ const AddCimrDeclaration = ({ onClose, onSave, departementId, initialData, prelo
                 employe: emp.label,
                 matricule: emp.matricule,
                 departement_id: emp.departement_id || form.departement_id,
-                montant_cimr_employeur: emp.montant || 0
+                montant_cimr_employeur: resolveMontantCotisation(emp, emp)
             }));
             onSave(declarations);
         }

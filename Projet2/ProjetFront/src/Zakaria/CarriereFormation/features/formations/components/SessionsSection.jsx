@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { Calendar, Plus, Edit2, Trash2, ClipboardList } from "lucide-react";
 import Swal from "sweetalert2";
 import SectionTitle from "../../../../CNSS/SectionTitle";
@@ -42,11 +42,15 @@ const SessionsSection = ({ formation, onManageAttendance }) => {
   const {
     sessions,
     loading,
+    error,
     fetchSessions,
     createSession,
     updateSession,
     deleteSession,
-  } = useFormationSessions(formation?.id);
+  } = useFormationSessions(formation?.id, {
+    sessionsCount: formation?.sessions_count,
+    initialSessions: formation?.sessions,
+  });
 
   const [formMode, setFormMode]   = useState(null); // null | "add" | "edit"
   const [editingSession, setEditingSession] = useState(null);
@@ -54,7 +58,7 @@ const SessionsSection = ({ formation, onManageAttendance }) => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (formation?.id) fetchSessions();
+    if (formation?.id) fetchSessions({ silent: true });
   }, [formation?.id, fetchSessions]);
 
   const openAdd = () => {
@@ -237,14 +241,21 @@ const SessionsSection = ({ formation, onManageAttendance }) => {
       )}
 
       {/* Sessions table */}
-      {loading ? (
+      {loading && sessions.length === 0 ? (
         <p style={{ fontSize: "0.85rem", color: "#9ca3af" }}>Chargement des séances…</p>
+      ) : error && sessions.length === 0 ? (
+        <p style={{ fontSize: "0.85rem", color: "#ef4444" }}>{error}</p>
       ) : sessions.length === 0 ? (
         <p style={{ fontSize: "0.85rem", color: "#9ca3af", textAlign: "center", padding: "16px" }}>
           Aucune séance planifiée.
         </p>
       ) : (
         <div style={{ overflowX: "auto" }}>
+          {loading && (
+            <p style={{ fontSize: "0.75rem", color: "#6b7280", marginBottom: "8px" }}>
+              Actualisation du planning...
+            </p>
+          )}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
             <thead>
               <tr style={{ backgroundColor: "#f1f5f9", borderBottom: "2px solid #e2e8f0" }}>

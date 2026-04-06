@@ -18,12 +18,16 @@ const ExpandRTable = ({
   columns,
   data,
   filteredData,
+  loading = false,
+  noDataMessage = 'Aucune donnee disponible',
   searchTerm,
   highlightText,
   selectAll,
   selectedItems,
   handleSelectAllChange,
   handleCheckboxChange,
+  onSelectAll,
+  onSelectItem,
   handleEdit,
   handleDelete,
   handleDuplicate,
@@ -38,6 +42,7 @@ const ExpandRTable = ({
   toggleRowExpansion,
   renderExpandedRow,
   renderCustomActions,
+  renderActions,
   expansionType = 'default',
   supportPDF = false,
   getRowStyle,
@@ -47,10 +52,19 @@ const ExpandRTable = ({
   disableFilter = false,
 }) => {
 
-  const hasActions = handleEdit || handleDelete || handleDuplicate || handlePrint || renderCustomActions;
-  const displayData = data || []; // Prioritize provided 'data' if filteredData is not provided or ambiguous
+  const resolvedSelectAllChange = handleSelectAllChange || onSelectAll;
+  const resolvedCheckboxChange = handleCheckboxChange || onSelectItem;
+  const resolvedRenderActions = renderCustomActions || renderActions;
+  const canSelectRows = typeof resolvedSelectAllChange === 'function' && typeof resolvedCheckboxChange === 'function';
+  const safeSelectedItems = Array.isArray(selectedItems) ? selectedItems : [];
+
+  const hasActions = handleEdit || handleDelete || handleDuplicate || handlePrint || resolvedRenderActions;
+  const displayData = Array.isArray(data)
+    ? data
+    : (Array.isArray(filteredData) ? filteredData : []);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [zoomedImages, setZoomedImages] = useState(new Set());
+  const [brokenImages, setBrokenImages] = useState(new Set());
 
 
   const isRowExpanded = (itemId) => {
@@ -76,6 +90,29 @@ const ExpandRTable = ({
       }
       return newSet;
     });
+  };
+
+  const markImageBroken = (imageId) => {
+    setBrokenImages((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(imageId);
+      return newSet;
+    });
+  };
+
+  const buildImageUrl = (imgSrc) => {
+    if (!imgSrc) return "";
+
+    const src = String(imgSrc).trim();
+    if (/^https?:\/\//i.test(src)) return src;
+
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+
+    if (src.startsWith('/storage/')) return `${baseUrl}${src}`;
+    if (src.startsWith('storage/')) return `${baseUrl}/${src}`;
+    if (src.startsWith('/')) return `${baseUrl}${src}`;
+
+    return `${baseUrl}/storage/${src.replace(/^\/+/, '')}`;
   };
 
   useEffect(() => {
@@ -115,9 +152,10 @@ const ExpandRTable = ({
       const imgSrc = item[column.key];
       const imageId = `${item.id}-${column.key}`;
       const isZoomed = zoomedImages.has(imageId);
+      const isBroken = brokenImages.has(imageId);
 
-      if (imgSrc) {
-        const fullImgSrc = imgSrc.startsWith('http') ? imgSrc : `http://127.0.0.1:8000/storage/${imgSrc}`;
+      if (imgSrc && !isBroken) {
+        const fullImgSrc = buildImageUrl(imgSrc);
 
         return (
           <div className="employee-avatar">
@@ -137,6 +175,9 @@ const ExpandRTable = ({
               onClick={(e) => {
                 e.stopPropagation();
                 toggleImageZoom(imageId);
+              }}
+              onError={() => {
+                markImageBroken(imageId);
               }}
             />
           </div>
@@ -180,6 +221,9 @@ const ExpandRTable = ({
   };
 
   const filteredItems = disableFilter ? displayData : displayData.filter(item => filterData(item, searchTerm));
+  const pagedItems = filteredItems.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const showSkeleton = loading && filteredItems.length === 0;
+  const skeletonRowsCount = Math.min(10, Math.max(5, Number(rowsPerPage) || 5));
 
   const tableStyles = {
     boxShadow: 'none',
@@ -235,6 +279,21 @@ const ExpandRTable = ({
   return (
     <>
       <style>{`
+        @keyframes rtablePulse {
+          0% { opacity: 0.45; }
+          50% { opacity: 1; }
+          100% { opacity: 0.45; }
+        }
+
+        .rtable-skeleton {
+          display: block;
+          width: 100%;
+          height: 12px;
+          border-radius: 999px;
+          background-color: #e5e7eb;
+          animation: rtablePulse 1s ease-in-out infinite;
+        }
+
         .zoomable-image {
           transition: transform 0.3s ease, border 0.3s ease;
         }
@@ -267,10 +326,10 @@ const ExpandRTable = ({
               <TableRow>
                 <TableCell padding="checkbox" sx={headerCellStyles}>
                   <Checkbox
-                    indeterminate={selectedItems.length > 0 && selectedItems.length < displayData.length}
+                    indeterminate={safeSelectedItems.length > 0 && safeSelectedItems.length < displayData.length}
                     checked={selectAll}
-                    onChange={canDelete ? (e) => handleSelectAllChange(e.target.checked) : undefined}
-                    disabled={!canDelete}
+                    onChange={canSelectRows ? (e) => resolvedSelectAllChange(e.target.checked) : undefined}
+                    disabled={!canSelectRows}
                     inputProps={{ 'aria-label': 'select all' }}
                     sx={{ padding: '0', borderBottom: 'none' }}
                   />
@@ -313,224 +372,249 @@ const ExpandRTable = ({
             </TableHead>
 
             <TableBody>
-              {filteredItems
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((item, index) => {
-                  return (
-                    <React.Fragment key={item.id || `row-${Math.random()}`}>
-                      <TableRow
-                        onClick={() => toggleRowExpansion && toggleRowExpansion(item.id)}
-                        sx={{
-                          ...(getRowStyle ? getRowStyle(item) : tableRowStyles(item)),
-                          ...(index !== filteredItems.length - 1 && {
-                            position: 'relative',
-                            '&::after': {
-                              content: '""',
-                              position: 'absolute',
-                              bottom: 0,
-                              left: '1rem',
-                              right: '1rem',
-                              height: '1px',
-                              backgroundColor: '#e5e7eb',
-                              width: 'calc(100% - 2rem)',
-                            }
-                          })
-                        }}
-                      >
-                        <TableCell padding="checkbox" sx={tableCellStyles}>
-                          <Checkbox
-                            checked={selectedItems.includes(item.id)}
-                            onChange={() => handleCheckboxChange(item.id)}
-                            inputProps={{ 'aria-label': `select row ${item.id}` }}
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{ padding: '0', borderBottom: 'none' }}
-                          />
-                        </TableCell>
+              {showSkeleton ? (
+                Array.from({ length: skeletonRowsCount }).map((_, index) => (
+                  <TableRow key={`skeleton-${index}`}>
+                    <TableCell padding="checkbox" sx={tableCellStyles}>
+                      <span className="rtable-skeleton" style={{ width: '16px', height: '16px', borderRadius: '4px' }} />
+                    </TableCell>
 
-                        {columns.map((column, colIndex) => {
-                          return (
-                            <TableCell
-                              key={`${item.id}-${column.key}`}
-                              align={column.key === 'prix' || column.key === 'price' ? 'right' : 'left'}
-                              sx={tableCellStyles}
-                            >
-                              {renderImageCell(item, column)}
-                            </TableCell>
-                          );
-                        })}
+                    {columns.map((column) => (
+                      <TableCell key={`skeleton-${index}-${column.key}`} sx={tableCellStyles}>
+                        <span
+                          className="rtable-skeleton"
+                          style={{
+                            width: `${58 + ((index + column.key.length) % 4) * 10}%`,
+                          }}
+                        />
+                      </TableCell>
+                    ))}
 
-                        {hasActions && (
-                          <TableCell
-                            align="right"
+                    {hasActions && (
+                      <TableCell align="right" sx={{ ...tableCellStyles, position: 'sticky', right: 0, zIndex: 2, backgroundColor: '#fff' }}>
+                        <span className="rtable-skeleton" style={{ width: '88px', marginLeft: 'auto' }} />
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              ) : (
+                <>
+                  {pagedItems
+                    .map((item, index) => {
+                      return (
+                        <React.Fragment key={item.id || `row-${Math.random()}`}>
+                          <TableRow
+                            onClick={() => toggleRowExpansion && toggleRowExpansion(item.id)}
                             sx={{
-                              ...tableCellStyles,
-                              verticalAlign: "middle",
-                              position: 'sticky',
-                              right: 0,
-                              zIndex: 2,
-                              backgroundColor: "#fff",
-                              borderBottom: "1px solid #e5e7eb",
+                              ...(getRowStyle ? getRowStyle(item) : tableRowStyles(item)),
+                              ...(index !== filteredItems.length - 1 && {
+                                position: 'relative',
+                                '&::after': {
+                                  content: '""',
+                                  position: 'absolute',
+                                  bottom: 0,
+                                  left: '1rem',
+                                  right: '1rem',
+                                  height: '1px',
+                                  backgroundColor: '#e5e7eb',
+                                  width: 'calc(100% - 2rem)',
+                                }
+                              })
                             }}
                           >
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                alignItems: 'center',
-                                gap: '10px',
-                                height: '100%',
+                            <TableCell padding="checkbox" sx={tableCellStyles}>
+                              <Checkbox
+                                checked={safeSelectedItems.includes(item.id)}
+                                onChange={canSelectRows ? () => resolvedCheckboxChange(item.id) : undefined}
+                                disabled={!canSelectRows}
+                                inputProps={{ 'aria-label': `select row ${item.id}` }}
+                                onClick={(e) => e.stopPropagation()}
+                                sx={{ padding: '0', borderBottom: 'none' }}
+                              />
+                            </TableCell>
+
+                            {columns.map((column) => {
+                              return (
+                                <TableCell
+                                  key={`${item.id}-${column.key}`}
+                                  align={column.key === 'prix' || column.key === 'price' ? 'right' : 'left'}
+                                  sx={tableCellStyles}
+                                >
+                                  {renderImageCell(item, column)}
+                                </TableCell>
+                              );
+                            })}
+
+                            {hasActions && (
+                              <TableCell
+                                align="right"
+                                sx={{
+                                  ...tableCellStyles,
+                                  verticalAlign: "middle",
+                                  position: 'sticky',
+                                  right: 0,
+                                  zIndex: 2,
+                                  backgroundColor: "#fff",
+                                  borderBottom: "1px solid #e5e7eb",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    height: '100%',
+                                  }}
+                                >
+                                  {supportPDF && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        console.log("PDF action for item:", item.id);
+                                      }}
+                                      aria-label="PDF"
+                                      style={{
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
+                                    </button>
+                                  )}
+
+                                  {handlePrint && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePrint(item);
+                                      }}
+                                      aria-label="Print"
+                                      title="Imprimer"
+                                      style={{
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <FontAwesomeIcon icon={faPrint} style={{ color: '#28a745', fontSize: '14px' }} />
+                                    </button>
+                                  )}
+
+                                  {handleEdit && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!canEdit) return;
+                                        handleEdit(item);
+                                      }}
+                                      aria-label="Edit"
+                                      title="Modifier"
+                                      className={!canEdit ? 'disabled-btn' : ''}
+                                      style={{
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        cursor: canEdit ? 'pointer' : 'not-allowed',
+                                        opacity: canEdit ? 1 : 0.5,
+                                      }}
+                                      disabled={!canEdit}
+                                    >
+                                      <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
+                                    </button>
+                                  )}
+
+                                  {handleDuplicate && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDuplicate(item);
+                                      }}
+                                      aria-label="Duplicate"
+                                      title="Dupliquer"
+                                      style={{
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <FontAwesomeIcon icon={faCopy} style={{ color: '#17a2b8', fontSize: '14px' }} />
+                                    </button>
+                                  )}
+
+                                  {handleDelete && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!canDelete) return;
+                                        handleDelete(item.id);
+                                      }}
+                                      aria-label="Delete"
+                                      title="Supprimer"
+                                      className={!canDelete ? 'disabled-btn' : ''}
+                                      style={{
+                                        border: 'none',
+                                        backgroundColor: 'transparent',
+                                        cursor: canDelete ? 'pointer' : 'not-allowed',
+                                        opacity: canDelete ? 1 : 0.5,
+                                      }}
+                                      disabled={!canDelete}
+                                    >
+                                      <FontAwesomeIcon icon={faTrash} style={{ color: '#ff0000', fontSize: '14px' }} />
+                                    </button>
+                                  )}
+
+                                  {resolvedRenderActions && resolvedRenderActions(item)}
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+
+                          {isRowExpanded(item.id) && (
+                            <TableRow
+                              sx={{
+                                ...(index !== filteredItems.length - 1 && {
+                                  position: 'relative',
+                                  '&::after': {
+                                    content: '""',
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: '1rem',
+                                    right: '1rem',
+                                    height: '1px',
+                                    backgroundColor: '#e5e7eb',
+                                    width: 'calc(100% - 2rem)',
+                                  }
+                                })
                               }}
                             >
-                              {supportPDF && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    console.log("PDF action for item:", item.id);
-                                  }}
-                                  aria-label="PDF"
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
-                                </button>
-                              )}
+                              <TableCell
+                                colSpan={columns.length + (hasActions ? 1 : 0) + 1}
+                                sx={{
+                                  padding: '16px',
+                                  backgroundColor: '#f9fafb',
+                                }}
+                              >
+                                {renderExpandedRow(item)}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
 
-                              {/* Bouton Imprimer */}
-                              {handlePrint && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePrint(item);
-                                  }}
-                                  aria-label="Print"
-                                  title="Imprimer"
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <FontAwesomeIcon icon={faPrint} style={{ color: '#28a745', fontSize: '14px' }} />
-                                </button>
-                              )}
-
-                              {/* Bouton Modifier */}
-                              {handleEdit && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canEdit) return;
-                                    handleEdit(item);
-                                  }}
-                                  aria-label="Edit"
-                                  title="Modifier"
-                                  className={!canEdit ? 'disabled-btn' : ''}
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: canEdit ? 'pointer' : 'not-allowed',
-                                    opacity: canEdit ? 1 : 0.5,
-                                  }}
-                                  disabled={!canEdit}
-                                >
-                                  <FontAwesomeIcon icon={faEdit} style={{ color: '#007bff', fontSize: '14px' }} />
-                                </button>
-                              )}
-
-                              {/* Bouton Dupliquer - Affiché seulement si handleDuplicate est fourni */}
-                              {handleDuplicate && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDuplicate(item);
-                                  }}
-                                  aria-label="Duplicate"
-                                  title="Dupliquer"
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <FontAwesomeIcon icon={faCopy} style={{ color: '#17a2b8', fontSize: '14px' }} />
-                                </button>
-                              )}
-
-                              {/* Bouton Supprimer */}
-                              {handleDelete && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canDelete) return;
-                                    handleDelete(item.id);
-                                  }}
-                                  aria-label="Delete"
-                                  title="Supprimer"
-                                  className={!canDelete ? 'disabled-btn' : ''}
-                                  style={{
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: canDelete ? 'pointer' : 'not-allowed',
-                                    opacity: canDelete ? 1 : 0.5,
-                                  }}
-                                  disabled={!canDelete}
-                                >
-                                  <FontAwesomeIcon icon={faTrash} style={{ color: '#ff0000', fontSize: '14px' }} />
-                                </button>
-                              )}
-
-                              {renderCustomActions && renderCustomActions(item)}
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-
-                      {isRowExpanded(item.id) && (
-                        <TableRow
-                          sx={{
-                            ...(index !== filteredItems.length - 1 && {
-                              position: 'relative',
-                              '&::after': {
-                                content: '""',
-                                position: 'absolute',
-                                bottom: 0,
-                                left: '1rem',
-                                right: '1rem',
-                                height: '1px',
-                                backgroundColor: '#e5e7eb',
-                                width: 'calc(100% - 2rem)',
-                              }
-                            })
-                          }}
-                        >
-                          <TableCell
-                            colSpan={columns.length + (hasActions ? 1 : 0) + 1}
-                            sx={{
-                              padding: '16px',
-                              backgroundColor: '#f9fafb',
-                            }}
-                          >
-                            {renderExpandedRow(item)}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-
-              {filteredItems.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length + (hasActions ? 1 : 0) + 1}
-                    align="center"
-                    sx={{ padding: '24px', color: '#6b7280' }}
-                  >
-                    Aucune donnée disponible
-                  </TableCell>
-                </TableRow>
+                  {filteredItems.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length + (hasActions ? 1 : 0) + 1}
+                        align="center"
+                        sx={{ padding: '24px', color: '#6b7280' }}
+                      >
+                        {noDataMessage}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               )}
             </TableBody>
           </Table>
@@ -547,7 +631,7 @@ const ExpandRTable = ({
               variant="contained"
               color="error"
               onClick={handleDeleteSelected}
-              disabled={!canBulkDelete || !selectedItems || selectedItems.length === 0}
+              disabled={loading || !canBulkDelete || !safeSelectedItems || safeSelectedItems.length === 0}
               startIcon={<FontAwesomeIcon icon={faTrash} />}
               sx={{
                 backgroundColor: '#ef4444',
@@ -574,6 +658,7 @@ const ExpandRTable = ({
               <select
                 value={rowsPerPage}
                 onChange={handleMuiChangeRowsPerPage}
+                disabled={loading}
                 style={{
                   width: "60px",
                   padding: "5px 8px",
@@ -597,9 +682,10 @@ const ExpandRTable = ({
             </div>
 
             <Pagination
-              count={Math.ceil(filteredItems.length / rowsPerPage)}
+              count={Math.max(1, Math.ceil(filteredItems.length / rowsPerPage))}
               page={page + 1}
               onChange={(event, newPage) => handleChangePage(newPage - 1)}
+              disabled={loading}
               color="primary"
             />
           </div>

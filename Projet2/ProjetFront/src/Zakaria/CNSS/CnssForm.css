@@ -3,6 +3,13 @@
    Aligné sur SocieteForm (societe-form-*)
    ================================================================ */
 
+:root {
+    --cnss-control-min-height: 42px;
+    --cnss-control-radius: 8px;
+    --cnss-border-color: #d8e0e8;
+    --cnss-label-color: #4b5563;
+}
+
 /* ---------- Conteneur principal ---------- */
 .cnss-form-container {
     border: none;
@@ -30,12 +37,15 @@
     left: 60%;
     width: 40%;
     height: calc(100vh - 160px);
+    min-height: 0;
     background: white;
     z-index: 1000;
     display: flex;
     flex-direction: column;
+    border: 1px solid #e2e8f0;
     box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
     border-radius: 8px 0 0 8px;
+    isolation: isolate;
 }
 
 /* Inside split-view: panel becomes inline, no fixed positioning */
@@ -45,11 +55,12 @@
     left: 0 !important;
     width: 100% !important;
     height: 100% !important;
+    min-height: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     z-index: auto !important;
     will-change: auto;
-    contain: layout style;
+    contain: none;
 }
 
 @media (max-width: 1024px) {
@@ -123,7 +134,20 @@
     padding: 1.5rem;
     background-color: transparent;
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+}
+
+.cnss-form-body>form {
+    min-height: 100%;
+}
+
+.cnss-form-body .row {
+    row-gap: 0.15rem;
+}
+
+.cnss-form-body .row.g-3 {
+    row-gap: 0.5rem;
 }
 
 .cnss-form-body::-webkit-scrollbar {
@@ -133,6 +157,19 @@
 .cnss-form-body::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 3px;
+}
+
+.cnss-form-body small.text-muted {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 0.74rem;
+    line-height: 1.35;
+    color: #6b7280 !important;
+}
+
+.cnss-form-body .alert {
+    border-radius: 8px;
+    font-size: 0.84rem;
 }
 
 /* ---------- Section title (séparateur de section) ---------- */
@@ -161,7 +198,7 @@
 
 /* ---------- Groupe de champ ---------- */
 .cnss-field-group {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
     position: relative;
 }
 
@@ -172,18 +209,26 @@
     right: 0;
     bottom: -0.625rem;
     height: 1px;
-    background-color: #f3f4f6;
+    background-color: #f1f5f9;
+    opacity: 0.75;
 }
 
 /* ---------- Labels ---------- */
 .cnss-form-label {
     font-size: 0.875rem;
-    font-weight: 500;
-    color: #4b5563;
-    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--cnss-label-color);
+    margin-bottom: 0.45rem;
     display: flex;
     align-items: center;
     gap: 6px;
+    line-height: 1.25;
+    flex-wrap: wrap;
+}
+
+.cnss-form-label .text-danger {
+    font-weight: 700;
+    line-height: 1;
 }
 
 .cnss-label-icon {
@@ -196,13 +241,16 @@
 /* ---------- Inputs ---------- */
 .cnss-form-control {
     width: 100%;
-    padding: 0.75rem 1rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
+    padding: 0.625rem 0.9rem;
+    min-height: var(--cnss-control-min-height);
+    border: 1px solid var(--cnss-border-color);
+    border-radius: var(--cnss-control-radius);
     font-size: 0.875rem;
     color: #111827;
     background-color: #ffffff;
+    background-clip: padding-box;
     transition: all 0.2s ease;
+    line-height: 1.35;
 }
 
 .cnss-form-control:focus {
@@ -214,6 +262,33 @@
 .cnss-form-control::placeholder {
     color: #9ca3af;
     font-size: 0.875rem;
+}
+
+.cnss-form-control[type="date"],
+.cnss-form-control[type="time"],
+.cnss-form-control[type="number"],
+.cnss-form-control[type="file"] {
+    line-height: 1.25;
+}
+
+.cnss-form-control[type="file"] {
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+}
+
+.cnss-form-control.form-select,
+select.cnss-form-control,
+.cnss-side-panel .form-select {
+    padding-right: 2.3rem;
+    background-position: right 0.78rem center;
+    background-size: 16px 12px;
+}
+
+.cnss-side-panel textarea.form-control,
+.cnss-side-panel .form-control[rows] {
+    min-height: 84px;
+    line-height: 1.35;
+    resize: vertical;
 }
 
 .cnss-form-control.is-invalid {
@@ -232,9 +307,20 @@
 .cnss-side-panel .form-select {
     font-size: 0.875rem;
     color: #111827;
-    border-color: #e5e7eb;
-    border-radius: 6px;
-    padding: 0.75rem 1rem;
+    min-height: var(--cnss-control-min-height);
+    border-color: var(--cnss-border-color);
+    border-radius: var(--cnss-control-radius);
+    padding: 0.625rem 0.9rem;
+    line-height: 1.35;
+    background-color: #ffffff;
+}
+
+.cnss-side-panel .form-control.form-control-sm,
+.cnss-side-panel .form-select.form-select-sm {
+    min-height: 38px;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.84rem;
+    line-height: 1.3;
 }
 
 .cnss-side-panel .form-control:focus,
@@ -253,13 +339,21 @@
     color: #6b7280;
 }
 
+.cnss-side-panel .form-control:disabled,
+.cnss-side-panel .form-select:disabled {
+    background-color: #f9fafb;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
 /* react-dropdown-select dans le panel */
 .cnss-side-panel .react-dropdown-select {
-    border: 1px solid #e5e7eb !important;
-    border-radius: 6px !important;
-    min-height: 42px !important;
+    border: 1px solid var(--cnss-border-color) !important;
+    border-radius: var(--cnss-control-radius) !important;
+    min-height: var(--cnss-control-min-height) !important;
     font-size: 0.875rem !important;
     padding: 0.25rem 0.75rem !important;
+    background-color: #ffffff !important;
 }
 
 .cnss-side-panel .react-dropdown-select:focus,
@@ -267,6 +361,32 @@
     border-color: #00afaa !important;
     box-shadow: 0 0 0 2px rgba(0, 175, 170, 0.1) !important;
     outline: none !important;
+}
+
+.cnss-side-panel .react-dropdown-select-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 0;
+}
+
+.cnss-side-panel .react-dropdown-select-input {
+    min-height: 28px !important;
+    margin: 0 !important;
+    font-size: 0.875rem !important;
+}
+
+.cnss-side-panel .react-dropdown-select-dropdown {
+    z-index: 3000 !important;
+    border: 1px solid #d6dee7 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15) !important;
+    overflow: hidden;
+}
+
+.cnss-side-panel .react-dropdown-select-item {
+    font-size: 0.86rem !important;
+    line-height: 1.35 !important;
 }
 
 /* ---------- Form label Bootstrap override ---------- */
@@ -285,6 +405,13 @@
     display: block;
 }
 
+.cnss-form-body .text-danger.mt-1,
+.cnss-form-body .invalid-feedback {
+    font-size: 0.75rem !important;
+    margin-top: 0.3rem !important;
+    line-height: 1.3;
+}
+
 /* ---------- Alerte globale ---------- */
 .cnss-alert {
     background-color: #fef2f2;
@@ -298,7 +425,7 @@
 
 /* ---------- Actions / Footer ---------- */
 .cnss-form-footer {
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
     background-color: #ffffff;
     border-top: 1px solid #eef2f5;
     display: flex;
@@ -410,7 +537,8 @@
 .unified-input-group .cnss-btn-add {
     min-width: 42px !important;
     width: 42px !important;
-    height: auto !important;
+    height: var(--cnss-control-min-height) !important;
+    min-height: var(--cnss-control-min-height) !important;
     padding: 0 !important;
     border-top-left-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
@@ -571,6 +699,22 @@
 
 /* ---------- Responsive ---------- */
 @media (max-width: 768px) {
+    .cnss-form-body {
+        padding: 1rem;
+    }
+
+    .cnss-form-footer {
+        padding: 1rem;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .cnss-btn-primary,
+    .cnss-btn-secondary {
+        min-width: 120px;
+        padding: 0.6rem 1.25rem;
+    }
+
     .cnss-detail-grid {
         grid-template-columns: 1fr;
     }

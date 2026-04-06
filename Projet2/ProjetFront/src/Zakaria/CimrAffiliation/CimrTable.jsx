@@ -111,7 +111,11 @@ const CimrTable = forwardRef((props, ref) => {
         filtersVisible,
         handleFiltersToggle,
         departementName = "Tous",
-        preloadedEmployees = [] // Employés préchargés par le parent
+        preloadedEmployees = [], // Employés préchargés par le parent
+        canViewCimr = true,
+        canCreateCimr = true,
+        canUpdateCimr = true,
+        canDeleteCimr = true
     } = props;
 
     const { dynamicStyles } = useOpen();
@@ -306,7 +310,27 @@ const CimrTable = forwardRef((props, ref) => {
         );
     }, []);
 
+    const isForbiddenError = useCallback((err) => err?.response?.status === 403, []);
+
+    const showForbiddenAlert = useCallback((actionLabel) => {
+        Swal.fire({
+            icon: 'error',
+            title: 'Accès refusé',
+            text: `Vous n'avez pas l'autorisation de ${actionLabel} les affiliations CIMR.`
+        });
+    }, []);
+
     const onSave = (newData, isFormData = false) => {
+        if (editingItem && !canUpdateCimr) {
+            showForbiddenAlert('modifier');
+            return;
+        }
+
+        if (!editingItem && !canCreateCimr) {
+            showForbiddenAlert('ajouter');
+            return;
+        }
+
         let request;
 
         if (isFormData) {
@@ -357,6 +381,12 @@ const CimrTable = forwardRef((props, ref) => {
             })
             .catch((err) => {
                 console.error(err);
+
+                if (isForbiddenError(err)) {
+                    showForbiddenAlert(editingItem ? 'modifier' : 'ajouter');
+                    return;
+                }
+
                 const errors = err.response?.data?.errors;
                 const serverMsg = err.response?.data?.message;
                 let messages = serverMsg || "Impossible d'enregistrer l'affiliation.";
@@ -368,6 +398,11 @@ const CimrTable = forwardRef((props, ref) => {
     };
 
     const handleDelete = (id) => {
+        if (!canDeleteCimr) {
+            showForbiddenAlert('supprimer');
+            return;
+        }
+
         Swal.fire({
             title: 'Êtes-vous sûr?',
             text: "Vous ne pourrez pas revenir en arrière!",
@@ -385,6 +420,10 @@ const CimrTable = forwardRef((props, ref) => {
                     })
                     .catch(err => {
                         console.error(err);
+                        if (isForbiddenError(err)) {
+                            showForbiddenAlert('supprimer');
+                            return;
+                        }
                         Swal.fire('Erreur', 'Impossible de supprimer.', 'error');
                     });
             }
@@ -393,6 +432,11 @@ const CimrTable = forwardRef((props, ref) => {
 
     const handleDeleteSelected = useCallback(async () => {
         if (selectedItems.length === 0) return;
+
+        if (!canDeleteCimr) {
+            showForbiddenAlert('supprimer');
+            return;
+        }
 
         const result = await Swal.fire({
             title: "Êtes-vous sûr?",
@@ -415,12 +459,20 @@ const CimrTable = forwardRef((props, ref) => {
                 Swal.fire("Supprimés!", "Les affiliations ont été supprimées.", "success");
             } catch (error) {
                 console.error("Error deleting selected affiliations:", error);
+                if (isForbiddenError(error)) {
+                    showForbiddenAlert('supprimer');
+                    return;
+                }
                 Swal.fire("Erreur!", "Une erreur est survenue lors de la suppression.", "error");
             }
         }
-    }, [selectedItems]);
+    }, [selectedItems, canDeleteCimr, showForbiddenAlert, isForbiddenError]);
 
     const handleEdit = (row) => {
+        if (!canUpdateCimr) {
+            showForbiddenAlert('modifier');
+            return;
+        }
         setEditingItem(row);
         setIsAddingEmploye(true);
     };
@@ -609,6 +661,13 @@ const CimrTable = forwardRef((props, ref) => {
     };
 
     const loadData = useCallback(() => {
+        if (!canViewCimr) {
+            setAffiliations([]);
+            setLoading(false);
+            setError("Accès refusé: vous n'avez pas la permission de voir les affiliations CIMR.");
+            return;
+        }
+
         // Charger depuis le cache d'abord pour affichage immédiat
         const cached = localStorage.getItem('cimrAffiliationsCache');
         if (cached) {
@@ -625,11 +684,24 @@ const CimrTable = forwardRef((props, ref) => {
                 const payload = Array.isArray(res.data) ? res.data : [];
                 const mapped = payload.map(mapApiToUi);
                 setAffiliations(mapped);
+                setError("");
                 localStorage.setItem('cimrAffiliationsCache', JSON.stringify(mapped));
             })
-            .catch(console.error)
+            .catch((err) => {
+                console.error(err);
+                if (isForbiddenError(err)) {
+                    setError("Accès refusé: vous n'avez pas la permission de voir les affiliations CIMR.");
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Accès refusé',
+                        text: "Vous n'avez pas l'autorisation d'afficher les affiliations CIMR."
+                    });
+                    return;
+                }
+                setError("Impossible de charger les affiliations CIMR.");
+            })
             .finally(() => setLoading(false));
-    }, []);
+    }, [canViewCimr, isForbiddenError]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -669,6 +741,8 @@ const CimrTable = forwardRef((props, ref) => {
         setIsAddingEmploye(false);
         setEditingItem(null);
     }
+
+    const canOpenAddForm = Boolean(departementId) && canCreateCimr;
 
     const exportToPDF = useCallback(() => {
         const doc = new jsPDF();
@@ -773,8 +847,8 @@ const CimrTable = forwardRef((props, ref) => {
                 }} className="container_employee">
                     <div className="mt-4">
                         <div className="section-header mb-3">
-                            <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
-                                <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
+                                <div style={{ minWidth: 0 }}>
                                     <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
                                         <i className="fas fa-users me-2"></i>
                                         Gestion Affiliations CIMR
@@ -784,7 +858,7 @@ const CimrTable = forwardRef((props, ref) => {
                                     </p>
                                 </div>
 
-                                <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{ display: "flex", gap: "10px", alignItems: 'center', justifySelf: 'end' }}>
                                     <FontAwesomeIcon
                                         onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
                                         icon={filtersVisible ? faClose : faFilter}
@@ -800,17 +874,20 @@ const CimrTable = forwardRef((props, ref) => {
 
                                     <Button
                                         onClick={() => {
-                                            if (!departementId) return;
+                                            if (!canOpenAddForm) return;
                                             setIsAddingEmploye(true);
                                         }}
-                                        className={`btn d-flex align-items-center ${!departementId ? "disabled-btn" : ""}`}
+                                        className={`btn d-flex align-items-center ${!canOpenAddForm ? "disabled-btn" : ""}`}
+                                        disabled={!canOpenAddForm}
                                         size="sm"
                                         style={{
                                             width: '200px',
                                             backgroundColor: '#2c767c',
                                             color: '#ffffff',
                                             border: 'none',
-                                            marginRight: '10px'
+                                            marginRight: '10px',
+                                            cursor: canOpenAddForm ? 'pointer' : 'not-allowed',
+                                            opacity: canOpenAddForm ? 1 : 0.6
                                         }}
                                     >
                                         <FaPlusCircle className="me-2" />
@@ -1186,6 +1263,9 @@ const CimrTable = forwardRef((props, ref) => {
                             handleEdit={handleEdit}
                             handleDelete={handleDelete}
                             handleDeleteSelected={handleDeleteSelected}
+                            canEdit={canUpdateCimr}
+                            canDelete={canDeleteCimr}
+                            canBulkDelete={canDeleteCimr}
                             expandedRows={expandedRows}
                             toggleRowExpansion={toggleRowExpansion}
                             renderExpandedRow={renderExpandedRow}
@@ -1368,11 +1448,18 @@ const CimrTable = forwardRef((props, ref) => {
                             </button>
                             <button
                                 onClick={() => {
+                                    if (!canUpdateCimr) return;
                                     setShowDetailModal(false);
                                     handleEdit(detailItem);
                                 }}
-                                className="btn btn-primary px-4 fw-bold d-flex align-items-center gap-2"
-                                style={{ backgroundColor: '#2c767c', border: 'none' }}
+                                className={`btn btn-primary px-4 fw-bold d-flex align-items-center gap-2 ${!canUpdateCimr ? 'disabled-btn' : ''}`}
+                                style={{
+                                    backgroundColor: '#2c767c',
+                                    border: 'none',
+                                    cursor: canUpdateCimr ? 'pointer' : 'not-allowed',
+                                    opacity: canUpdateCimr ? 1 : 0.6
+                                }}
+                                disabled={!canUpdateCimr}
                             >
                                 <FontAwesomeIcon icon={faEdit} />
                                 Modifier

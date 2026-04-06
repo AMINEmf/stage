@@ -5,9 +5,23 @@ namespace App\Http\Controllers;
 use App\Models\CimrDeclaration;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class CimrDeclarationController extends Controller
 {
+    private function declarationAmountFallbackSql(): string
+    {
+        return "CASE
+            WHEN cimr_declarations.montant_cimr_employeur IS NOT NULL AND cimr_declarations.montant_cimr_employeur > 0
+                THEN cimr_declarations.montant_cimr_employeur
+            WHEN aff.montant_cotisation IS NOT NULL AND aff.montant_cotisation > 0
+                THEN aff.montant_cotisation
+            WHEN aff.salaire_cotisable IS NOT NULL AND aff.taux_employeur IS NOT NULL
+                THEN (aff.salaire_cotisable * aff.taux_employeur / 100)
+            ELSE 0
+        END";
+    }
+
     public function index(Request $request)
     {
         if ($request->has('summary')) {
@@ -16,8 +30,12 @@ class CimrDeclarationController extends Controller
         
         $query = CimrDeclaration::query();
         
-        if ($request->has('mois')) $query->where('mois', $request->mois);
-        if ($request->has('annee')) $query->where('annee', $request->annee);
+        if ($request->has('mois')) {
+            $query->where('mois', $request->mois);
+        }
+        if ($request->has('annee')) {
+            $query->where('annee', $request->annee);
+        }
         
         return $query->orderByDesc('created_at')->get();
     }
@@ -36,6 +54,12 @@ class CimrDeclarationController extends Controller
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
+        $affiliationFallback = DB::table('cimr_affiliations')
+            ->selectRaw('matricule, MAX(montant_cotisation) as montant_cotisation, MAX(salaire_cotisable) as salaire_cotisable, MAX(taux_employeur) as taux_employeur')
+            ->groupBy('matricule');
+
+        $amountSql = $this->declarationAmountFallbackSql();
+
         // Total active affiliations
         $totalAffiliations = \App\Models\CimrAffiliation::where('statut', 'actif')->count();
 
@@ -45,16 +69,25 @@ class CimrDeclarationController extends Controller
             ->count();
 
         // Total amount this month
-        $totalAmountThisMonth = CimrDeclaration::where('mois', $currentMonth)
-            ->where('annee', $currentYear)
-            ->sum('montant_cimr_employeur');
+        $totalAmountThisMonth = CimrDeclaration::query()
+            ->leftJoinSub($affiliationFallback, 'aff', function ($join) {
+                $join->on('aff.matricule', '=', 'cimr_declarations.matricule');
+            })
+            ->where('cimr_declarations.mois', $currentMonth)
+            ->where('cimr_declarations.annee', $currentYear)
+            ->selectRaw("COALESCE(SUM({$amountSql}), 0) as total")
+            ->value('total');
 
         // Monthly evolution (last 6 months)
-        $monthlyEvolution = CimrDeclaration::selectRaw('mois, annee, SUM(montant_cimr_employeur) as total')
-            ->where('annee', '>=', now()->subMonths(6)->year)
-            ->groupBy('mois', 'annee')
-            ->orderBy('annee')
-            ->orderBy('mois')
+        $monthlyEvolution = CimrDeclaration::query()
+            ->leftJoinSub($affiliationFallback, 'aff', function ($join) {
+                $join->on('aff.matricule', '=', 'cimr_declarations.matricule');
+            })
+            ->selectRaw("cimr_declarations.mois, cimr_declarations.annee, SUM({$amountSql}) as total")
+            ->where('cimr_declarations.annee', '>=', now()->subMonths(6)->year)
+            ->groupBy('cimr_declarations.mois', 'cimr_declarations.annee')
+            ->orderBy('cimr_declarations.annee')
+            ->orderBy('cimr_declarations.mois')
             ->limit(6)
             ->get();
 

@@ -44,6 +44,9 @@ const UsersForm = ({ onSubmit, onCancel, initialData, onOpenPermissionsModal }) 
         if (!initialData && !formData.password.trim()) {
             errors.password = 'Le mot de passe est requis';
         }
+        if (formData.password && formData.password.trim().length > 0 && formData.password.trim().length < 8) {
+            errors.password = 'Le mot de passe doit contenir au moins 8 caractères';
+        }
         setValidationErrors(errors);
         return Object.keys(errors).length === 0;
     };
@@ -391,11 +394,12 @@ const UsersForm = ({ onSubmit, onCancel, initialData, onOpenPermissionsModal }) 
                             {initialData ? 'Nouveau mot de passe (optionnel)' : 'Mot de passe'}
                         </Form.Label>
                         <Form.Control
-                            type="text"
+                            type="password"
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
                             className={`form-control-enhanced ${validationErrors.password ? 'is-invalid' : ''}`}
+                            minLength={8}
                             placeholder={initialData ? "Entrez le nouveau mot de passe" : "Entrez le mot de passe"}
                         />
                         {validationErrors.password && (

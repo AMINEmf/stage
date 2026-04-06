@@ -3,6 +3,7 @@
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   forwardRef,
   useImperativeHandle,
 } from "react";
@@ -55,6 +56,7 @@ const formatCurrency = (value) => {
 };
 
 const normalizeValue = (value) => (value == null ? "" : String(value).toLowerCase().trim());
+const CNSS_DECLARATIONS_CACHE_KEY = "cnssDeclarationsCache";
 
 const DeclarationsTable = forwardRef((props, ref) => {
   const { globalSearch, filtersVisible, handleFiltersToggle } = props;
@@ -69,6 +71,7 @@ const DeclarationsTable = forwardRef((props, ref) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [isTableLoading, setIsTableLoading] = useState(false);
   const [showChartModal, setShowChartModal] = useState(false);
+  const declarationsCacheRef = useRef(null);
 
   // ── Expand rows ──────────────────────────────────────────────────────────────
   const [expandedRows, setExpandedRows] = useState({});
@@ -290,26 +293,50 @@ const DeclarationsTable = forwardRef((props, ref) => {
     return allColumns.filter((column) => columnVisibility[column.key]);
   }, [allColumns, columnVisibility]);
 
-  const fetchDeclarations = useCallback(async () => {
-    setIsTableLoading(true);
+  const readDeclarationsCache = useCallback(() => {
+    const cached = localStorage.getItem(CNSS_DECLARATIONS_CACHE_KEY);
+    if (!cached) return null;
+    try {
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const hydrateDeclarationsFromCache = useCallback(() => {
+    const cached = declarationsCacheRef.current ?? readDeclarationsCache();
+    if (!Array.isArray(cached)) return false;
+    declarationsCacheRef.current = cached;
+    setDeclarations(cached);
+    return true;
+  }, [readDeclarationsCache]);
+
+  const fetchDeclarations = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setIsTableLoading(true);
     try {
       const response = await axios.get("http://127.0.0.1:8000/api/cnss/declarations", {
         withCredentials: true,
       });
       const declarationsData = Array.isArray(response.data) ? response.data : [];
       setDeclarations(declarationsData);
+      declarationsCacheRef.current = declarationsData;
+      localStorage.setItem(CNSS_DECLARATIONS_CACHE_KEY, JSON.stringify(declarationsData));
     } catch (error) {
       console.error("Erreur lors de la recuperation des declarations CNSS:", error);
       Swal.fire("Erreur", "Impossible de charger les declarations CNSS.", "error");
-      setDeclarations([]);
+      if (!hydrateDeclarationsFromCache()) {
+        setDeclarations([]);
+      }
     } finally {
-      setIsTableLoading(false);
+      if (showLoading) setIsTableLoading(false);
     }
-  }, []);
+  }, [hydrateDeclarationsFromCache]);
 
   useEffect(() => {
-    fetchDeclarations();
-  }, [fetchDeclarations]);
+    const hasWarmCache = hydrateDeclarationsFromCache();
+    fetchDeclarations({ showLoading: !hasWarmCache });
+  }, [fetchDeclarations, hydrateDeclarationsFromCache]);
 
   useEffect(() => {
     const savedColumnVisibility = localStorage.getItem("cnssDeclarationsColumnVisibility");
@@ -679,7 +706,7 @@ const DeclarationsTable = forwardRef((props, ref) => {
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         .with-split-view .addemp-overlay, 
         .with-split-view .add-cnss-container, 
         .with-split-view .add-accident-container,
@@ -796,8 +823,16 @@ const DeclarationsTable = forwardRef((props, ref) => {
         }}>
         <div className="mt-4">
           <div className="section-header mb-3">
-            <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
-              <div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) auto",
+                alignItems: "center",
+                columnGap: "16px",
+                width: "100%",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
                 <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c', textTransform: 'none' }}>
                   <i className="fas fa-id-card me-2"></i>
                   Declarations CNSS
@@ -808,7 +843,7 @@ const DeclarationsTable = forwardRef((props, ref) => {
                 </p>
               </div>
 
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "12px", alignItems: "center", justifySelf: "end" }}>
                 {!isDrawerOpen && (
                   <>
                     <FontAwesomeIcon
@@ -960,7 +995,6 @@ const DeclarationsTable = forwardRef((props, ref) => {
           columns={visibleColumns}
           data={filteredDeclarations}
           loading={isTableLoading}
-          loadingText="Chargement des declarations CNSS..."
           searchTerm={normalizeValue(globalSearch)}
           highlightText={highlightText}
           selectAll={selectedItems.length === filteredDeclarations.length && filteredDeclarations.length > 0}

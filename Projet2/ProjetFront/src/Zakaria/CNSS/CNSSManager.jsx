@@ -82,7 +82,6 @@ function CNSSManager() {
   const fetchDepartmentHierarchy = async () => {
     try {
       const response = await axios.get('http://127.0.0.1:8000/api/departements/hierarchy');
-      console.log('CNSS: Departments fetched:', response.data);
       setDepartements(response.data);
       localStorage.setItem('departmentHierarchy', JSON.stringify(response.data));
     } catch (error) {
@@ -104,7 +103,6 @@ function CNSSManager() {
 
     if (departmentsFromStorage) {
       const cached = JSON.parse(departmentsFromStorage);
-      console.log('CNSS: Loading departments from cache:', cached);
       setDepartements(cached);
     }
 
@@ -314,7 +312,6 @@ function CNSSManager() {
   };
 
   const handleDepartementClick = (departementId, departementName) => {
-    console.log('CNSS: Department clicked:', departementId, departementName);
     if (departementId) {
       setSelectedDepartementId(departementId);
       setSelectedDepartementName(departementName);
@@ -479,11 +476,6 @@ function CNSSManager() {
   const handleAddCNSS = async (cnssData) => {
     try {
       setIsAddingCNSS(false);
-      if (selectedDepartementId) {
-        setSelectedDepartementId(null);
-        setTimeout(() => setSelectedDepartementId(selectedDepartementId), 0);
-      }
-      console.log("Affiliation CNSS ajoutée avec succès");
     } catch (error) {
       console.error("Error updating UI after adding CNSS affiliation:", error);
       setError(
@@ -616,7 +608,6 @@ function CNSSManager() {
 
     return Array.from(ids);
   }, []);
-  console.log('isAddingCNSS', isAddingCNSS)
 
   const [filtersVisible, setFiltersVisible] = useState(false);
 
@@ -652,7 +643,6 @@ function CNSSManager() {
                 </div>
               </li>
               <div className="separator" style={{ marginTop: '-1%' }}></div>
-              {console.log('CNSS: Rendering departments, count:', departements.length, departements)}
               {departements.length === 0 && (
                 <li style={{ listStyleType: 'none', padding: '1rem', color: '#666' }}>
                   Aucun département trouvé

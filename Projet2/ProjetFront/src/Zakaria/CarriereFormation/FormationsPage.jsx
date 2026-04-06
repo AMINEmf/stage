@@ -12,6 +12,8 @@ import ManageResourceModal from "../CNSS/ManageResourceModal";
 import SmartSuggestionsPanel from "./features/formations/components/SmartSuggestionsPanel";
 import SessionsSection from "./features/formations/components/SessionsSection";
 import AttendanceView from "./features/formations/components/AttendanceView";
+import { prefetchFormationSessions } from "./features/formations/useFormationSessions";
+import { prefetchSmartSuggestions } from "./features/formations/useSmartSuggestions";
 import { STATUTS_CYCLE_FORMATION, STATUTS_CYCLE_FORMATION_LIST } from "../../constants/status";
 import "./CareerTraining.css";
 import "../Style.css";
@@ -39,12 +41,39 @@ const INITIAL_DOMAINE_OPTIONS = ["Informatique", "Management", "Comptabilite", "
 const STATUT_OPTIONS = STATUTS_CYCLE_FORMATION_LIST;
 const TYPE_OPTIONS = ["Interne", "Externe"];
 const MODE_OPTIONS = ["Présentiel", "En ligne", "Hybride"];
+const PARTICIPANTS_CACHE_TTL_MS = 10 * 60 * 1000;
+const WARMUP_PANELS_DELAY_MS = 2800;
+const WARMUP_PARTICIPANTS_DELAY_MS = 1800;
 
 const FormationsPage = () => {
   const { setTitle, clearActions } = useHeader();
   const { dynamicStyles } = useOpen();
   const navigate = useNavigate();
   const catalogRef = useRef(null);
+  const prewarmedFormationIdsRef = useRef(new Map());
+  const prewarmedParticipantsIdsRef = useRef(new Map());
+  const prewarmedParticipantsRequestsRef = useRef(new Map());
+
+  const readLocalTimedCache = useCallback((key, ttlMs) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ts !== "number") return null;
+      if (Date.now() - parsed.ts > ttlMs) return null;
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const writeLocalTimedCache = useCallback((key, data) => {
+    try {
+      localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+    } catch {
+      // Ignore cache persistence errors.
+    }
+  }, []);
 
   /* ─── rows state (single source of truth) ─── */
   const [trainingsState, setTrainingsState] = useState([]);
@@ -82,28 +111,59 @@ const FormationsPage = () => {
 
   const isDrawerOpen = drawerMode !== null;
 
+  const prefetchFormationPanels = useCallback(async (formation, options = {}) => {
+    const { forceRefresh = false } = options;
+    if (!formation?.id) return;
+
+    const tasks = [
+      prefetchFormationSessions(formation.id, {
+        forceRefresh,
+        knownSessionsCount: formation.sessions_count,
+      }),
+    ];
+
+    const effectif = Number(formation.effectif);
+    const participants = Number(formation.participants_count ?? 0);
+    const isFull = Number.isFinite(effectif) && effectif > 0 && participants >= effectif;
+
+    if (!isFull) {
+      tasks.push(prefetchSmartSuggestions(formation.id, { forceRefresh }));
+    }
+
+    await Promise.allSettled(tasks);
+  }, []);
+
   /* ─── fetch formations from API ─── */
-  const fetchFormations = useCallback(async () => {
+  const fetchFormations = useCallback(async (options = {}) => {
+    const { showLoader = true } = options;
     let hasCachedData = false;
-    
+
+    if (showLoader) {
+      setLoading(true);
+    }
+
     try {
-      // Load from cache immediately for instant display
-      const cachedData = localStorage.getItem('formations_cache');
-      if (cachedData) {
-        try {
-          const parsed = JSON.parse(cachedData);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setTrainingsState(parsed);
-            setLoading(false);
-            hasCachedData = true;
+      if (showLoader) {
+        // Load from cache immediately for instant display
+        const cachedData = localStorage.getItem('formations_cache');
+        if (cachedData) {
+          try {
+            const parsed = JSON.parse(cachedData);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setTrainingsState(parsed);
+              setLoading(false);
+              hasCachedData = true;
+            }
+          } catch (e) {
+            console.warn('Cache invalide:', e);
           }
-        } catch (e) {
-          console.warn('Cache invalide:', e);
         }
       }
 
       // Fetch fresh data from API
-      const res = await apiClient.get("/formations");
+      const res = await apiClient.get("/formations", {
+        params: { include_sessions: 1 },
+      });
       const freshData = res.data || [];
       setTrainingsState(freshData);
       // Cache will be updated automatically by the useEffect
@@ -114,7 +174,9 @@ const FormationsPage = () => {
         Swal.fire({ icon: "error", title: "Erreur", text: "Impossible de charger les formations." });
       }
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -222,11 +284,176 @@ const FormationsPage = () => {
     if (trainingsState.length > 0) {
       try {
         localStorage.setItem('formations_cache', JSON.stringify(trainingsState));
+
+        const ts = Date.now();
+        trainingsState.forEach((training) => {
+          if (!training?.id) return;
+          localStorage.setItem(
+            `cf_formation_details_cache_v1:${training.id}`,
+            JSON.stringify({ ts, data: training })
+          );
+        });
       } catch (e) {
         console.warn('Erreur mise à jour cache:', e);
       }
     }
   }, [trainingsState]);
+
+  /* ─── Warm planning + suggestions cache for top visible formations ─── */
+  useEffect(() => {
+    if (!Array.isArray(trainingsState) || trainingsState.length === 0) return;
+
+    const now = Date.now();
+    const candidates = trainingsState
+      .filter((training) => {
+        const key = String(training?.id || "");
+        if (!key) return false;
+        const lastPrefetch = prewarmedFormationIdsRef.current.get(key) || 0;
+        if (now - lastPrefetch < 90 * 1000) return false;
+        prewarmedFormationIdsRef.current.set(key, now);
+        return true;
+      })
+      .slice(0, 6);
+
+    if (candidates.length === 0) return;
+
+    let cancelled = false;
+    let warmupTimer = null;
+
+    const runWarmup = async () => {
+      for (let i = 0; i < candidates.length; i += 2) {
+        if (cancelled) return;
+        const chunk = candidates.slice(i, i + 2);
+        await Promise.allSettled(chunk.map((training) => prefetchFormationPanels(training)));
+      }
+    };
+
+    warmupTimer = window.setTimeout(() => {
+      runWarmup();
+    }, WARMUP_PANELS_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      if (warmupTimer) {
+        window.clearTimeout(warmupTimer);
+      }
+    };
+  }, [trainingsState, prefetchFormationPanels]);
+
+  useEffect(() => {
+    if (!Array.isArray(trainingsState) || trainingsState.length === 0) return;
+
+    const now = Date.now();
+    const candidates = trainingsState
+      .filter((training) => {
+        const id = Number(training?.id);
+        if (!Number.isFinite(id) || id <= 0) return false;
+        if (Number(training?.participants_count ?? 0) <= 0) return false;
+
+        const cacheKey = `cf_formation_participants_cache_v1:${id}`;
+        const cached = readLocalTimedCache(cacheKey, PARTICIPANTS_CACHE_TTL_MS);
+        if (Array.isArray(cached)) return false;
+
+        const lastPrefetch = prewarmedParticipantsIdsRef.current.get(id) || 0;
+        if (now - lastPrefetch < 90 * 1000) return false;
+
+        prewarmedParticipantsIdsRef.current.set(id, now);
+        return true;
+      })
+      .slice(0, 4);
+
+    if (candidates.length === 0) return;
+
+    let cancelled = false;
+    let warmupTimer = null;
+
+    const runParticipantsWarmup = async () => {
+      for (let i = 0; i < candidates.length; i += 2) {
+        if (cancelled) return;
+        const chunk = candidates.slice(i, i + 2);
+        await Promise.allSettled(
+          chunk.map(async (training) => {
+            const formationId = Number(training.id);
+            const response = await apiClient.get(
+              `/formations/${formationId}/participants`,
+              { timeout: 10000 }
+            );
+            const list = Array.isArray(response.data) ? response.data : [];
+            writeLocalTimedCache(`cf_formation_participants_cache_v1:${formationId}`, list);
+          })
+        );
+      }
+    };
+
+    warmupTimer = window.setTimeout(() => {
+      runParticipantsWarmup();
+    }, WARMUP_PARTICIPANTS_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      if (warmupTimer) {
+        window.clearTimeout(warmupTimer);
+      }
+    };
+  }, [trainingsState, readLocalTimedCache, writeLocalTimedCache]);
+
+  const prewarmParticipantsForFormation = useCallback((formationId, options = {}) => {
+    const { force = false, timeout = 10000 } = options;
+    const parsedId = Number(formationId);
+    if (!Number.isFinite(parsedId) || parsedId <= 0) return Promise.resolve([]);
+
+    const cacheKey = `cf_formation_participants_cache_v1:${parsedId}`;
+    const cached = readLocalTimedCache(cacheKey, PARTICIPANTS_CACHE_TTL_MS);
+    if (Array.isArray(cached)) return Promise.resolve(cached);
+
+    const inFlightPromise = prewarmedParticipantsRequestsRef.current.get(parsedId);
+    if (inFlightPromise) {
+      return inFlightPromise;
+    }
+
+    const now = Date.now();
+    const lastPrefetch = prewarmedParticipantsIdsRef.current.get(parsedId) || 0;
+    if (!force && now - lastPrefetch < 15 * 1000) return Promise.resolve([]);
+    prewarmedParticipantsIdsRef.current.set(parsedId, now);
+
+    const requestPromise = apiClient
+      .get(`/formations/${parsedId}/participants`, { timeout })
+      .then((response) => {
+        const list = Array.isArray(response.data) ? response.data : [];
+        writeLocalTimedCache(cacheKey, list);
+        return list;
+      })
+      .catch(() => {
+        // silent prewarm
+        return [];
+      })
+      .finally(() => {
+        prewarmedParticipantsRequestsRef.current.delete(parsedId);
+      });
+
+    prewarmedParticipantsRequestsRef.current.set(parsedId, requestPromise);
+    return requestPromise;
+  }, [readLocalTimedCache, writeLocalTimedCache]);
+
+  const navigateToParticipants = useCallback((training) => {
+    if (!training?.id) return;
+
+    const parsedId = Number(training.id);
+    if (!Number.isFinite(parsedId) || parsedId <= 0) return;
+
+    const cacheKey = `cf_formation_participants_cache_v1:${parsedId}`;
+    const cachedParticipants = readLocalTimedCache(cacheKey, PARTICIPANTS_CACHE_TTL_MS);
+
+    prewarmParticipantsForFormation(parsedId, { force: true, timeout: 8000 });
+
+    navigate(`/carrieres-formations/formations/${parsedId}/participants`, {
+      state: {
+        formation: training,
+        fromParticipantsLink: true,
+        participants: Array.isArray(cachedParticipants) ? cachedParticipants : undefined,
+      },
+    });
+  }, [navigate, prewarmParticipantsForFormation, readLocalTimedCache]);
 
   /* ─── load domaines from localStorage ─── */
   const loadDomaines = () => {
@@ -301,15 +528,18 @@ const FormationsPage = () => {
     // Open drawer immediately with available data
     setSelectedTraining(training);
     setDrawerMode("view");
+    prefetchFormationPanels(training).catch(() => {});
     
     // Fetch full formation details including competences in background
     try {
       const res = await apiClient.get(`/formations/${training.id}`);
-      setSelectedTraining(res.data);
+      const fullTraining = res.data;
+      setSelectedTraining(fullTraining);
+      prefetchFormationPanels(fullTraining).catch(() => {});
     } catch (err) {
       console.error("Erreur chargement détails formation:", err);
     }
-  }, []);
+  }, [prefetchFormationPanels]);
 
   const handleAdd = useCallback(() => {
     setFormData(EMPTY_FORM);
@@ -478,6 +708,11 @@ const FormationsPage = () => {
       console.error('Erreur rafraîchissement formation:', err);
     }
   }, [selectedTraining?.id]);
+
+  const handleAttendanceSaved = useCallback(async () => {
+    await fetchFormations({ showLoader: false });
+    await refreshSelectedFormation();
+  }, [fetchFormations, refreshSelectedFormation]);
 
   /* ─── calculate end date based on duration and start date ─── */
   const calculateEndDate = (startDate, duration) => {
@@ -920,7 +1155,7 @@ const FormationsPage = () => {
           <AttendanceView
             session={attendanceSession}
             onBack={() => setAttendanceSession(null)}
-            onSaved={refreshSelectedFormation}
+            onSaved={handleAttendanceSaved}
           />
         );
       }
@@ -991,7 +1226,9 @@ const FormationsPage = () => {
           )}
           <button
             type="button"
-            onClick={() => navigate(`/carrieres-formations/formations/${selectedTraining.id}/participants`)}
+            onClick={() => {
+              navigateToParticipants(selectedTraining);
+            }}
             style={{
               width: "100%",
               padding: "12px 20px",
@@ -1081,7 +1318,12 @@ const FormationsPage = () => {
                 onAdd={handleAdd}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                onParticipantsClick={(t) => navigate(`/carrieres-formations/formations/${t.id}/participants`)}
+                onParticipantsHover={(t) => {
+                  prewarmParticipantsForFormation(t.id, { timeout: 8000 });
+                }}
+                onParticipantsClick={(t) => {
+                  navigateToParticipants(t);
+                }}
                 filtersVisible={filtersVisible}
                 handleFiltersToggle={handleFiltersToggle}
                 drawerOpen={isDrawerOpen}

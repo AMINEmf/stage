@@ -10,6 +10,7 @@ import {
   showInfoMessage,
   STANDARD_MESSAGES
 } from '../../../utils/messageHelper';
+import "../AffiliationMutuelle/AddAffiliationMutuelle.css";
 
 const api = axios.create({
     baseURL: "http://localhost:8000/api",
@@ -74,13 +75,16 @@ function AddMutuelleDocument({ operations, onClose, onSaved }) {
 
     return (
         <div className="add-affiliation-overlay">
-            <div className="add-affiliation-panel" style={{ maxWidth: '500px', height: 'auto', maxHeight: '90vh' }}>
-                <div className="panel-container">
+            <div
+                className="add-affiliation-panel"
+                style={{ maxWidth: '500px', width: '100%', height: '90vh', display: 'flex', flexDirection: 'column' }}
+            >
+                <div className="panel-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                     <div className="panel-header" style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', backgroundColor: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <h5 className="mb-0" style={{ color: '#3a8a90', fontWeight: 600 }}>Ajouter un document</h5>
                         <button type="button" className="btn-close" aria-label="Close" onClick={onClose}></button>
                     </div>
-                    <div className="panel-body" style={{ padding: '24px' }}>
+                    <div className="panel-body" style={{ padding: '24px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
                         <Form onSubmit={handleSubmit}>
                             <Form.Group className="mb-3">
                                 <Form.Label>Opération concernée *</Form.Label>

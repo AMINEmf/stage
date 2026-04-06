@@ -23,6 +23,7 @@ import { motion, AnimatePresence, color } from 'framer-motion';
 import { FaPlusCircle } from "react-icons/fa";
 import EmployeFichePrint from "./EmployeFichePrint";
 import { useOpen } from "../../Acceuil/OpenProvider";
+import apiClient from "../../services/apiClient";
 
 
 
@@ -398,12 +399,27 @@ const EmployeTable = forwardRef((props, ref) => {
 
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/full-data')
-      .then(response => response.json())
-      .then(data => {
-        setData(data);
-      })
-      .catch(error => console.error('Erreur de chargement:', error));
+    let isMounted = true;
+
+    const fetchFullData = async () => {
+      try {
+        const response = await apiClient.get('/full-data');
+        if (isMounted) {
+          setData(response?.data || {});
+        }
+      } catch (error) {
+        console.error('Erreur de chargement:', error);
+        if (isMounted) {
+          setData({});
+        }
+      }
+    };
+
+    fetchFullData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
 
@@ -1323,7 +1339,7 @@ body {
       {/* Refreshing the key when adding/editing helps ensure state is fresh. */}
       <div className="mt-4"   >
         <div className="section-header mb-3">
-          <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
             {/* Bloc titre */}
             <div style={{ flex: '1 1 300px', minWidth: 0 }}>
               <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
@@ -1341,7 +1357,7 @@ body {
 
             </div>
             {/* Bloc Dropdowns */}
-            <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: 'center', justifySelf: 'end' }}>
 
               <FontAwesomeIcon
                 onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
@@ -1975,7 +1991,7 @@ body {
         </Modal.Footer>
       </Modal>
 
-      <style jsx>{`
+      <style>{`
         // .custom-checkbox1 .form-check-input:checked {
         //   background-color: #00afaa;
         //   border-color: #00afaa;
@@ -2114,7 +2130,7 @@ body {
                 {/* Colonne 1 */}
                 <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
                   {allEmployeFields.slice(0, 11).map(field => (
-                    <div className="d-flex align-items-center mb-2">
+                    <div key={field} className="d-flex align-items-center mb-2">
                       <Form.Check
                         type="checkbox"
                         id={`field-${field}`}
@@ -2151,7 +2167,7 @@ body {
                 {/* Colonne 2 */}
                 <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
                   {allEmployeFields.slice(11, 22).map(field => (
-                    <div className="d-flex align-items-center mb-2">
+                    <div key={field} className="d-flex align-items-center mb-2">
                       <Form.Check
                         type="checkbox"
                         id={`field-${field}`}
@@ -2188,7 +2204,7 @@ body {
                 {/* Colonne 3 */}
                 <div className="d-flex flex-column me-2" style={{ minWidth: '120px' }}>
                   {allEmployeFields.slice(22, 33).map(field => (
-                    <div className="d-flex align-items-center mb-2">
+                    <div key={field} className="d-flex align-items-center mb-2">
                       <Form.Check
                         type="checkbox"
                         id={`field-${field}`}
@@ -2225,7 +2241,7 @@ body {
                 {/* Colonne 4 */}
                 <div className="d-flex flex-column" style={{ minWidth: '120px' }}>
                   {allEmployeFields.slice(33).map(field => (
-                    <div className="d-flex align-items-center mb-2">
+                    <div key={field} className="d-flex align-items-center mb-2">
                       <Form.Check
                         type="checkbox"
                         id={`field-${field}`}
@@ -2306,7 +2322,7 @@ body {
         </Modal.Footer>
 
 
-        <style jsx>{`
+        <style>{`
     .custom-checkbox1 .form-check-input:checked {
       background-color: #00afaa;
       border-color: #00afaa;

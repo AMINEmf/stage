@@ -593,7 +593,7 @@ const SanctionTable = forwardRef((props, ref) => {
         }} className="container_employee">
           <div className="mt-4">
             <div className="section-header mb-3">
-              <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
                 {/* Bloc titre */}
                 <div style={{ flex: '1 1 300px', minWidth: 0 }}>
                   <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
@@ -606,7 +606,7 @@ const SanctionTable = forwardRef((props, ref) => {
                 </div>
 
                 {/* Bloc Dropdowns */}
-                <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: 'center', justifySelf: 'end' }}>
                   <FontAwesomeIcon
                     onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
                     icon={filtersVisible ? faClose : faFilter}

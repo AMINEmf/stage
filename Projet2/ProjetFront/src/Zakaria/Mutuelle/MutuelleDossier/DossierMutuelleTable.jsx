@@ -41,13 +41,16 @@ function DossierMutuelleTable({
   const [filterNumeroDossier, setFilterNumeroDossier] = useState("");
   const containerRef = useRef(null);
   const searchTimeoutRef = useRef(null);
+  const previousDepartementRef = useRef(departementId);
+  const previousIncludeSubRef = useRef(includeSubDepartments);
+  const dossiersCacheRef = useRef(new Map());
 
   useEffect(() => {
     setSelectedIds([]);
     setSelectedDossierNumero(null);
   }, [departementId]);
 
-  const fetchDossiers = async () => {
+  const fetchDossiers = async ({ forceRefresh = false } = {}) => {
     // 1. Si aucun département n'est sélectionné, on ne charge rien (table vide)
     if (!departementId) {
       setDossiers([]);
@@ -56,7 +59,46 @@ function DossierMutuelleTable({
     }
 
     setError(null);
-    setLoading(true);
+
+    const cacheKey = [
+      "mutuelle_dossiers",
+      String(departementId),
+      includeSubDepartments ? "sub" : "single",
+      filterNom || "-",
+      filterStatut || "-",
+      filterNumeroAdherent || "-",
+      filterNumeroDossier || "-",
+    ].join("|");
+
+    let hasWarmCache = false;
+    if (!forceRefresh) {
+      const inMemory = dossiersCacheRef.current.get(cacheKey);
+      if (Array.isArray(inMemory)) {
+        setDossiers(inMemory);
+        setLoading(false);
+        hasWarmCache = true;
+      } else {
+        const stored = localStorage.getItem(cacheKey);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              dossiersCacheRef.current.set(cacheKey, parsed);
+              setDossiers(parsed);
+              setLoading(false);
+              hasWarmCache = true;
+            }
+          } catch {
+            // Ignore malformed cache and continue with network request.
+          }
+        }
+      }
+    }
+
+    if (!hasWarmCache) {
+      setLoading(true);
+    }
+
     try {
       const params = {
         departement_id: departementId ? Number(departementId) : null,
@@ -69,11 +111,12 @@ function DossierMutuelleTable({
       if (filterNumeroAdherent) params.numero_adherent = filterNumeroAdherent;
       if (filterNumeroDossier) params.numero_dossier = filterNumeroDossier;
 
-      console.log("Fetching dossiers with params:", params);
-
       const response = await api.get("/mutuelles/dossiers", { params });
       const data = response.data?.data ?? response.data;
-      setDossiers(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setDossiers(list);
+      dossiersCacheRef.current.set(cacheKey, list);
+      localStorage.setItem(cacheKey, JSON.stringify(list));
     } catch (err) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {
         setError("Session expirée ou accès refusé. Veuillez rafraîchir la page.");
@@ -81,7 +124,9 @@ function DossierMutuelleTable({
         setError(`Impossible de charger les dossiers (${err?.response?.status || 'Erreur réseau'})`);
       }
     } finally {
-      setLoading(false);
+      if (!hasWarmCache) {
+        setLoading(false);
+      }
     }
   };
 
@@ -91,6 +136,10 @@ function DossierMutuelleTable({
       clearTimeout(searchTimeoutRef.current);
     }
 
+    const departmentChanged = previousDepartementRef.current !== departementId;
+    const includeSubChanged = previousIncludeSubRef.current !== includeSubDepartments;
+    const debounceDelay = departmentChanged || includeSubChanged ? 0 : 220;
+
     searchTimeoutRef.current = setTimeout(() => {
       // Si pas de dépt, on vide la liste
       if (!departementId) {
@@ -99,14 +148,17 @@ function DossierMutuelleTable({
       }
       setCurrentPage(0); // Reset to page 1 when filters change
       fetchDossiers();
-    }, 400);
+    }, debounceDelay);
+
+    previousDepartementRef.current = departementId;
+    previousIncludeSubRef.current = includeSubDepartments;
 
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [filterNom, filterStatut, filterNumeroAdherent, filterNumeroDossier, departementId, includeSubDepartments, globalSearch]);
+  }, [filterNom, filterStatut, filterNumeroAdherent, filterNumeroDossier, departementId, includeSubDepartments]);
 
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -473,7 +525,9 @@ function DossierMutuelleTable({
             emptyMessage={
               !departementId
                 ? "Veuillez sélectionner un département pour afficher les dossiers."
-                : (loading ? "Chargement..." : error || "Aucun dossier trouvé pour ce département.")
+                : (loading
+                  ? <span className="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true" />
+                  : error || "Aucun dossier trouvé pour ce département.")
             }
           />
         </div>
@@ -494,7 +548,7 @@ function DossierMutuelleTable({
                 onClose={() => setShowAddOperation(false)}
                 onSaved={() => {
                   setShowAddOperation(false);
-                  fetchDossiers();
+                    fetchDossiers({ forceRefresh: true });
                 }}
                 isSidebar={true}
               />
@@ -502,7 +556,7 @@ function DossierMutuelleTable({
               <DossierMutuelleDetails
                 numeroDossier={selectedDossierNumero}
                 onClose={() => setSelectedDossierNumero(null)}
-                onUpdate={fetchDossiers}
+                onUpdate={() => fetchDossiers({ forceRefresh: true })}
                 isSidebar={true}
               />
             )}

@@ -1,11 +1,12 @@
 ﻿import React, { useEffect, useState, useMemo } from "react";
-import axios from "axios";
+import apiClient from "../../../services/apiClient";
 import { useHeader } from "../../../Acceuil/HeaderContext";
 import { useOpen } from "../../../Acceuil/OpenProvider";
 import {
   Box,
   Grid,
   Card,
+  CardContent,
   Typography,
   Table,
   TableBody,
@@ -24,6 +25,8 @@ import {
   useMediaQuery,
   useTheme
 } from "@mui/material";
+import { BarChart } from "@mui/x-charts/BarChart";
+import { PieChart, pieArcLabelClasses } from "@mui/x-charts/PieChart";
 import {
   Users,
   FileText,
@@ -109,65 +112,108 @@ const theme = createTheme({
   }
 });
 
-const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
-  withCredentials: true,
-});
+const api = apiClient;
+
+const EMPTY_MUTUELLE_DASHBOARD = {
+  kpis: {
+    affiliations_actives: 0,
+    affiliations_inactives: 0,
+    dossiers_en_cours: 0,
+    dossiers_termines: 0,
+  },
+  latest_affiliations: [],
+  latest_dossiers: [],
+  distribution: { EN_COURS: 0, TERMINEE: 0, ANNULEE: 0, total: 0 },
+};
 
 // --- Components ---
 
-const StatCard = ({ title, value, icon: Icon, color }) => (
+const StatCard = ({ title, value, subtitle, icon: Icon, bgGradient }) => (
   <Card
     sx={{
       position: 'relative',
-      overflow: 'visible',
-      background: `linear-gradient(135deg, ${color}05 0%, #ffffff 100%)`,
-      border: `1px solid ${color}20`,
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '4px',
-        background: `linear-gradient(90deg, ${color}, ${color}80)`,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-      },
+      overflow: 'hidden',
+      background: bgGradient,
+      borderRadius: '20px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
       '&:hover': {
-        transform: 'translateY(-4px)',
-        boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
+        transform: 'translateY(-5px)',
+        boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
       },
-      p: 3,
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between'
+      transition: 'all 0.3s ease',
+      cursor: 'pointer',
     }}
   >
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <Box>
-        <Typography variant="subtitle2" sx={{ fontSize: '0.875rem', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          {title}
-        </Typography>
-        <Typography variant="h3" sx={{ fontWeight: 700, color: COLORS.primaryDark, fontSize: { xs: '2rem', lg: '2.5rem' } }}>
-          {value}
-        </Typography>
+    <CardContent sx={{ p: 3, position: 'relative', zIndex: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box>
+          <Typography
+            sx={{
+              color: 'rgba(255,255,255,0.85)',
+              mb: 1,
+              fontWeight: 500,
+              fontSize: '0.85rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            {title}
+          </Typography>
+          <Typography
+            sx={{
+              fontWeight: 700,
+              color: '#fff',
+              fontSize: { xs: '2rem', sm: '2.2rem', md: '2.4rem' },
+              lineHeight: 1.1,
+              mb: 0.5,
+            }}
+          >
+            {value}
+          </Typography>
+          {subtitle ? (
+            <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
+              {subtitle}
+            </Typography>
+          ) : null}
+        </Box>
+        <Box
+          sx={{
+            backgroundColor: 'rgba(255,255,255,0.2)',
+            p: 2,
+            borderRadius: '16px',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <Icon size={30} />
+        </Box>
       </Box>
-      <Box
-        sx={{
-          bgcolor: `${color}15`,
-          p: 1.5,
-          borderRadius: '16px',
-          color: color,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Icon size={28} />
-      </Box>
-    </Box>
+    </CardContent>
+    <Box
+      sx={{
+        position: 'absolute',
+        top: -50,
+        right: -50,
+        width: 150,
+        height: 150,
+        borderRadius: '50%',
+        background: 'rgba(255,255,255,0.1)',
+      }}
+    />
+    <Box
+      sx={{
+        position: 'absolute',
+        bottom: -30,
+        right: 30,
+        width: 80,
+        height: 80,
+        borderRadius: '50%',
+        background: 'rgba(255,255,255,0.08)',
+      }}
+    />
   </Card>
 );
 
@@ -224,12 +270,21 @@ const StatusBadge = ({ status }) => {
 };
 
 const TableSection = ({ title, icon: Icon, columns, data, emptyMessage, statusIndex }) => (
-  <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-    <Box sx={{ p: 3, borderBottom: `1px solid ${COLORS.primary}10`, display: 'flex', alignItems: 'center', bgcolor: COLORS.hoverBg }}>
-      <Box sx={{ bgcolor: `${COLORS.primary}15`, p: 1, borderRadius: 2, mr: 2, color: COLORS.primary }}>
+  <Card
+    sx={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      borderRadius: '20px',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+      border: '1px solid rgba(0,0,0,0.05)',
+    }}
+  >
+    <Box sx={{ p: 3, borderBottom: '1px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center' }}>
+      <Box sx={{ bgcolor: `${COLORS.primary}15`, p: 1.5, borderRadius: '12px', mr: 2, color: COLORS.primary }}>
         <Icon size={20} />
       </Box>
-      <Typography variant="h6">{title}</Typography>
+      <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: COLORS.textPrimary }}>{title}</Typography>
     </Box>
     <TableContainer sx={{ flexGrow: 1 }}>
       <Table stickyHeader>
@@ -280,66 +335,185 @@ const TableSection = ({ title, icon: Icon, columns, data, emptyMessage, statusIn
   </Card>
 );
 
-const ChartSection = ({ distribution }) => {
-  const total = distribution.total || 1; // Prevent division by zero
+const ChartSection = ({ distribution, operations }) => {
+  const monthNames = ["Jan", "Fev", "Mar", "Avr", "Mai", "Juin", "Juil", "Aout", "Sep", "Oct", "Nov", "Dec"];
+  const groupedByMonth = new Map();
 
-  const items = [
-    { label: "En cours", value: distribution.EN_COURS || 0, color: COLORS.warning, icon: Clock },
-    { label: "Validée / Terminée", value: distribution.TERMINEE || 0, color: COLORS.success, icon: CheckCircle },
-    { label: "Refusée / Annulée", value: distribution.ANNULEE || 0, color: COLORS.error, icon: XCircle },
-  ];
+  (Array.isArray(operations) ? operations : []).forEach((row) => {
+    const rawDate = row?.date_operation || row?.date;
+    if (!rawDate) return;
+
+    const parsedDate = new Date(rawDate);
+    if (Number.isNaN(parsedDate.getTime())) return;
+
+    const year = parsedDate.getFullYear();
+    const month = parsedDate.getMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    groupedByMonth.set(key, (groupedByMonth.get(key) || 0) + 1);
+  });
+
+  const sortedEntries = [...groupedByMonth.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const operationTrend = {
+    labels: sortedEntries.map(([key]) => {
+      const [year, month] = key.split("-");
+      return `${monthNames[Number(month) - 1]} ${year}`;
+    }),
+    values: sortedEntries.map(([, value]) => value),
+  };
+
+  const pieData = [
+    { id: 0, label: "En cours", value: Number(distribution?.EN_COURS || 0), color: COLORS.warning },
+    { id: 1, label: "Terminée", value: Number(distribution?.TERMINEE || 0), color: COLORS.success },
+    { id: 2, label: "Annulée", value: Number(distribution?.ANNULEE || 0), color: COLORS.error },
+  ].filter((item) => item.value > 0);
 
   return (
-    <Card sx={{ p: 0 }}>
-      {/* Header matching table style */}
-      <Box sx={{ p: 3, borderBottom: `1px solid ${COLORS.primary}10`, display: 'flex', alignItems: 'center', bgcolor: COLORS.hoverBg }}>
-        <Box sx={{ bgcolor: `${COLORS.secondary}15`, p: 1, borderRadius: 2, mr: 2, color: COLORS.secondary }}>
-          <TrendingUp size={20} />
-        </Box>
-        <Typography variant="h6">Répartition des Statuts (Opérations)</Typography>
-      </Box>
+    <Grid container spacing={3}>
+      <Grid item xs={12} lg={8}>
+        <Card
+          sx={{
+            borderRadius: "20px",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(0,0,0,0.05)",
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
+              <Box sx={{ backgroundColor: `${COLORS.primary}15`, borderRadius: "12px", p: 1.5, mr: 2 }}>
+                <TrendingUp size={20} color={COLORS.primary} />
+              </Box>
+              <Typography sx={{ fontWeight: 700, fontSize: "1.1rem", color: COLORS.textPrimary }}>
+                Evolution des Opérations
+              </Typography>
+            </Box>
 
-      <Box sx={{ p: 3 }}>
-        <Grid container spacing={4}>
-          {items.map((item, idx) => {
-            const percent = Math.round((item.value / total) * 100);
-            return (
-              <Grid item xs={12} md={4} key={idx}>
-                <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <item.icon size={16} color={item.color} />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{item.label}</Typography>
-                  </Box>
-                  <Typography variant="body2" sx={{ color: COLORS.textSecondary }}>
-                    {item.value} <Typography component="span" variant="caption" sx={{ color: COLORS.textSecondary }}>({percent}%)</Typography>
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={percent}
+            {operationTrend.labels.length > 0 ? (
+              <Box sx={{ height: 300, width: "100%" }}>
+                <BarChart
+                  xAxis={[
+                    {
+                      scaleType: "band",
+                      data: operationTrend.labels,
+                      tickLabelStyle: { fontSize: 12, fill: COLORS.textSecondary },
+                    },
+                  ]}
+                  series={[
+                    {
+                      data: operationTrend.values,
+                      color: COLORS.primary,
+                      label: "Nombre d'opérations",
+                    },
+                  ]}
+                  height={280}
+                  margin={{ left: 70, right: 20, top: 20, bottom: 40 }}
                   sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    bgcolor: '#e2e8f0',
-                    '& .MuiLinearProgress-bar': {
-                      bgcolor: item.color,
-                      borderRadius: 4
-                    }
+                    "& .MuiChartsAxis-line": { stroke: "#e2e8f0" },
+                    "& .MuiChartsAxis-tick": { stroke: "#e2e8f0" },
                   }}
                 />
-              </Grid>
-            );
-          })}
-        </Grid>
-      </Box>
-    </Card>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  height: 280,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#f8fafc",
+                  borderRadius: "12px",
+                }}
+              >
+                <Typography sx={{ color: COLORS.textSecondary }}>Aucune donnée disponible</Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} lg={4}>
+        <Card
+          sx={{
+            borderRadius: "20px",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(0,0,0,0.05)",
+            height: "100%",
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
+              <Box sx={{ backgroundColor: `${COLORS.info}15`, borderRadius: "12px", p: 1.5, mr: 2 }}>
+                <CheckCircle size={20} color={COLORS.info} />
+              </Box>
+              <Typography sx={{ fontWeight: 700, fontSize: "1.1rem", color: COLORS.textPrimary }}>
+                Statuts Opérations
+              </Typography>
+            </Box>
+
+            {pieData.length > 0 ? (
+              <Box sx={{ height: 280, display: "flex", justifyContent: "center" }}>
+                <PieChart
+                  series={[
+                    {
+                      data: pieData,
+                      innerRadius: 50,
+                      outerRadius: 100,
+                      paddingAngle: 2,
+                      cornerRadius: 5,
+                      arcLabel: (item) => `${item.value}`,
+                      arcLabelMinAngle: 30,
+                    },
+                  ]}
+                  sx={{
+                    [`& .${pieArcLabelClasses.root}`]: {
+                      fill: "#fff",
+                      fontWeight: "bold",
+                      fontSize: 14,
+                    },
+                  }}
+                  width={280}
+                  height={280}
+                  slotProps={{
+                    legend: {
+                      direction: "row",
+                      position: { vertical: "bottom", horizontal: "middle" },
+                      padding: 0,
+                      itemMarkWidth: 10,
+                      itemMarkHeight: 10,
+                      markGap: 5,
+                      itemGap: 10,
+                      labelStyle: {
+                        fontSize: 11,
+                        fill: COLORS.textSecondary,
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  height: 280,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#f8fafc",
+                  borderRadius: "12px",
+                }}
+              >
+                <Typography sx={{ color: COLORS.textSecondary }}>Aucune donnée disponible</Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
   );
 };
 
 // --- Main Layout ---
 
 function MutuelleDashboard() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(EMPTY_MUTUELLE_DASHBOARD);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -361,14 +535,25 @@ function MutuelleDashboard() {
       const cachedData = sessionStorage.getItem('mutuelle_dashboard_cache');
       const cacheTimestamp = sessionStorage.getItem('mutuelle_dashboard_timestamp');
       const now = Date.now();
+      let hasCachedData = false;
 
-      if (cachedData && cacheTimestamp && (now - parseInt(cacheTimestamp)) < 120000) { // 2 minutes de cache
-        setData(JSON.parse(cachedData));
-        setLoading(false);
+      if (cachedData) {
+        try {
+          setData(JSON.parse(cachedData));
+          setLoading(false);
+          hasCachedData = true;
+        } catch (cacheError) {
+          console.warn("Cache Mutuelle invalide:", cacheError);
+        }
+      }
+
+      if (cachedData && cacheTimestamp && (now - Number.parseInt(cacheTimestamp, 10)) < 120000) { // 2 minutes de cache
         return;
       }
 
-      setLoading(true);
+      if (!hasCachedData) {
+        setLoading(true);
+      }
       setError(null);
       try {
         const resp = await api.get("/mutuelle/dashboard-stats");
@@ -379,12 +564,7 @@ function MutuelleDashboard() {
       } catch (e) {
         console.error("Dashboard Error:", e);
         setError("Impossible de charger les données.");
-        setData({
-          kpis: { affiliations_actives: 0, affiliations_inactives: 0, dossiers_en_cours: 0, dossiers_termines: 0 },
-          latest_affiliations: [],
-          latest_dossiers: [],
-          distribution: { EN_COURS: 0, TERMINEE: 0, ANNULEE: 0, total: 0 }
-        });
+        setData(EMPTY_MUTUELLE_DASHBOARD);
       } finally {
         setLoading(false);
       }
@@ -461,14 +641,6 @@ function MutuelleDashboard() {
     distribution.total = (distribution.EN_COURS || 0) + (distribution.TERMINEE || 0) + (distribution.ANNULEE || 0);
   }
 
-  if (loading) {
-    return (
-      <Box sx={{ ...dynamicStyles, mt: '80px', p: 4, display: 'flex', justifyContent: 'center' }}>
-        <LinearProgress sx={{ width: '100%', maxWidth: 400 }} />
-      </Box>
-    );
-  }
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -484,9 +656,15 @@ function MutuelleDashboard() {
 
         {/* Header */}
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" gutterBottom>Tableau de Bord Assurances</Typography>
-          <Typography variant="subtitle1">Aperçu global des affiliations et des opérations</Typography>
+          <Typography sx={{ fontWeight: 800, color: COLORS.textPrimary, fontSize: '1.75rem', mb: 0.5 }}>
+            Tableau de bord Assurances
+          </Typography>
+          <Typography sx={{ color: COLORS.textSecondary, fontSize: '0.95rem' }}>
+            Aperçu global des affiliations et des opérations
+          </Typography>
         </Box>
+
+        {loading ? <LinearProgress sx={{ mb: 3, borderRadius: 2 }} /> : null}
 
         {/* KPIs Grid */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -495,7 +673,8 @@ function MutuelleDashboard() {
               title="Affiliations Actives"
               value={displayKpis.active}
               icon={Users}
-              color={COLORS.success}
+                subtitle="Affiliations en cours"
+                bgGradient="linear-gradient(135deg, #2c767c 0%, #4db6ac 100%)"
             />
           </Grid>
           <Grid item xs={12} sm={6} lg={3}>
@@ -503,7 +682,8 @@ function MutuelleDashboard() {
               title="Affiliations Résiliées"
               value={displayKpis.inactive}
               icon={XCircle}
-              color={COLORS.error}
+                subtitle="Affiliations clôturées"
+                bgGradient="linear-gradient(135deg, #f97316 0%, #ef4444 100%)"
             />
           </Grid>
           <Grid item xs={12} sm={6} lg={3}>
@@ -511,7 +691,8 @@ function MutuelleDashboard() {
               title="Opérations En Cours"
               value={displayKpis.pending}
               icon={Clock}
-              color={COLORS.info} // Blue for specific info/pending state
+                subtitle="Traitement en cours"
+                bgGradient="linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)"
             />
           </Grid>
           <Grid item xs={12} sm={6} lg={3}>
@@ -519,14 +700,15 @@ function MutuelleDashboard() {
               title="Opérations Traitées"
               value={displayKpis.completed}
               icon={CheckCircle}
-              color={COLORS.success}
+                subtitle="Dossiers finalisés"
+                bgGradient="linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)"
             />
           </Grid>
         </Grid>
 
         {/* Distribution Chart */}
         <Box sx={{ mb: 4 }}>
-          <ChartSection distribution={distribution} />
+          <ChartSection distribution={distribution} operations={filteredDossiers} />
         </Box>
 
         {/* Tables Section */}

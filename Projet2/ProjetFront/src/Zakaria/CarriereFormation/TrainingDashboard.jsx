@@ -139,32 +139,23 @@ const TrainingDashboard = () => {
     fetchData();
   }, []);
 
-  const StatCard = ({ title, value, icon: Icon, color }) => (
+  const StatCard = ({ title, value, subtitle, icon: Icon, bgGradient }) => (
     <Card
       sx={{
-        background: `linear-gradient(135deg, ${color}08 0%, ${color}04 100%)`,
-        borderRadius: "1.5rem",
-        boxShadow: "0 0.25rem 1.25rem rgba(0,0,0,0.08)",
-        border: `0.0625rem solid ${color}15`,
+        background: bgGradient,
+        borderRadius: "20px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
         position: "relative",
         overflow: "hidden",
-        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "all 0.3s ease",
+        cursor: "pointer",
         "&:hover": {
-          transform: "translateY(-0.25rem)",
-          boxShadow: "0 0.75rem 2.5rem rgba(0,0,0,0.12)",
-        },
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "0.25rem",
-          background: `linear-gradient(90deg, ${themeColors.teal}, ${themeColors.tealLight})`,
+          transform: "translateY(-5px)",
+          boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
         },
       }}
     >
-      <CardContent sx={{ p: "1.5rem" }}>
+      <CardContent sx={{ p: "1.5rem", position: "relative", zIndex: 1 }}>
         <Box
           sx={{
             display: "flex",
@@ -176,43 +167,72 @@ const TrainingDashboard = () => {
         >
           <Box>
             <Typography
-              variant="body2"
               sx={{
-                color: themeColors.textSecondary,
+                color: "rgba(255,255,255,0.85)",
                 mb: "0.5rem",
                 fontWeight: 500,
-                fontSize: "0.875rem",
+                fontSize: "0.85rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
               }}
             >
               {title}
             </Typography>
             <Typography
-              variant="h2"
               sx={{
                 fontWeight: 700,
-                color: themeColors.tealDark,
-                fontSize: { xs: "1.5rem", sm: "1.75rem", md: "2rem" },
-                lineHeight: 1,
+                color: "#fff",
+                fontSize: { xs: "2rem", sm: "2.2rem", md: "2.4rem" },
+                lineHeight: 1.1,
+                mb: 0.5,
               }}
             >
               {loading ? "..." : value}
             </Typography>
+            {subtitle ? (
+              <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: "0.8rem" }}>
+                {subtitle}
+              </Typography>
+            ) : null}
           </Box>
           <Box
             sx={{
-              backgroundColor: `${color}26`,
-              borderRadius: "1rem",
-              p: "0.75rem",
+              backgroundColor: "rgba(255,255,255,0.2)",
+              borderRadius: "16px",
+              p: "0.85rem",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
+              backdropFilter: "blur(10px)",
             }}
           >
-            <Icon size={24} color={color} />
+            <Icon size={26} color="#fff" />
           </Box>
         </Box>
       </CardContent>
+      <Box
+        sx={{
+          position: "absolute",
+          top: -50,
+          right: -50,
+          width: 150,
+          height: 150,
+          borderRadius: "50%",
+          background: "rgba(255,255,255,0.1)",
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          bottom: -30,
+          right: 30,
+          width: 80,
+          height: 80,
+          borderRadius: "50%",
+          background: "rgba(255,255,255,0.08)",
+        }}
+      />
     </Card>
   );
 
@@ -221,37 +241,43 @@ const TrainingDashboard = () => {
       title: "Formations Actives",
       value: dashboardData.kpis.formations_actives,
       icon: BookOpen,
-      color: themeColors.teal,
+      subtitle: "Catalogues actifs",
+      bgGradient: "linear-gradient(135deg, #2c767c 0%, #4db6ac 100%)",
     },
     {
       title: "Participants Inscrits",
       value: dashboardData.kpis.participants_total,
       icon: Users,
-      color: themeColors.secondary,
+      subtitle: "Collaborateurs formés",
+      bgGradient: "linear-gradient(135deg, #26a69a 0%, #00897b 100%)",
     },
     {
       title: "Taux de Réussite",
       value: `${dashboardData.kpis.taux_reussite}%`,
       icon: CheckCircle,
-      color: themeColors.success,
+      subtitle: "Résultats de validation",
+      bgGradient: "linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)",
     },
     {
       title: "Budget Total Formations",
       value: `${Number(dashboardData.kpis.budget_total || 0).toLocaleString("fr-FR")} MAD`,
       icon: DollarSign,
-      color: themeColors.warning,
+      subtitle: "Budget engagé",
+      bgGradient: "linear-gradient(135deg, #f59e0b 0%, #f97316 100%)",
     },
     {
       title: "Demandes Formation",
       value: dashboardData.kpis.demandes_formation_total,
       icon: TrendingUp,
-      color: themeColors.info,
+      subtitle: "Demandes reçues",
+      bgGradient: "linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)",
     },
     {
       title: "Demandes en étude",
       value: dashboardData.kpis.demandes_en_etude,
       icon: Target,
-      color: themeColors.tealDark,
+      subtitle: "Décisions en cours",
+      bgGradient: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
     },
   ];
 
@@ -280,13 +306,10 @@ const TrainingDashboard = () => {
 
         {/* Page Title */}
         <Box sx={{ mb: 4 }}>
-          <Typography
-            variant="h4"
-            sx={{ fontSize: "1.5rem", fontWeight: 700, color: themeColors.textPrimary }}
-          >
+          <Typography sx={{ fontWeight: 800, color: themeColors.textPrimary, fontSize: "1.75rem", mb: 0.5 }}>
             Tableau de bord Formations
           </Typography>
-          <Typography variant="body2" sx={{ color: themeColors.textSecondary, mt: 0.5 }}>
+          <Typography sx={{ color: themeColors.textSecondary, fontSize: "0.95rem" }}>
             Suivi des formations, participants et budget
           </Typography>
         </Box>
@@ -298,8 +321,9 @@ const TrainingDashboard = () => {
               <StatCard
                 title={item.title}
                 value={item.value}
+                subtitle={item.subtitle}
                 icon={item.icon}
-                color={item.color}
+                bgGradient={item.bgGradient}
               />
             </Grid>
           ))}
@@ -311,9 +335,9 @@ const TrainingDashboard = () => {
           <Grid item xs={12} md={7}>
             <Card
               sx={{
-                borderRadius: "1.5rem",
-                boxShadow: "0 0.25rem 1.25rem rgba(0,0,0,0.08)",
-                border: `0.0625rem solid ${themeColors.divider}`,
+                borderRadius: "20px",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+                border: "1px solid rgba(0,0,0,0.05)",
               }}
             >
               <CardContent sx={{ p: "1.5rem" }}>
@@ -328,9 +352,9 @@ const TrainingDashboard = () => {
                 >
                   <Box
                     sx={{
-                      backgroundColor: `${themeColors.teal}26`,
-                      borderRadius: "0.75rem",
-                      p: "0.5rem",
+                      backgroundColor: `${themeColors.teal}15`,
+                      borderRadius: "12px",
+                      p: "0.75rem",
                       display: "flex",
                       alignItems: "center",
                     }}
@@ -374,9 +398,9 @@ const TrainingDashboard = () => {
           <Grid item xs={12} md={5}>
             <Card
               sx={{
-                borderRadius: "1.5rem",
-                boxShadow: "0 0.25rem 1.25rem rgba(0,0,0,0.08)",
-                border: `0.0625rem solid ${themeColors.divider}`,
+                borderRadius: "20px",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+                border: "1px solid rgba(0,0,0,0.05)",
               }}
             >
               <CardContent sx={{ p: "1.5rem" }}>
@@ -391,9 +415,9 @@ const TrainingDashboard = () => {
                 >
                   <Box
                     sx={{
-                      backgroundColor: `${themeColors.info}26`,
-                      borderRadius: "0.75rem",
-                      p: "0.5rem",
+                      backgroundColor: `${themeColors.info}15`,
+                      borderRadius: "12px",
+                      p: "0.75rem",
                       display: "flex",
                       alignItems: "center",
                     }}
@@ -443,9 +467,9 @@ const TrainingDashboard = () => {
           <Grid item xs={12}>
             <Card
               sx={{
-                borderRadius: "1.5rem",
-                boxShadow: "0 0.25rem 1.25rem rgba(0,0,0,0.08)",
-                border: `0.0625rem solid ${themeColors.divider}`,
+                borderRadius: "20px",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+                border: "1px solid rgba(0,0,0,0.05)",
               }}
             >
               <CardContent sx={{ p: "1.5rem" }}>
@@ -460,9 +484,9 @@ const TrainingDashboard = () => {
                 >
                   <Box
                     sx={{
-                      backgroundColor: `${themeColors.secondary}26`,
-                      borderRadius: "0.75rem",
-                      p: "0.5rem",
+                      backgroundColor: `${themeColors.secondary}15`,
+                      borderRadius: "12px",
+                      p: "0.75rem",
                       display: "flex",
                       alignItems: "center",
                     }}

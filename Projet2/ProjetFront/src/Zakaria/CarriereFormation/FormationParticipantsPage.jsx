@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Box, ThemeProvider, createTheme } from "@mui/material";
 import { ArrowLeft, UserPlus, Trash2, X, Eye, User, BookOpen, ClipboardList } from "lucide-react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -15,6 +15,96 @@ import "../Style.css";
 import "./CareerTraining.css";
 
 const STATUT_OPTIONS = ["En attente", "En cours", "Termine", "Annule"];
+const FORMATION_CACHE_TTL_MS = 2 * 60 * 1000;
+const PARTICIPANTS_CACHE_TTL_MS = 10 * 60 * 1000;
+const EMPLOYEES_CACHE_TTL_MS = 5 * 60 * 1000;
+const REQUEST_TIMEOUT_MS = 20000;
+const FAST_REQUEST_TIMEOUT_MS = 10000;
+const PARTICIPANTS_ENRICH_FALLBACK_DELAY_MS = 2500;
+const EMPLOYEES_CACHE_KEY = "cf_employees_list_cache_v1";
+const inFlightRequests = new Map();
+
+const dedupeRequest = async (key, requestFactory) => {
+  if (inFlightRequests.has(key)) {
+    return inFlightRequests.get(key);
+  }
+
+  const promise = Promise.resolve()
+    .then(requestFactory)
+    .finally(() => {
+      inFlightRequests.delete(key);
+    });
+
+  inFlightRequests.set(key, promise);
+  return promise;
+};
+
+const readTimedCache = (key, ttlMs) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.ts !== "number") return null;
+    if (Date.now() - parsed.ts > ttlMs) return null;
+    return parsed.data;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.debug("Cache read failed:", key, error);
+    }
+    return null;
+  }
+};
+
+const writeTimedCache = (key, data) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.debug("Cache write failed:", key, error);
+    }
+  }
+};
+
+const hasAttendanceStats = (row) => {
+  if (!row || typeof row !== "object") return false;
+  return (
+    Object.hasOwn(row, "total_sessions") ||
+    Object.hasOwn(row, "total_present") ||
+    Object.hasOwn(row, "total_absent") ||
+    Object.hasOwn(row, "total_retard") ||
+    Object.hasOwn(row, "attendance_rate")
+  );
+};
+
+const mergeParticipantsWithAttendance = (baseList, attendanceList) => {
+  const safeBase = Array.isArray(baseList) ? baseList : [];
+  const safeAttendance = Array.isArray(attendanceList) ? attendanceList : [];
+
+  if (safeBase.length === 0) return safeAttendance;
+  if (safeAttendance.length === 0) return safeBase;
+
+  const byId = new Map();
+  const byEmployee = new Map();
+
+  safeAttendance.forEach((row) => {
+    if (row?.id != null) byId.set(Number(row.id), row);
+    if (row?.employe_id != null) byEmployee.set(Number(row.employe_id), row);
+  });
+
+  return safeBase.map((row) => {
+    let enriched = null;
+
+    if (row?.id !== null && row?.id !== undefined) {
+      enriched = byId.get(Number(row.id)) || null;
+    }
+
+    if (!enriched && row?.employe_id !== null && row?.employe_id !== undefined) {
+      enriched = byEmployee.get(Number(row.employe_id)) || null;
+    }
+
+    return enriched ? { ...row, ...enriched } : row;
+  });
+};
 
 const StatusBadge = ({ status }) => {
   const cls = status === "Termine" ? "success" : status === "En cours" ? "info" : "warning";
@@ -24,13 +114,35 @@ const StatusBadge = ({ status }) => {
 const FormationParticipantsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { setTitle, clearActions, searchQuery } = useHeader();
   const { dynamicStyles } = useOpen();
+  const formationTimeoutUntilRef = useRef(0);
 
   const [formation, setFormation] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+
+  const locationFormation = useMemo(() => {
+    const stateFormation = location?.state?.formation;
+    return stateFormation && Number(stateFormation.id) === Number(id) ? stateFormation : null;
+  }, [id, location?.state?.formation?.id]);
+
+  const locationParticipants = useMemo(() => {
+    const stateParticipants = location?.state?.participants;
+    return Array.isArray(stateParticipants) ? stateParticipants : null;
+  }, [location?.state?.participants]);
+
+  const fromParticipantsLink = Boolean(location?.state?.fromParticipantsLink);
+
+  const formationCacheKey = useMemo(() => `cf_formation_details_cache_v1:${id}`, [id]);
+  const participantsCacheKey = useMemo(() => `cf_formation_participants_cache_v1:${id}`, [id]);
+
+  const persistParticipantsCache = useCallback((list) => {
+    writeTimedCache(participantsCacheKey, Array.isArray(list) ? list : []);
+  }, [participantsCacheKey]);
 
   // Unified drawer: null | "add" | "edit" | "details"
   const [drawerMode, setDrawerMode] = useState(null);
@@ -82,43 +194,239 @@ const FormationParticipantsPage = () => {
     return () => clearActions();
   }, [setTitle, clearActions]);
 
-  const fetchFormation = useCallback(async () => {
-    try {
-      const res = await apiClient.get(`/formations/${id}`);
-      setFormation(res.data);
-    } catch (err) {
-      console.error("Error loading formation:", err);
+  const fetchFormation = useCallback(async ({ silent = false, force = false } = {}) => {
+    if (!force && Date.now() < formationTimeoutUntilRef.current) {
+      return null;
     }
-  }, [id]);
 
-  const fetchParticipants = useCallback(async () => {
     try {
-      const res = await apiClient.get(`/formations/${id}/participants-with-attendance`);
-      setParticipants(Array.isArray(res.data) ? res.data : []);
+      const res = await dedupeRequest(`formation:${id}:compact`, () =>
+        apiClient.get(`/formations/${id}/summary`, {
+          timeout: REQUEST_TIMEOUT_MS,
+        })
+      );
+      const data = res.data ?? null;
+      setFormation(data);
+      writeTimedCache(formationCacheKey, data);
+      return data;
     } catch (err) {
-      console.error("Error loading participants:", err);
-      setParticipants([]);
+      const isTimeout = err?.code === "ECONNABORTED";
+      if (isTimeout) {
+        formationTimeoutUntilRef.current = Date.now() + 60 * 1000;
+      }
+      if (!silent && !isTimeout) {
+        console.error("Error loading formation:", err);
+      }
+      return null;
     }
-  }, [id]);
+  }, [id, formationCacheKey]);
+
+  const fetchParticipantsBasic = useCallback(async ({ silent = false } = {}) => {
+    try {
+      const res = await dedupeRequest(`formation:${id}:participants:basic`, () =>
+        apiClient.get(`/formations/${id}/participants`, { timeout: FAST_REQUEST_TIMEOUT_MS })
+      );
+      const list = Array.isArray(res.data) ? res.data : [];
+
+      setParticipants((prev) => {
+        const merged = mergeParticipantsWithAttendance(list, prev);
+        persistParticipantsCache(merged);
+        return merged;
+      });
+
+      return {
+        list,
+        ok: true,
+        timedOut: false,
+      };
+    } catch (err) {
+      const isTimeout = err?.code === "ECONNABORTED";
+      if (!silent && !isTimeout) {
+        console.error("Error loading participants (basic):", err);
+      }
+      return {
+        list: [],
+        ok: false,
+        timedOut: isTimeout,
+      };
+    }
+  }, [id, persistParticipantsCache]);
+
+  const fetchParticipantsWithAttendance = useCallback(async ({ silent = false } = {}) => {
+    try {
+      const res = await dedupeRequest(`formation:${id}:participants:attendance`, () =>
+        apiClient.get(`/formations/${id}/participants-with-attendance`, { timeout: REQUEST_TIMEOUT_MS })
+      );
+      const list = Array.isArray(res.data) ? res.data : [];
+
+      setParticipants((prev) => {
+        const source = Array.isArray(prev) && prev.length > 0 ? prev : list;
+        const merged = mergeParticipantsWithAttendance(source, list);
+        persistParticipantsCache(merged);
+        return merged;
+      });
+
+      return list;
+    } catch (err) {
+      const isTimeout = err?.code === "ECONNABORTED";
+      if (!silent && !isTimeout) {
+        console.error("Error loading participants (attendance):", err);
+      }
+      return null;
+    }
+  }, [id, persistParticipantsCache]);
 
   const fetchEmployees = useCallback(async () => {
+    const cached = readTimedCache(EMPLOYEES_CACHE_KEY, EMPLOYEES_CACHE_TTL_MS);
+    if (Array.isArray(cached)) {
+      setEmployees(cached);
+      return cached;
+    }
+
+    setLoadingEmployees(true);
     try {
-      const res = await apiClient.get("/employes/list");
+      const res = await dedupeRequest("employes:list", () =>
+        apiClient.get("/employes/list", { timeout: REQUEST_TIMEOUT_MS })
+      );
       const list = Array.isArray(res.data) ? res.data : [];
       setEmployees(list);
+      writeTimedCache(EMPLOYEES_CACHE_KEY, list);
+      return list;
     } catch (err) {
-      console.error("Error loading employees:", err);
+      if (err?.code !== "ECONNABORTED") {
+        console.error("Error loading employees:", err);
+      }
+      return [];
+    } finally {
+      setLoadingEmployees(false);
     }
   }, []);
 
   useEffect(() => {
-    const loadAll = async () => {
-      setLoading(true);
-      await Promise.all([fetchFormation(), fetchParticipants(), fetchEmployees()]);
-      setLoading(false);
+    const cachedFormation = readTimedCache(formationCacheKey, FORMATION_CACHE_TTL_MS);
+    const cachedParticipants = readTimedCache(participantsCacheKey, PARTICIPANTS_CACHE_TTL_MS);
+    const warmParticipants = Array.isArray(cachedParticipants)
+      ? cachedParticipants
+      : Array.isArray(locationParticipants)
+      ? locationParticipants
+      : null;
+    const warmFormation = cachedFormation || locationFormation;
+    const inferredNoParticipants = Number(warmFormation?.participants_count ?? -1) === 0;
+    const cachedNeedsAttendance =
+      Array.isArray(warmParticipants) &&
+      warmParticipants.some((row) => !hasAttendanceStats(row));
+
+    if (warmFormation) {
+      setFormation(warmFormation);
+      if (!cachedFormation) {
+        writeTimedCache(formationCacheKey, warmFormation);
+      }
+    }
+    if (Array.isArray(warmParticipants)) {
+      setParticipants(warmParticipants);
+      if (!Array.isArray(cachedParticipants)) {
+        writeTimedCache(participantsCacheKey, warmParticipants);
+      }
+    } else if (inferredNoParticipants) {
+      setParticipants([]);
+      writeTimedCache(participantsCacheKey, []);
+    }
+
+    // Keep table responsive; background refresh should not block rendering.
+    setLoading(false);
+
+    let cancelled = false;
+
+    const refreshParticipants = async () => {
+      const knownParticipantsCount = Number(warmFormation?.participants_count);
+      const hasKnownParticipantsCount =
+        Number.isFinite(knownParticipantsCount) && knownParticipantsCount >= 0;
+
+      let attendanceRequested = false;
+      let basicResolved = false;
+      let fallbackTimer = null;
+
+      const requestAttendance = () => {
+        if (cancelled || attendanceRequested) return;
+        attendanceRequested = true;
+        fetchParticipantsWithAttendance({ silent: true });
+      };
+
+      const shouldScheduleEarlyFallback =
+        cachedNeedsAttendance ||
+        !hasKnownParticipantsCount ||
+        knownParticipantsCount > 0;
+
+      const shouldPrioritizeLinkOpen =
+        fromParticipantsLink &&
+        !Array.isArray(cachedParticipants) &&
+        !Array.isArray(locationParticipants) &&
+        (!hasKnownParticipantsCount || knownParticipantsCount > 0);
+
+      if (shouldPrioritizeLinkOpen) {
+        requestAttendance();
+      }
+
+      // Trigger enrichment automatically if the fast endpoint does not answer quickly.
+      if (shouldScheduleEarlyFallback) {
+        fallbackTimer = window.setTimeout(() => {
+          if (!basicResolved) {
+            requestAttendance();
+          }
+        }, PARTICIPANTS_ENRICH_FALLBACK_DELAY_MS);
+      }
+
+      const basicResult = await fetchParticipantsBasic({ silent: true });
+      basicResolved = true;
+
+      if (fallbackTimer) {
+        window.clearTimeout(fallbackTimer);
+      }
+
+      if (cancelled) return;
+
+      const basicList = Array.isArray(basicResult?.list) ? basicResult.list : [];
+      const shouldEnrich =
+        basicResult?.ok === false ||
+        basicList.length > 0 ||
+        cachedNeedsAttendance ||
+        !hasKnownParticipantsCount ||
+        knownParticipantsCount > 0;
+
+      if (shouldEnrich) {
+        requestAttendance();
+      }
     };
-    loadAll();
-  }, [fetchFormation, fetchParticipants, fetchEmployees]);
+
+    // Formation details refresh runs in background and must not block table rendering.
+    if (!warmFormation) {
+      fetchFormation({ silent: true });
+    }
+
+    // Skip first participants fetch when we already know the formation has no participants.
+    if (!inferredNoParticipants || Array.isArray(warmParticipants) || !warmFormation) {
+      refreshParticipants();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    fetchFormation,
+    fetchParticipantsBasic,
+    fetchParticipantsWithAttendance,
+    formationCacheKey,
+    participantsCacheKey,
+    locationFormation,
+    locationParticipants,
+    fromParticipantsLink,
+  ]);
+
+  useEffect(() => {
+    if (drawerMode !== "add") return;
+    if (employees.length > 0 || loadingEmployees) return;
+    fetchEmployees();
+  }, [drawerMode, employees.length, loadingEmployees, fetchEmployees]);
 
   // Filter employees already in the formation
   const availableEmployees = useMemo(() => {
@@ -160,7 +468,11 @@ const FormationParticipantsPage = () => {
         note: addNote || null,
         commentaire: addCommentaire || null,
       });
-      setParticipants((prev) => [...prev, res.data]);
+      setParticipants((prev) => {
+        const next = [...prev, res.data];
+        persistParticipantsCache(next);
+        return next;
+      });
       setSelectedEmploye(null);
       setAddStatut("En attente");
       setAddNote("");
@@ -190,7 +502,11 @@ const FormationParticipantsPage = () => {
 
     try {
       await apiClient.delete(`/formations/${id}/participants/${participant.id}`);
-      setParticipants((prev) => prev.filter((p) => p.id !== participant.id));
+      setParticipants((prev) => {
+        const next = prev.filter((p) => p.id !== participant.id);
+        persistParticipantsCache(next);
+        return next;
+      });
       setDrawerParticipant((prev) => (prev?.id === participant.id ? null : prev));
       if (drawerParticipant?.id === participant.id) setDrawerMode(null);
       Swal.fire({ icon: "success", title: "Participant retiré", timer: 1200, showConfirmButton: false });
@@ -214,7 +530,11 @@ const FormationParticipantsPage = () => {
 
     try {
       await Promise.all(selectedItems.map((pid) => apiClient.delete(`/formations/${id}/participants/${pid}`)));
-      setParticipants((prev) => prev.filter((p) => !selectedItems.includes(p.id)));
+      setParticipants((prev) => {
+        const next = prev.filter((p) => !selectedItems.includes(p.id));
+        persistParticipantsCache(next);
+        return next;
+      });
       if (drawerParticipant && selectedItems.includes(drawerParticipant.id)) setDrawerMode(null);
       setDrawerParticipant((prev) => (prev && selectedItems.includes(prev.id) ? null : prev));
       setSelectedItems([]);
@@ -230,7 +550,11 @@ const FormationParticipantsPage = () => {
     try {
       await apiClient.put(`/formations/${id}/participants/${drawerParticipant.id}`, editForm);
       const updated = { ...drawerParticipant, ...editForm };
-      setParticipants((prev) => prev.map((p) => (p.id === drawerParticipant.id ? updated : p)));
+      setParticipants((prev) => {
+        const next = prev.map((p) => (p.id === drawerParticipant.id ? updated : p));
+        persistParticipantsCache(next);
+        return next;
+      });
       setDrawerParticipant(updated);
       setDrawerMode("details");
       Swal.fire({ icon: "success", title: "Modifié", timer: 1000, showConfirmButton: false });
@@ -301,16 +625,6 @@ const FormationParticipantsPage = () => {
     { key: "total_absent",    label: "Absences",  render: (p) => <span>{p.total_absent  ?? "—"}</span> },
     { key: "attendance_rate", label: "Assiduité", render: (p) => <AttendanceBadge rate={p.attendance_rate} /> },
   ], []);
-
-  if (loading) {
-    return (
-      <ThemeProvider theme={createTheme()}>
-        <Box sx={{ ...dynamicStyles, minHeight: "100vh", backgroundColor: "#ffffff" }}>
-          <Box sx={{ mt: 14, textAlign: "center", color: "#999" }}>Chargement...</Box>
-        </Box>
-      </ThemeProvider>
-    );
-  }
 
   const isFull = formation?.effectif && participants.length >= formation.effectif;
   const isDrawerOpen = drawerMode !== null;
@@ -430,6 +744,7 @@ const FormationParticipantsPage = () => {
               <ExpandRTable
                 columns={columns}
                 data={filteredParticipants}
+                loading={loading && filteredParticipants.length === 0}
                 searchTerm=""
                 selectAll={
                   selectedItems.length === filteredParticipants.length &&
@@ -447,12 +762,15 @@ const FormationParticipantsPage = () => {
                 canEdit={false}
                 canDelete={false}
                 canBulkDelete={false}
-                renderActions={(p) => (
+                renderCustomActions={(p) => (
                   <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                     <button
                       className="btn btn-sm"
                       style={{ color: "#3a8a90", padding: "2px 6px" }}
-                      onClick={() => openDetails(p)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDetails(p);
+                      }}
                       title="Voir détails"
                     >
                       <Eye size={14} />
@@ -460,7 +778,10 @@ const FormationParticipantsPage = () => {
                     <button
                       className="btn btn-sm"
                       style={{ color: "#3b82f6", padding: "2px 6px" }}
-                      onClick={() => openEdit(p)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(p);
+                      }}
                       title="Modifier"
                     >
                       <FontAwesomeIcon icon={faEdit} />
@@ -468,7 +789,10 @@ const FormationParticipantsPage = () => {
                     <button
                       className="btn btn-sm"
                       style={{ color: "#ef4444", padding: "2px 6px" }}
-                      onClick={() => handleDeleteParticipant(p)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteParticipant(p);
+                      }}
                       title="Retirer"
                     >
                       <FontAwesomeIcon icon={faTrash} />
@@ -736,9 +1060,10 @@ const FormationParticipantsPage = () => {
                         options={employeeOptions}
                         value={selectedEmploye}
                         onChange={setSelectedEmploye}
-                        placeholder="Rechercher un employé..."
+                        placeholder={loadingEmployees ? "Chargement des employés..." : "Rechercher un employé..."}
+                        isLoading={loadingEmployees}
                         isClearable
-                        noOptionsMessage={() => "Aucun employé disponible"}
+                        noOptionsMessage={() => (loadingEmployees ? "Chargement des employés..." : "Aucun employé disponible")}
                       />
                     </div>
 

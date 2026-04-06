@@ -243,3 +243,24 @@
   margin: 10px 0;
   width: 100%;
 }
+
+/* Accidents module: enforce departments-only panel to use full width (same behavior as Sanctions). */
+.accidents-department-only .departement_historique {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  gap: 0 !important;
+}
+
+.accidents-department-only .departement_list {
+  width: 100% !important;
+  min-width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.accidents-department-only .employee-panel {
+  display: none !important;
+}

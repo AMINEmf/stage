@@ -159,20 +159,23 @@ const SmartSuggestionsPanel = ({ formation, onParticipantAdded }) => {
   const { suggestions, loading, error, fetchSuggestions, removeFromSuggestions } =
     useSmartSuggestions(formation?.id);
 
-  // Reload suggestions when formation changes and panel is open
+  // Warm cache when selected formation changes.
+  useEffect(() => {
+    if (formation?.id) {
+      fetchSuggestions({ silent: true });
+    }
+  }, [formation?.id, fetchSuggestions]);
+
+  // Refresh in background when panel is opened.
   useEffect(() => {
     if (open && formation?.id) {
-      fetchSuggestions();
+      fetchSuggestions({ silent: true });
     }
   }, [formation?.id, open, fetchSuggestions]);
 
   const handleToggle = useCallback(() => {
-    const next = !open;
-    setOpen(next);
-    if (next && !loading) {
-      fetchSuggestions();
-    }
-  }, [open, loading, fetchSuggestions]);
+    setOpen((prev) => !prev);
+  }, []);
 
   const handleAdd = useCallback(
     async (suggestion) => {
@@ -249,7 +252,7 @@ const SmartSuggestionsPanel = ({ formation, onParticipantAdded }) => {
             color: "#fff",
             letterSpacing: "0.3px",
           }}>
-            Suggestions Intelligentes IA
+            Suggestion des participants
           </span>
           {suggestions.length > 0 && (
             <span
@@ -310,7 +313,7 @@ const SmartSuggestionsPanel = ({ formation, onParticipantAdded }) => {
           )}
 
           {/* Loading */}
-          {loading && (
+          {loading && suggestions.length === 0 && (
             <div style={{ 
               display: "flex", 
               alignItems: "center", 
@@ -323,6 +326,20 @@ const SmartSuggestionsPanel = ({ formation, onParticipantAdded }) => {
             }}>
               <Loader size={20} className="spin" />
               <span>Analyse des profils en cours...</span>
+            </div>
+          )}
+
+          {loading && suggestions.length > 0 && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "#3b82f6",
+              fontSize: "0.82rem",
+              marginBottom: "12px",
+            }}>
+              <Loader size={14} className="spin" />
+              <span>Actualisation des suggestions...</span>
             </div>
           )}
 
@@ -365,7 +382,7 @@ const SmartSuggestionsPanel = ({ formation, onParticipantAdded }) => {
           )}
 
           {/* Suggestions list */}
-          {!loading && suggestions.length > 0 && (
+          {suggestions.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {suggestions.map((s) => {
                 const borderColor = s.score > 75 ? "#10b981" : s.score >= 50 ? "#f59e0b" : "#ef4444";
@@ -662,7 +679,7 @@ const SmartSuggestionsPanel = ({ formation, onParticipantAdded }) => {
               {/* Refresh */}
               <button
                 type="button"
-                onClick={fetchSuggestions}
+                onClick={() => fetchSuggestions({ forceRefresh: true })}
                 style={{
                   display: "flex",
                   alignItems: "center",

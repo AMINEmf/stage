@@ -118,6 +118,14 @@ public function subordinates()
 }
 
 /**
+ * Alias FR pour compatibilite avec les services existants.
+ */
+public function subordonnes()
+{
+    return $this->subordinates();
+}
+
+/**
  * Poste actuel de l'employé.
  */
 public function poste()
@@ -131,6 +139,24 @@ public function poste()
 public function posteHistoriques()
 {
     return $this->hasMany(GpEmployePosteHistorique::class, 'employe_id');
+}
+
+/**
+ * Alias utilise par certains controllers pour l'historique de postes.
+ */
+public function historiquePostes()
+{
+    return $this->hasMany(GpEmployePosteHistorique::class, 'employe_id');
+}
+
+/**
+ * Formations suivies par l'employe.
+ */
+public function formations()
+{
+    return $this->belongsToMany(Formation::class, 'formation_participants', 'employe_id', 'formation_id')
+        ->withPivot(['statut', 'note', 'commentaire', 'attestation'])
+        ->withTimestamps();
 }
 
 /**

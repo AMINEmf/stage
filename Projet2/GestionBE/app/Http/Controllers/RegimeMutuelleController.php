@@ -6,6 +6,7 @@ use App\Models\Mutuelle;
 use App\Models\RegimeMutuelle;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 
 class RegimeMutuelleController extends Controller
 {
@@ -14,19 +15,29 @@ class RegimeMutuelleController extends Controller
      */
     public function index(Request $request)
     {
-        $query = RegimeMutuelle::query()->with('mutuelle:id,nom');
+        $cachePayload = [
+            'mutuelle_id' => $request->filled('mutuelle_id') ? (int) $request->input('mutuelle_id') : null,
+            'active' => $request->boolean('active', false),
+        ];
 
-        if ($request->filled('mutuelle_id')) {
-            $query->where('mutuelle_id', $request->input('mutuelle_id'));
-        }
+        $cacheVersion = $this->getRegimesCacheVersion();
+        $cacheKey = 'mutuelle:regimes:index:v' . $cacheVersion . ':' . sha1(json_encode($cachePayload));
 
-        if ($request->boolean('active', false)) {
-            $query->active();
-        }
+        $regimes = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($request) {
+            $query = RegimeMutuelle::query()->with('mutuelle:id,nom');
 
-        $regimes = $query
-            ->orderBy('libelle')
-            ->get();
+            if ($request->filled('mutuelle_id')) {
+                $query->where('mutuelle_id', $request->input('mutuelle_id'));
+            }
+
+            if ($request->boolean('active', false)) {
+                $query->active();
+            }
+
+            return $query
+                ->orderBy('libelle')
+                ->get();
+        });
 
         return response()->json([
             'success' => true,
@@ -43,6 +54,7 @@ class RegimeMutuelleController extends Controller
             $validated = $this->validateData($request);
 
             $regime = RegimeMutuelle::create($validated);
+            $this->bumpRegimesCacheVersion();
 
             return response()->json([
                 'success' => true,
@@ -81,6 +93,7 @@ class RegimeMutuelleController extends Controller
             $validated = $this->validateData($request, $regime->id, $regime->mutuelle_id);
 
             $regime->update($validated);
+            $this->bumpRegimesCacheVersion();
 
             return response()->json([
                 'success' => true,
@@ -111,6 +124,7 @@ class RegimeMutuelleController extends Controller
         }
 
         $regime->delete();
+        $this->bumpRegimesCacheVersion();
 
         return response()->json([
             'success' => true,
@@ -124,13 +138,18 @@ class RegimeMutuelleController extends Controller
     public function getByMutuelle($mutuelleId)
     {
         $mutuelle = Mutuelle::findOrFail($mutuelleId);
+        $activeOnly = request()->boolean('active', true);
+        $cacheVersion = $this->getRegimesCacheVersion();
+        $cacheKey = 'mutuelle:regimes:by-mutuelle:v' . $cacheVersion . ':' . (int) $mutuelleId . ':active:' . ($activeOnly ? '1' : '0');
 
-        $regimes = RegimeMutuelle::where('mutuelle_id', $mutuelleId)
-            ->when(request()->boolean('active', true), function ($query) {
-                $query->active();
-            })
-            ->orderBy('libelle')
-            ->get();
+        $regimes = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($mutuelleId, $activeOnly) {
+            return RegimeMutuelle::where('mutuelle_id', $mutuelleId)
+                ->when($activeOnly, function ($query) {
+                    $query->active();
+                })
+                ->orderBy('libelle')
+                ->get();
+        });
 
         return response()->json([
             'success' => true,
@@ -189,5 +208,22 @@ class RegimeMutuelleController extends Controller
         }
 
         return $validated;
+    }
+
+    private function getRegimesCacheVersion(): int
+    {
+        $version = (int) Cache::get('mutuelle:regimes:version', 1);
+        if ($version <= 0) {
+            $version = 1;
+            Cache::forever('mutuelle:regimes:version', $version);
+        }
+
+        return $version;
+    }
+
+    private function bumpRegimesCacheVersion(): void
+    {
+        $currentVersion = $this->getRegimesCacheVersion();
+        Cache::forever('mutuelle:regimes:version', $currentVersion + 1);
     }
 }

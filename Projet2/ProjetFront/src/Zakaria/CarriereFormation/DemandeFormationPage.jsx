@@ -229,24 +229,6 @@ const DemandeFormationPage = () => {
     }
   }, [fetchDemandes, selectedDemande, handleCloseDrawer]);
 
-  const handleStatusChange = useCallback(async (row, statut) => {
-    try {
-      const statusResponse = await axios.patch(
-        `${API_BASE_URL}/demandes-formation/${row.id}/status`,
-        { statut },
-        { headers: { Accept: "application/json" } }
-      );
-      await fetchDemandes();
-      if (selectedDemande?.id === row.id) {
-        const response = await apiClient.get(`/demandes-formation/${row.id}`);
-        setSelectedDemande(response?.data || null);
-      }
-      Swal.fire("Succès", statusResponse?.data?.message || "Statut mis à jour.", "success");
-    } catch (error) {
-      Swal.fire("Erreur", extractApiError(error, "Mise à jour du statut impossible."), "error");
-    }
-  }, [fetchDemandes, selectedDemande]);
-
   const drawerTitle = useMemo(() => {
     if (drawerMode === "add") return "Ajouter une demande de formation";
     if (drawerMode === "edit") return "Modifier la demande de formation";
@@ -279,18 +261,27 @@ const DemandeFormationPage = () => {
                   onView={handleOpenView}
                   onEdit={handleOpenEdit}
                   onDelete={handleDelete}
-                  onStatusChange={handleStatusChange}
                 />
               </div>
 
               {isDrawerOpen && (
-                <div className="cnss-form-section" style={{ flex: "0 0 42%", minWidth: 340, maxWidth: "100%" }}>
+                <div
+                  className="cnss-form-section"
+                  style={{
+                    flex: "0 0 42%",
+                    minWidth: 340,
+                    maxWidth: "100%",
+                    height: "calc(100vh - 170px)",
+                    maxHeight: "calc(100vh - 170px)",
+                    minHeight: 0,
+                  }}
+                >
                   <div className="cnss-form-header d-flex justify-content-between align-items-center">
                     <h5 style={{ margin: 0 }}>{drawerTitle}</h5>
                     <button className="cnss-close-btn" onClick={handleCloseDrawer} type="button" aria-label="Fermer">×</button>
                   </div>
 
-                  <div className="cnss-form-body" style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto" }}>
+                  <div className="cnss-form-body" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                     {drawerMode === "add" && (
                       <AddDemandeFormation employees={employees} departements={departements} formations={formations} onSubmit={handleCreate} onCancel={handleCloseDrawer} />
                     )}

@@ -41,9 +41,7 @@ const formatDate = (dateString) => {
 };
 
 const themeColors = {
-  teal: "#2c767c",
   success: "#4caf50",
-  warning: "#ff9800",
   error: "#f44336",
   info: "#2196f3",
   textSecondary: "#64748b",
@@ -209,6 +207,12 @@ const CNSSTable = forwardRef((props, ref) => {
     }
   }, []);
 
+  const hasWarmCache = useCallback(() => {
+    const cachedEmployees = employeesCacheRef.current ?? readCache('cnssEmployees');
+    const cachedAffiliations = affiliationsCacheRef.current ?? readCache('cnssAffiliations');
+    return Array.isArray(cachedEmployees) || Array.isArray(cachedAffiliations);
+  }, [readCache]);
+
   const fetchEmployees = useCallback(async (force = false) => {
     if (!force) {
       if (employeesCacheRef.current) {
@@ -228,7 +232,6 @@ const CNSSTable = forwardRef((props, ref) => {
       setEmployees(employeesData);
       localStorage.setItem('cnssEmployees', JSON.stringify(employeesData));
       employeesCacheRef.current = employeesData;
-      console.log('CNSS: Employees fetched, count:', employeesData.length);
       return employeesData;
     } catch (error) {
       console.error('CNSS: Error fetching employees:', error);
@@ -255,13 +258,12 @@ const CNSSTable = forwardRef((props, ref) => {
       setCnssAffiliations(affiliationsData);
       localStorage.setItem("cnssAffiliations", JSON.stringify(affiliationsData));
       affiliationsCacheRef.current = affiliationsData;
-      console.log("CNSS: Affiliations fetched, count:", affiliationsData.length);
       return affiliationsData;
     } catch (error) {
       console.error("Erreur lors de la récupération des affiliations CNSS:", error);
       return [];
     }
-  }, []);
+  }, [readCache]);
 
   const refreshCnssData = useCallback(async (force = false) => {
     await Promise.all([
@@ -275,20 +277,21 @@ const CNSSTable = forwardRef((props, ref) => {
 
     if (!hasSelectedDepartement) {
       setIsTableLoading(false);
-      setEmployees([]);
-      setCnssAffiliations([]);
       return;
     }
 
     const fetchData = async () => {
-      setIsTableLoading(true);
-      // Clear old cache and force fresh data
-      localStorage.removeItem('cnssEmployees');
-      localStorage.removeItem('cnssAffiliations');
-      employeesCacheRef.current = null;
-      affiliationsCacheRef.current = null;
+      const warm = hasWarmCache();
+      setIsTableLoading(!warm);
+
       try {
-        await refreshCnssData(true); // Force refresh
+        await refreshCnssData(false);
+
+        if (warm) {
+          refreshCnssData(true).catch(() => {
+            // Background refresh errors should not block UI.
+          });
+        }
       } catch (error) {
         console.error("Error fetching initial data", error);
       } finally {
@@ -303,7 +306,7 @@ const CNSSTable = forwardRef((props, ref) => {
     return () => {
       cancelled = true;
     };
-  }, [hasSelectedDepartement, departementId, refreshCnssData]);
+  }, [hasSelectedDepartement, refreshCnssData, hasWarmCache]);
 
   useEffect(() => {
     if (!hasSelectedDepartement && showAddForm) {
@@ -344,10 +347,7 @@ const CNSSTable = forwardRef((props, ref) => {
 
 
   const filteredCnssData = useMemo(() => {
-    console.log('CNSS: Filtering - departementId:', departementId, 'employees:', employees.length, 'affiliations:', cnssAffiliations.length);
-
     if (!departementId) {
-      console.log('CNSS: No department selected');
       return [];
     }
 
@@ -356,17 +356,11 @@ const CNSSTable = forwardRef((props, ref) => {
       ? getSubDepartmentIds(departements, departementId).map(String)
       : [String(departementId)];
 
-    console.log('CNSS: Department IDs to include:', subIds);
-
     // NOUVELLE APPROCHE: Filtrer TOUTES les affiliations par departement_id directement
     const filteredAffiliations = cnssAffiliations.filter(aff => {
       const affDeptId = String(aff.departement_id || '');
-      const matches = subIds.includes(affDeptId);
-      console.log('CNSS: Affiliation', aff.id, 'dept:', affDeptId, 'matches:', matches);
-      return matches;
+      return subIds.includes(affDeptId);
     });
-
-    console.log('CNSS: Filtered affiliations count:', filteredAffiliations.length);
 
     // Créer un map des employés pour recherche rapide
     const employeesMap = new Map();
@@ -395,7 +389,6 @@ const CNSSTable = forwardRef((props, ref) => {
       };
     });
 
-    console.log('CNSS: Final merged data:', mergedData.length);
     return mergedData;
   }, [employees, cnssAffiliations, departementId, includeSubDepartments, getSubDepartmentIds, departements]);
 
@@ -483,7 +476,12 @@ const CNSSTable = forwardRef((props, ref) => {
 
   const handleCnssAdded = useCallback((newCnss) => {
     setCnssAffiliations(prev => {
-      const updated = [...prev, newCnss];
+      const nextItem = newCnss && typeof newCnss === "object" ? newCnss : null;
+      if (!nextItem) return prev;
+      const updated = nextItem.id != null
+        ? [...prev.filter(cnss => cnss.id !== nextItem.id), nextItem]
+        : [...prev, nextItem];
+      affiliationsCacheRef.current = updated;
       localStorage.setItem("cnssAffiliations", JSON.stringify(updated));
       return updated;
     });
@@ -492,6 +490,7 @@ const CNSSTable = forwardRef((props, ref) => {
   const handleCnssUpdated = useCallback((updatedCnss) => {
     setCnssAffiliations(prev => {
       const updated = prev.map(cnss => cnss.id === updatedCnss.id ? updatedCnss : cnss);
+      affiliationsCacheRef.current = updated;
       localStorage.setItem("cnssAffiliations", JSON.stringify(updated));
       return updated;
     });
@@ -514,6 +513,7 @@ const CNSSTable = forwardRef((props, ref) => {
         await axios.delete(`http://127.0.0.1:8000/api/cnss/affiliations/${id}`);
         setCnssAffiliations(prev => {
           const updated = prev.filter(cnss => cnss.id !== id);
+          affiliationsCacheRef.current = updated;
           localStorage.setItem("cnssAffiliations", JSON.stringify(updated));
           return updated;
         });
@@ -674,6 +674,7 @@ const CNSSTable = forwardRef((props, ref) => {
 
         setCnssAffiliations(prev => {
           const updated = prev.filter(item => !selectedItems.includes(item.id));
+          affiliationsCacheRef.current = updated;
           localStorage.setItem("cnssAffiliations", JSON.stringify(updated));
           return updated;
         });
@@ -863,7 +864,7 @@ const CNSSTable = forwardRef((props, ref) => {
         }}>
           <div className="mt-4">
             <div className="section-header mb-3">
-              <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '24px', width: '100%' }}>
                 <div>
                   <SectionTitle icon="fas fa-id-card" text="Affiliations CNSS" />
                   {!showAddForm && (
@@ -874,7 +875,7 @@ const CNSSTable = forwardRef((props, ref) => {
                   )}
                 </div>
 
-                <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ display: "flex", gap: "12px", justifySelf: 'end' }}>
                   {true && (
                     <FontAwesomeIcon
                       onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
@@ -1148,7 +1149,6 @@ const CNSSTable = forwardRef((props, ref) => {
             columns={visibleColumns}
             data={hasSelectedDepartement ? filteredCnssDataForFilters : []}
             loading={hasSelectedDepartement && isTableLoading}
-            loadingText="Chargement des affiliations CNSS..."
             searchTerm={normalizedGlobalSearch}
             highlightText={highlightText}
             selectAll={selectedItems.length === filteredCnssDataForFilters.length && filteredCnssDataForFilters.length > 0}

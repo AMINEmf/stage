@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, forwardRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef } from "react";
 import axios from "axios";
 import { Button, Dropdown, Form, Table } from "react-bootstrap";
 import Swal from "sweetalert2";
@@ -18,6 +18,58 @@ const API_BASE = window.location.hostname === "localhost"
   : "http://127.0.0.1:8000";
 const OPERATION_TYPES_ENDPOINT = `${API_BASE}/api/cnss/operation-types`;
 const OPERATION_TYPES_ENDPOINT_STATUS_KEY = "cnss_operation_types_endpoint_status";
+const CNSS_OPERATIONS_CACHE_PREFIX = "cnss_dossier_operations_";
+const CNSS_OPERATIONS_CACHE_TTL_MS = 20 * 1000;
+const operationsCacheMemory = new Map();
+
+const getOperationsCacheKey = (employeId) => `${CNSS_OPERATIONS_CACHE_PREFIX}${String(employeId)}`;
+
+const readCachedOperations = (employeId) => {
+  if (!employeId) return null;
+
+  const cacheKey = getOperationsCacheKey(employeId);
+  const inMemoryEntry = operationsCacheMemory.get(cacheKey);
+  if (inMemoryEntry && Array.isArray(inMemoryEntry.data)) {
+    return inMemoryEntry;
+  }
+
+  try {
+    const raw = localStorage.getItem(cacheKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const data = Array.isArray(parsed) ? parsed : parsed?.data;
+
+    if (!Array.isArray(data)) return null;
+
+    const entry = {
+      data,
+      updatedAt: Number(parsed?.updatedAt ?? 0) || 0,
+    };
+
+    operationsCacheMemory.set(cacheKey, entry);
+    return entry;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedOperations = (employeId, data) => {
+  if (!employeId) return;
+
+  const entry = {
+    data: Array.isArray(data) ? data : [],
+    updatedAt: Date.now(),
+  };
+
+  const cacheKey = getOperationsCacheKey(employeId);
+  operationsCacheMemory.set(cacheKey, entry);
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(entry));
+  } catch {
+    // ignore storage quota / private mode errors
+  }
+};
 
 const themeColors = {
   teal: "#2c767c",
@@ -39,6 +91,7 @@ const normalizeStatus = (value) => String(value || "").trim().replace(/\s+/g, "_
 function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch = "" }) {
   const employeId = dossier?.id ?? null;
   const hasSelectedEmployee = Boolean(employeId);
+  const latestOperationsFetchRef = useRef(0);
 
   const [operations, setOperations] = useState([]);
   const [operationsLoading, setOperationsLoading] = useState(false);
@@ -271,20 +324,52 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
     cursor: "pointer",
   };
 
-  const fetchOperations = useCallback(async () => {
+  const fetchOperations = useCallback(async ({ forceRefresh = false } = {}) => {
     if (!employeId) {
       setOperations([]);
+      setOperationsLoading(false);
       return;
     }
 
-    setOperationsLoading(true);
+    const cachedEntry = readCachedOperations(employeId);
+    const hasWarmCache = Array.isArray(cachedEntry?.data);
+
+    if (hasWarmCache) {
+      setOperations(cachedEntry.data);
+      setOperationsLoading(false);
+    } else {
+      setOperationsLoading(true);
+    }
+
+    const isCacheFresh = hasWarmCache
+      && cachedEntry.updatedAt > 0
+      && (Date.now() - cachedEntry.updatedAt) < CNSS_OPERATIONS_CACHE_TTL_MS;
+
+    if (!forceRefresh && isCacheFresh) {
+      return;
+    }
+
+    const fetchId = latestOperationsFetchRef.current + 1;
+    latestOperationsFetchRef.current = fetchId;
+
     try {
       const response = await axios.get(`${API_BASE}/api/cnss/dossiers/${employeId}/operations`);
-      setOperations(response.data?.data ?? response.data ?? []);
+      if (latestOperationsFetchRef.current !== fetchId) return;
+
+      const list = response.data?.data ?? response.data ?? [];
+      const normalizedList = Array.isArray(list) ? list : [];
+
+      setOperations(normalizedList);
+      writeCachedOperations(employeId, normalizedList);
     } catch (error) {
-      setOperations([]);
+      if (latestOperationsFetchRef.current !== fetchId) return;
+      if (!hasWarmCache) {
+        setOperations([]);
+      }
     } finally {
-      setOperationsLoading(false);
+      if (latestOperationsFetchRef.current === fetchId && !hasWarmCache) {
+        setOperationsLoading(false);
+      }
     }
   }, [employeId]);
 
@@ -356,7 +441,7 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
     try {
       await axios.delete(`${API_BASE}/api/cnss/documents/${doc.id}`);
       await fetchDocs(opId, true);
-      await fetchOperations();
+      await fetchOperations({ forceRefresh: true });
       if (onDocumentsUpdated) onDocumentsUpdated();
       Swal.fire("Supprimé!", "Le document a été supprimé.", "success");
     } catch (error) {
@@ -380,7 +465,7 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
 
     try {
       await axios.delete(`${API_BASE}/api/cnss/operations/${opId}`);
-      await fetchOperations();
+      await fetchOperations({ forceRefresh: true });
       if (onDocumentsUpdated) onDocumentsUpdated();
       Swal.fire("Supprimé!", "L'opération a été supprimée.", "success");
     } catch (error) {
@@ -408,7 +493,7 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
       await Promise.all(selectedOpIds.map((id) => axios.delete(`${API_BASE}/api/cnss/operations/${id}`)));
       setSelectedOpIds([]);
       setSelectAll(false);
-      await fetchOperations();
+      await fetchOperations({ forceRefresh: true });
       if (onDocumentsUpdated) onDocumentsUpdated();
       Swal.fire("Supprimées!", "Les opérations ont été supprimées.", "success");
     } catch (error) {
@@ -656,7 +741,7 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         .filters-container::-webkit-scrollbar {
           height: 5px;
         }
@@ -809,15 +894,59 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
         >
           <div>
             <div className="section-header mb-3">
-              <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
-                <div>
-                  <SectionTitle icon="fas fa-id-card" text="Opérations Mutuelle" />
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "24px",
+                  width: "100%",
+                }}
+              >
+                <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+                  <SectionTitle icon="fas fa-id-card" text="Opérations CNSS" />
                   <p className="section-description text-muted mb-0">
                     {hasSelectedEmployee ? `- ${dossier?.employe_label || "Employé sélectionné"}` : "- Groupe sélectionné"}
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: "12px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "12px",
+                    alignItems: "center",
+                    marginLeft: "auto",
+                    justifyContent: "flex-end",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Button
+                    onClick={() => {
+                      setStatsDrawerOpen(false);
+                      setSelectedOperation(null);
+                      setOperationDrawerMode("add");
+                    }}
+                    className="d-flex align-items-center justify-content-center"
+                    size="sm"
+                    disabled={!hasSelectedEmployee}
+                    title={!hasSelectedEmployee ? "Sélectionnez un employé pour ajouter une opération." : ""}
+                    style={{
+                      minWidth: "182px",
+                      height: "38px",
+                      backgroundColor: hasSelectedEmployee ? "#3a8a90" : "#9ebec1",
+                      border: "none",
+                      borderRadius: "8px",
+                      color: "#ffffff",
+                      fontWeight: 700,
+                      fontSize: "0.95rem",
+                      boxShadow: hasSelectedEmployee ? "0 3px 8px rgba(58, 138, 144, 0.28)" : "none",
+                      cursor: hasSelectedEmployee ? "pointer" : "not-allowed",
+                      opacity: 1,
+                    }}
+                  >
+                    <PlusCircle size={15} style={{ marginRight: "0.4rem" }} />
+                    Ajouter une opération
+                  </Button>
+
                   {true && (
                     <FontAwesomeIcon
                       onClick={() => setFiltersVisible((prev) => !prev)}
@@ -841,7 +970,7 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
                         setFiltersVisible(false);
                       }}
                       className={`graph-action-btn ${statsDrawerOpen ? "active" : ""}`}
-                      title="Statistiques des opérations mutuelle"
+                      title="Statistiques des opérations CNSS"
                     >
                       <svg className="graph-icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <rect x="4" y="12" width="3" height="8" rx="1" fill="#FFFFFF" />
@@ -849,32 +978,6 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
                         <rect x="17" y="10" width="3" height="10" rx="1" fill="#FFFFFF" />
                       </svg>
                     </button>
-                  )}
-
-                  {hasSelectedEmployee && (
-                    <Button
-                      onClick={() => {
-                        setStatsDrawerOpen(false);
-                        setSelectedOperation(null);
-                        setOperationDrawerMode("add");
-                      }}
-                      className="d-flex align-items-center justify-content-center"
-                      size="sm"
-                      style={{
-                        minWidth: "182px",
-                        height: "38px",
-                        backgroundColor: "#3a8a90",
-                        border: "none",
-                        borderRadius: "8px",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        fontSize: "0.95rem",
-                        boxShadow: "0 3px 8px rgba(58, 138, 144, 0.28)",
-                      }}
-                    >
-                      <PlusCircle size={15} style={{ marginRight: "0.4rem" }} />
-                      Ajouter une opération
-                    </Button>
                   )}
 
                   {true && (
@@ -987,7 +1090,7 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
             columns={visibleColumns}
             data={hasSelectedEmployee ? filteredOperations : []}
             filteredData={hasSelectedEmployee ? filteredOperations : []}
-            loading={hasSelectedEmployee && operationsLoading}
+            loading={hasSelectedEmployee && operationsLoading && operations.length === 0}
             searchTerm={globalSearch || ""}
             highlightText={(text) => text}
             selectAll={selectAll}
@@ -1065,7 +1168,7 @@ function DossierCNSSDetails({ dossier, onClose, onDocumentsUpdated, globalSearch
               onSaved={async () => {
                 setOperationDrawerMode(null);
                 setSelectedOperation(null);
-                await fetchOperations();
+                await fetchOperations({ forceRefresh: true });
                 if (onDocumentsUpdated) onDocumentsUpdated();
               }}
             />

@@ -19,7 +19,19 @@ import "../Style.css";
 
 const TabPanel = ({ value, index, children }) => {
   if (value !== index) return null;
-  return <div style={{ paddingTop: "12px" }}>{children}</div>;
+  return (
+    <div
+      style={{
+        paddingTop: "12px",
+        flex: 1,
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {children}
+    </div>
+  );
 };
 
 const normalizeDepartementsPayload = (payload) => {
@@ -27,6 +39,176 @@ const normalizeDepartementsPayload = (payload) => {
   if (Array.isArray(payload?.data)) return payload.data;
   if (Array.isArray(payload?.departements)) return payload.departements;
   return [];
+};
+
+const EMPLOYEE_COMPETENCES_CACHE_KEY = "cf_employee_competences_cache_v1";
+const EMPLOYEE_COMPETENCES_CACHE_TTL_MS = 2 * 60 * 1000;
+const EMPLOYEE_PENDING_POSTES_CACHE_KEY = "cf_employee_pending_postes_cache_v1";
+const EMPLOYEE_PENDING_POSTES_CACHE_TTL_MS = 2 * 60 * 1000;
+const DEPARTMENT_PREFETCH_CHUNK_SIZE = 50;
+const DEPARTMENT_PREFETCH_BATCH_CONCURRENCY = 2;
+const DEPARTMENT_PREFETCH_RECENT_MS = 90 * 1000;
+const DEPARTMENT_PREFETCH_FALLBACK_BATCH = 8;
+const GLOBAL_COMPETENCE_REQUESTS_KEY = "__cf_competence_prefetch_requests";
+const GLOBAL_PENDING_POSTES_REQUESTS_KEY = "__cf_pending_postes_prefetch_requests";
+
+const chunkArray = (items, size) => {
+  const list = Array.isArray(items) ? items : [];
+  if (!Number.isFinite(size) || size <= 0) return [list];
+  const chunks = [];
+  for (let i = 0; i < list.length; i += size) {
+    chunks.push(list.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const getSharedRequestMap = (key) => {
+  if (typeof window === "undefined") return null;
+  const globalObj = window;
+  if (!(globalObj[key] instanceof Map)) {
+    globalObj[key] = new Map();
+  }
+  return globalObj[key];
+};
+
+const readEmployeeCompetencesStore = () => {
+  try {
+    const raw = localStorage.getItem(EMPLOYEE_COMPETENCES_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const getCachedEmployeeCompetenceEntry = (employeeId) => {
+  const store = readEmployeeCompetencesStore();
+  const entry = store[String(employeeId)];
+  if (!entry || !Array.isArray(entry.rows)) return null;
+
+  const ts = Number(entry.ts) || 0;
+  return {
+    ts,
+    rows: entry.rows,
+    isFresh: ts > 0 && Date.now() - ts <= EMPLOYEE_COMPETENCES_CACHE_TTL_MS,
+  };
+};
+
+const persistEmployeeCompetenceEntry = (employeeId, rows) => {
+  try {
+    const store = readEmployeeCompetencesStore();
+    store[String(employeeId)] = {
+      ts: Date.now(),
+      rows: Array.isArray(rows) ? rows : [],
+    };
+    localStorage.setItem(EMPLOYEE_COMPETENCES_CACHE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore cache persistence failures
+  }
+};
+
+const persistEmployeeCompetenceEntries = (entriesByEmployeeId, employeeIds = []) => {
+  try {
+    const source =
+      entriesByEmployeeId &&
+      typeof entriesByEmployeeId === "object" &&
+      !Array.isArray(entriesByEmployeeId)
+        ? entriesByEmployeeId
+        : {};
+
+    const ids = (Array.isArray(employeeIds) && employeeIds.length > 0
+      ? employeeIds
+      : Object.keys(source)
+    )
+      .map((id) => String(id))
+      .filter(Boolean);
+
+    if (ids.length === 0) return;
+
+    const now = Date.now();
+    const store = readEmployeeCompetencesStore();
+    ids.forEach((id) => {
+      const rows = source[id] ?? source[String(id)] ?? source[Number(id)] ?? [];
+      store[id] = {
+        ts: now,
+        rows: Array.isArray(rows) ? rows : [],
+      };
+    });
+    localStorage.setItem(EMPLOYEE_COMPETENCES_CACHE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore cache persistence failures
+  }
+};
+
+const readEmployeePendingPostesStore = () => {
+  try {
+    const raw = localStorage.getItem(EMPLOYEE_PENDING_POSTES_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const getCachedEmployeePendingPostesEntry = (employeeId) => {
+  const store = readEmployeePendingPostesStore();
+  const entry = store[String(employeeId)];
+  if (!entry || !Array.isArray(entry.rows)) return null;
+
+  const ts = Number(entry.ts) || 0;
+  return {
+    ts,
+    rows: entry.rows,
+    isFresh: ts > 0 && Date.now() - ts <= EMPLOYEE_PENDING_POSTES_CACHE_TTL_MS,
+  };
+};
+
+const persistEmployeePendingPostesEntry = (employeeId, rows) => {
+  try {
+    const store = readEmployeePendingPostesStore();
+    store[String(employeeId)] = {
+      ts: Date.now(),
+      rows: Array.isArray(rows) ? rows : [],
+    };
+    localStorage.setItem(EMPLOYEE_PENDING_POSTES_CACHE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore cache persistence failures
+  }
+};
+
+const persistEmployeePendingPostesEntries = (entriesByEmployeeId, employeeIds = []) => {
+  try {
+    const source =
+      entriesByEmployeeId &&
+      typeof entriesByEmployeeId === "object" &&
+      !Array.isArray(entriesByEmployeeId)
+        ? entriesByEmployeeId
+        : {};
+
+    const ids = (Array.isArray(employeeIds) && employeeIds.length > 0
+      ? employeeIds
+      : Object.keys(source)
+    )
+      .map((id) => String(id))
+      .filter(Boolean);
+
+    if (ids.length === 0) return;
+
+    const now = Date.now();
+    const store = readEmployeePendingPostesStore();
+    ids.forEach((id) => {
+      const rows = source[id] ?? source[String(id)] ?? source[Number(id)] ?? [];
+      store[id] = {
+        ts: now,
+        rows: Array.isArray(rows) ? rows : [],
+      };
+    });
+    localStorage.setItem(EMPLOYEE_PENDING_POSTES_CACHE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore cache persistence failures
+  }
 };
 
 const CarrieresPage = () => {
@@ -49,6 +231,10 @@ const CarrieresPage = () => {
   const { setTitle, setOnPrint, setOnExportPDF, setOnExportExcel, searchQuery, clearActions } = useHeader();
   const { dynamicStyles } = useOpen();
   const carrieresTableRef = useRef(null);
+  const competencesPrefetchRequestsRef = useRef(new Map());
+  const pendingPostesPrefetchRequestsRef = useRef(new Map());
+  const departmentPrefetchRequestsRef = useRef(new Map());
+  const departmentPrefetchedAtRef = useRef(new Map());
   const normalizedDepartements = useMemo(() => normalizeDepartementsPayload(departements), [departements]);
 
   useEffect(() => {
@@ -200,7 +386,15 @@ const CarrieresPage = () => {
     });
     
     setEmployees(filtered);
-    setSelectedEmployee(null);
+
+    // Keep the current selection when background refreshes update the employee list.
+    setSelectedEmployee((prevSelected) => {
+      if (!prevSelected?.id) return null;
+      const nextSelected = filtered.find(
+        (emp) => String(emp?.id) === String(prevSelected.id)
+      );
+      return nextSelected || null;
+    });
   }, [selectedDepartementId, includeSubDepartments, normalizedDepartements, allEmployees, collectDeptIds, findDeptById]);
 
   const filteredEmployeeList = useMemo(() => {
@@ -211,6 +405,186 @@ const CarrieresPage = () => {
       return terms.every((t) => text.includes(t));
     });
   }, [employees, employeeSearch]);
+
+  const primeEmployeeCompetencesCache = useCallback(async (employeeId, options = {}) => {
+    if (!employeeId) return;
+
+    const { forceRefresh = false } = options;
+    const cacheKey = String(employeeId);
+    const cachedEntry = getCachedEmployeeCompetenceEntry(cacheKey);
+    const sharedRequests = getSharedRequestMap(GLOBAL_COMPETENCE_REQUESTS_KEY);
+
+    if (!forceRefresh && cachedEntry?.isFresh) {
+      return;
+    }
+
+    const sharedExistingRequest = sharedRequests?.get(cacheKey);
+    if (sharedExistingRequest) {
+      await sharedExistingRequest;
+      return;
+    }
+
+    const existingRequest = competencesPrefetchRequestsRef.current.get(cacheKey);
+    if (existingRequest) {
+      await existingRequest;
+      return;
+    }
+
+    const request = apiClient
+      .get(`/employes/${employeeId}/competences`)
+      .then((response) => {
+        const payload = response?.data?.data ?? response?.data ?? [];
+        const rows = Array.isArray(payload) ? payload : [];
+        persistEmployeeCompetenceEntry(cacheKey, rows);
+      })
+      .catch(() => {
+        // Silent prefetch: errors are ignored here.
+      })
+      .finally(() => {
+        competencesPrefetchRequestsRef.current.delete(cacheKey);
+        sharedRequests?.delete(cacheKey);
+      });
+
+    competencesPrefetchRequestsRef.current.set(cacheKey, request);
+    sharedRequests?.set(cacheKey, request);
+    await request;
+  }, []);
+
+  const primeEmployeePendingPostesCache = useCallback(async (employeeId, options = {}) => {
+    if (!employeeId) return;
+
+    const { forceRefresh = false } = options;
+    const cacheKey = String(employeeId);
+    const cachedEntry = getCachedEmployeePendingPostesEntry(cacheKey);
+    const sharedRequests = getSharedRequestMap(GLOBAL_PENDING_POSTES_REQUESTS_KEY);
+
+    if (!forceRefresh && cachedEntry?.isFresh) {
+      return;
+    }
+
+    const sharedExistingRequest = sharedRequests?.get(cacheKey);
+    if (sharedExistingRequest) {
+      await sharedExistingRequest;
+      return;
+    }
+
+    const existingRequest = pendingPostesPrefetchRequestsRef.current.get(cacheKey);
+    if (existingRequest) {
+      await existingRequest;
+      return;
+    }
+
+    const request = apiClient
+      .get(`/employes/${employeeId}/postes-en-attente`)
+      .then((response) => {
+        const payload = response?.data;
+        let rows = [];
+        if (Array.isArray(payload)) {
+          rows = payload;
+        } else if (Array.isArray(payload?.data)) {
+          rows = payload.data;
+        }
+        persistEmployeePendingPostesEntry(cacheKey, rows);
+      })
+      .catch(() => {
+        // Silent prefetch: errors are ignored here.
+      })
+      .finally(() => {
+        pendingPostesPrefetchRequestsRef.current.delete(cacheKey);
+        sharedRequests?.delete(cacheKey);
+      });
+
+    pendingPostesPrefetchRequestsRef.current.set(cacheKey, request);
+    sharedRequests?.set(cacheKey, request);
+    await request;
+  }, []);
+
+  const prefetchDepartmentEmployeeData = useCallback(
+    async (employeeIds) => {
+      const ids = (Array.isArray(employeeIds) ? employeeIds : [])
+        .map((id) => String(id || ""))
+        .filter(Boolean);
+
+      if (ids.length === 0) return;
+
+      const idChunks = chunkArray(ids, DEPARTMENT_PREFETCH_CHUNK_SIZE);
+      for (let i = 0; i < idChunks.length; i += DEPARTMENT_PREFETCH_BATCH_CONCURRENCY) {
+        const chunkGroup = idChunks.slice(i, i + DEPARTMENT_PREFETCH_BATCH_CONCURRENCY);
+
+        await Promise.allSettled(
+          chunkGroup.map(async (chunk) => {
+            const [competencesResult, pendingResult] = await Promise.allSettled([
+              apiClient.post("/employes/competences/batch", { employee_ids: chunk }),
+              apiClient.post("/carrieres/postes-en-attente/batch", { employee_ids: chunk }),
+            ]);
+
+            if (competencesResult.status === "fulfilled") {
+              const payload = competencesResult.value?.data?.data ?? competencesResult.value?.data ?? {};
+              persistEmployeeCompetenceEntries(payload, chunk);
+            } else {
+              for (let j = 0; j < chunk.length; j += DEPARTMENT_PREFETCH_FALLBACK_BATCH) {
+                const fallbackChunk = chunk.slice(j, j + DEPARTMENT_PREFETCH_FALLBACK_BATCH);
+                await Promise.allSettled(fallbackChunk.map((id) => primeEmployeeCompetencesCache(id)));
+              }
+            }
+
+            if (pendingResult.status === "fulfilled") {
+              const payload = pendingResult.value?.data?.data ?? pendingResult.value?.data ?? {};
+              persistEmployeePendingPostesEntries(payload, chunk);
+            } else {
+              for (let j = 0; j < chunk.length; j += DEPARTMENT_PREFETCH_FALLBACK_BATCH) {
+                const fallbackChunk = chunk.slice(j, j + DEPARTMENT_PREFETCH_FALLBACK_BATCH);
+                await Promise.allSettled(fallbackChunk.map((id) => primeEmployeePendingPostesCache(id)));
+              }
+            }
+          })
+        );
+      }
+    },
+    [primeEmployeeCompetencesCache, primeEmployeePendingPostesCache]
+  );
+
+  useEffect(() => {
+    if (!selectedDepartementId || !Array.isArray(employees) || employees.length === 0) return;
+
+    const employeeIds = employees
+      .map((emp) => String(emp?.id || ""))
+      .filter(Boolean);
+
+    if (employeeIds.length === 0) return;
+
+    const prefetchKey = `${selectedDepartementId}:${includeSubDepartments ? "1" : "0"}`;
+    const lastPrefetchTs = Number(departmentPrefetchedAtRef.current.get(prefetchKey) || 0);
+    if (lastPrefetchTs > 0 && Date.now() - lastPrefetchTs < DEPARTMENT_PREFETCH_RECENT_MS) {
+      return;
+    }
+
+    const existingRequest = departmentPrefetchRequestsRef.current.get(prefetchKey);
+    if (existingRequest) {
+      return;
+    }
+
+    let cancelled = false;
+    const request = (async () => {
+      await prefetchDepartmentEmployeeData(employeeIds);
+      if (!cancelled) {
+        departmentPrefetchedAtRef.current.set(prefetchKey, Date.now());
+      }
+    })().finally(() => {
+      departmentPrefetchRequestsRef.current.delete(prefetchKey);
+    });
+
+    departmentPrefetchRequestsRef.current.set(prefetchKey, request);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedDepartementId,
+    includeSubDepartments,
+    employees,
+    prefetchDepartmentEmployeeData,
+  ]);
 
   const toggleExpand = (departementId) => {
     setExpandedDepartements((prev) => ({
@@ -346,10 +720,31 @@ const CarrieresPage = () => {
                       <li
                         key={emp.id}
                         className={`employee-item ${isSelected ? "selected" : ""}`}
-                        onClick={() => setSelectedEmployee(emp)}
+                        onMouseEnter={() => {
+                          void primeEmployeeCompetencesCache(emp.id);
+                          void primeEmployeePendingPostesCache(emp.id);
+                        }}
+                        onClick={() => {
+                          void primeEmployeeCompetencesCache(emp.id);
+                          void primeEmployeePendingPostesCache(emp.id);
+                          setSelectedEmployee(emp);
+                        }}
                         style={{ cursor: "pointer" }}
                       >
                         <div style={{ display: "flex", alignItems: "center" }}>
+                          <div className={`career-employee-checkbox ${isSelected ? "checked" : ""}`} aria-hidden="true">
+                            {isSelected ? (
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3a8a90" strokeWidth="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <path d="M9 12l2 2 4-4"></path>
+                              </svg>
+                            ) : (
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                              </svg>
+                            )}
+                          </div>
+
                           <div className="employee-avatar">
                             {emp.nom?.charAt(0).toUpperCase() || ""}
                             {emp.prenom?.charAt(0).toUpperCase() || ""}
@@ -373,7 +768,16 @@ const CarrieresPage = () => {
             </div>
 
             {/* 3. Main content: tabs */}
-            <div className="career-main-panel" style={{ flex: 1, width: "100%" }}>
+            <div
+              className="career-main-panel"
+              style={{
+                flex: 1,
+                width: "100%",
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
               {selectedEmployee && (
                 <div
                   className="career-selected-employee-banner"

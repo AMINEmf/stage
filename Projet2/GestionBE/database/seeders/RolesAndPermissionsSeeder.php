@@ -238,6 +238,36 @@ class RolesAndPermissionsSeeder extends Seeder
             'update_bultin_models_details',
             'delete_bultin_models_details',
 
+            // Permissions navigation RH
+            'view_all_accidents',
+            'create_accidents',
+            'update_accidents',
+            'delete_accidents',
+            'view_all_cimr',
+            'create_cimr',
+            'update_cimr',
+            'delete_cimr',
+            'view_all_mutuelle',
+            'create_mutuelle',
+            'update_mutuelle',
+            'delete_mutuelle',
+            'view_all_cnss',
+            'create_cnss',
+            'update_cnss',
+            'delete_cnss',
+            'view_all_carrieres_formations',
+            'create_carrieres_formations',
+            'update_carrieres_formations',
+            'delete_carrieres_formations',
+            'view_all_conflits',
+            'create_conflits',
+            'update_conflits',
+            'delete_conflits',
+            'view_all_sanctions',
+            'create_sanctions',
+            'update_sanctions',
+            'delete_sanctions',
+
         ];
         foreach ($AdminPermissions as $permission) {
             $perm = Permission::firstOrCreate(['name' => $permission]);

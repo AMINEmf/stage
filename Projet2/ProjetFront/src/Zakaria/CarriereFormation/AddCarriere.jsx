@@ -465,6 +465,7 @@ function AddCarriere({
   const handleClose = useCallback(() => {
     setMatricule("");
     setFullName("");
+    setSelectedEmployeeOption([]);
     setPosteActuel("");
     setGrade("");
     setPromotionDate("");
@@ -479,6 +480,10 @@ function AddCarriere({
 
   const selectedPoste = selectedPosteOption[0]?.poste;
   const gradeLocked = Boolean(selectedPoste && (selectedPoste.grade_id ?? selectedPoste.grade?.id));
+  const canSubmit = useMemo(
+    () => !loading && Boolean(matricule.trim() && fullName.trim() && posteActuel.trim() && posteId && grade),
+    [loading, matricule, fullName, posteActuel, posteId, grade]
+  );
 
 
 
@@ -490,13 +495,8 @@ function AddCarriere({
       return;
     }
 
-    if (!matricule.trim() || !fullName.trim() || !posteActuel.trim() || !grade) {
-      Swal.fire("Erreur", "Veuillez remplir tous les champs obligatoires.", "warning");
-      return;
-    }
-
-    if (typeEvolutionValue.length === 0) {
-      Swal.fire("Erreur", "Veuillez sélectionner un type d'évolution.", "warning");
+    if (!matricule.trim() || !fullName.trim() || !posteActuel.trim() || !posteId || !grade) {
+      Swal.fire("Erreur", "Veuillez sélectionner un poste et renseigner les champs obligatoires.", "warning");
       return;
     }
 
@@ -520,14 +520,17 @@ function AddCarriere({
         employe_id: employeId,
         poste_id: posteId,
         grade_id: grade ? Number(grade) : null,
-        type_evolution: typeEvolutionValue[0].value,
         manager_id: managerId ? Number(managerId) : null,
       };
 
       await apiClient.post("/carrieres", apiPayload);
 
       Swal.fire("Succès", "Évolution de carrière enregistrée", "success");
-      if (onCarriereAdded) onCarriereAdded();
+      if (selectedCarriere) {
+        onCarriereUpdated?.();
+      } else {
+        onCarriereAdded?.();
+      }
       handleClose();
     } catch (error) {
       console.error("Erreur carrière:", error);
@@ -551,7 +554,12 @@ function AddCarriere({
           </button>
         </div>
 
-        <div className="cnss-form-body">
+        <div
+          className="cnss-form-body"
+          style={{
+            overflowX: "hidden",
+          }}
+        >
           <Form onSubmit={handleSubmit} id="carriereForm">
             <div className="cnss-section-title">
               <User size={14} />
@@ -803,14 +811,19 @@ function AddCarriere({
         </div>
 
         <div className="cnss-form-footer">
-          <button type="button" className="cnss-btn-secondary" onClick={handleClose}>
+          <button
+            type="button"
+            className="cnss-btn-secondary"
+            onClick={handleClose}
+            disabled={loading}
+          >
             Annuler
           </button>
           <button
             type="submit"
             form="carriereForm"
             className="cnss-btn-primary"
-            disabled={loading || !matricule.trim() || !fullName.trim() || !posteActuel.trim() || !grade}
+            disabled={!canSubmit}
           >
             {loading ? "Enregistrement..." : "Enregistrer"}
           </button>

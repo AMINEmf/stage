@@ -156,9 +156,18 @@ const AddUser = () => {
         <Navigation />
         <Box component="main"  sx={{ flexGrow: 1, p: 3, mt: 4 }}>
           <Toolbar />
-      <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto" }}>
+      <div style={{
+        padding: "20px",
+        maxWidth: "600px",
+        margin: "0 auto",
+        height: "calc(100vh - 180px)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden"
+      }}>
         <i className="fas fa-user-plus" aria-hidden="true"></i>
         <h2 style={{ marginBottom: "20px" }}>Ajouter un utilisateur</h2>
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: "6px" }}>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: "15px" }}>
             <label style={{ marginRight: "10px" }}>Nom:</label>
@@ -254,6 +263,7 @@ const AddUser = () => {
             Ajouter
           </button>
         </form>
+        </div>
       </div>
       </Box>
       </Box>

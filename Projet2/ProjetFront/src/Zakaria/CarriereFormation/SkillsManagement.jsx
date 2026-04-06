@@ -16,8 +16,89 @@ import "./CareerTraining.css";
 
 const DEBUG_COMPETENCES = false;
 const UNCATEGORIZED_LABEL = "Non classée";
+const EMPLOYEE_COMPETENCES_CACHE_KEY = "cf_employee_competences_cache_v1";
+const EMPLOYEE_COMPETENCES_CACHE_TTL_MS = 2 * 60 * 1000;
+const PREFETCH_COMPETENCES_LIMIT = 24;
+const PREFETCH_COMPETENCES_BATCH = 4;
+const GLOBAL_COMPETENCE_REQUESTS_KEY = "__cf_competence_prefetch_requests";
+
+const getSharedRequestMap = (key) => {
+  if (typeof window === "undefined") return null;
+  const globalObj = window;
+  if (!(globalObj[key] instanceof Map)) {
+    globalObj[key] = new Map();
+  }
+  return globalObj[key];
+};
 
 const normalizeValue = (value) => (value == null ? "" : String(value).toLowerCase().trim());
+
+const sanitizeCompetenceRows = (rows) => (Array.isArray(rows) ? rows : []);
+
+const buildEmployeeCompetenceSnapshot = (rowsInput) => {
+  const rows = sanitizeCompetenceRows(rowsInput);
+  const levels = {};
+  const ids = [];
+
+  rows.forEach((comp) => {
+    const compId = comp?.id ?? comp?.competence_id;
+    if (compId == null) return;
+    const key = String(compId);
+    const level =
+      comp?.niveau ??
+      comp?.pivot?.niveau ??
+      comp?.pivot?.niveau_acquis ??
+      0;
+    levels[key] = Number(level) || 0;
+    ids.push(key);
+  });
+
+  return {
+    rows,
+    levels,
+    ids: Array.from(new Set(ids)),
+  };
+};
+
+const readEmployeeCompetencesStore = () => {
+  try {
+    const raw = localStorage.getItem(EMPLOYEE_COMPETENCES_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const getEmployeeCompetencesCachedSnapshot = (employeeId) => {
+  const store = readEmployeeCompetencesStore();
+  const entry = store[String(employeeId)];
+
+  if (!entry || !Array.isArray(entry.rows)) return null;
+
+  const snapshot = buildEmployeeCompetenceSnapshot(entry.rows);
+  const ts = Number(entry.ts) || 0;
+
+  return {
+    ...snapshot,
+    ts,
+    isFresh: ts > 0 && Date.now() - ts <= EMPLOYEE_COMPETENCES_CACHE_TTL_MS,
+  };
+};
+
+const persistEmployeeCompetencesSnapshot = (employeeId, rows) => {
+  try {
+    const store = readEmployeeCompetencesStore();
+    store[String(employeeId)] = {
+      ts: Date.now(),
+      rows: sanitizeCompetenceRows(rows),
+    };
+    localStorage.setItem(EMPLOYEE_COMPETENCES_CACHE_KEY, JSON.stringify(store));
+  } catch (e) {
+    console.warn("Erreur sauvegarde cache compétences employé:", e);
+  }
+};
 
 const SkillsManagement = ({
   embedded = false,
@@ -59,6 +140,7 @@ const SkillsManagement = ({
 
   const dropdownRef = useRef(null);
   const employeeCompetencesCacheRef = useRef(new Map());
+  const employeeCompetenceRequestsRef = useRef(new Map());
   const posteRequiredLevelsCacheRef = useRef(new Map());
 
   useEffect(() => {
@@ -197,7 +279,7 @@ const SkillsManagement = ({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [embedded]);
 
   const findDepartmentById = useCallback((list, id) => {
     for (let dept of list) {
@@ -208,7 +290,7 @@ const SkillsManagement = ({
       }
     }
     return null;
-  }, []);
+  }, [embedded]);
 
   const departmentIdSet = useMemo(() => {
     if (!departementId) return new Set();
@@ -262,6 +344,10 @@ const SkillsManagement = ({
       }
     } catch (e) {
       console.warn('Cache employés invalide:', e);
+    }
+
+    if (embedded && hasCachedData) {
+      return;
     }
 
     // Fetch fresh data from API in background
@@ -320,6 +406,10 @@ const SkillsManagement = ({
       console.warn('Cache compétences invalide:', e);
     }
 
+    if (embedded && hasCachedData) {
+      return;
+    }
+
     // Fetch fresh data from API in background
     setLoading(true);
     try {
@@ -344,53 +434,94 @@ const SkillsManagement = ({
     }
   }, []);
 
-  const fetchEmployeeCompetences = useCallback(async (employeeId) => {
+  const fetchEmployeeCompetences = useCallback(async (employeeId, options = {}) => {
     if (!employeeId) return;
-    console.log('[SkillsManagement] Fetching competences for employee:', employeeId);
 
+    const { forceRefresh = false, silent = false } = options;
     const cacheKey = String(employeeId);
-    const cached = employeeCompetencesCacheRef.current.get(cacheKey);
+    const sharedRequests = getSharedRequestMap(GLOBAL_COMPETENCE_REQUESTS_KEY);
+
+    let cached = employeeCompetencesCacheRef.current.get(cacheKey);
+    if (!cached) {
+      const diskCached = getEmployeeCompetencesCachedSnapshot(cacheKey);
+      if (diskCached) {
+        cached = diskCached;
+        employeeCompetencesCacheRef.current.set(cacheKey, diskCached);
+      }
+    }
+
     if (cached) {
       setEmployeeCompetences(cached.levels);
       setEmployeeCompetenceIds(new Set(cached.ids));
       setEmployeeCompetenceRows(cached.rows);
     }
 
-    setLoadingEmployeeCompetences(true);
-    try {
-      const response = await apiClient.get(`/employes/${employeeId}/competences`);
-      const payload = response?.data?.data ?? response?.data ?? [];
-      const rows = Array.isArray(payload) ? payload : [];
-      console.log('[SkillsManagement] Competences loaded:', rows.length, 'competences');
-      const levels = {};
-      const ids = new Set();
-      rows.forEach((comp) => {
-        const level =
-          comp?.niveau ??
-          comp?.pivot?.niveau ??
-          comp?.pivot?.niveau_acquis ??
-          0;
-        levels[comp.id] = Number(level) || 0;
-        ids.add(String(comp.id));
-      });
-      setEmployeeCompetences(levels);
-      setEmployeeCompetenceIds(ids);
-      setEmployeeCompetenceRows(rows);
-      employeeCompetencesCacheRef.current.set(cacheKey, {
-        levels,
-        ids: Array.from(ids),
-        rows,
-      });
-    } catch (error) {
-      console.error("EMPLOYEE_COMPETENCES_ERROR", error);
-      if (!cached) {
-        setEmployeeCompetences({});
-        setEmployeeCompetenceIds(new Set());
-        setEmployeeCompetenceRows([]);
-      }
-    } finally {
-      setLoadingEmployeeCompetences(false);
+    const isCacheFresh = Boolean(cached?.ts) && Date.now() - Number(cached.ts) <= EMPLOYEE_COMPETENCES_CACHE_TTL_MS;
+
+    if (!forceRefresh && isCacheFresh) {
+      return;
     }
+
+    const sharedExistingRequest = sharedRequests?.get(cacheKey);
+    if (sharedExistingRequest) {
+      await sharedExistingRequest;
+      const refreshed = getEmployeeCompetencesCachedSnapshot(cacheKey);
+      if (refreshed) {
+        setEmployeeCompetences(refreshed.levels);
+        setEmployeeCompetenceIds(new Set(refreshed.ids));
+        setEmployeeCompetenceRows(refreshed.rows);
+        employeeCompetencesCacheRef.current.set(cacheKey, refreshed);
+      }
+      return;
+    }
+
+    const existingRequest = employeeCompetenceRequestsRef.current.get(cacheKey);
+    if (existingRequest) {
+      await existingRequest;
+      return;
+    }
+
+    const shouldBlockUI = !silent && !cached;
+    if (shouldBlockUI) {
+      setLoadingEmployeeCompetences(true);
+    }
+
+    const request = apiClient
+      .get(`/employes/${employeeId}/competences`)
+      .then((response) => {
+        const payload = response?.data?.data ?? response?.data ?? [];
+        const rows = Array.isArray(payload) ? payload : [];
+        const snapshot = {
+          ...buildEmployeeCompetenceSnapshot(rows),
+          ts: Date.now(),
+          isFresh: true,
+        };
+
+        setEmployeeCompetences(snapshot.levels);
+        setEmployeeCompetenceIds(new Set(snapshot.ids));
+        setEmployeeCompetenceRows(snapshot.rows);
+        employeeCompetencesCacheRef.current.set(cacheKey, snapshot);
+        persistEmployeeCompetencesSnapshot(cacheKey, snapshot.rows);
+      })
+      .catch((error) => {
+        console.error("EMPLOYEE_COMPETENCES_ERROR", error);
+        if (!cached) {
+          setEmployeeCompetences({});
+          setEmployeeCompetenceIds(new Set());
+          setEmployeeCompetenceRows([]);
+        }
+      })
+      .finally(() => {
+        employeeCompetenceRequestsRef.current.delete(cacheKey);
+        sharedRequests?.delete(cacheKey);
+        if (shouldBlockUI) {
+          setLoadingEmployeeCompetences(false);
+        }
+      });
+
+    employeeCompetenceRequestsRef.current.set(cacheKey, request);
+    sharedRequests?.set(cacheKey, request);
+    await request;
   }, []);
 
   const fetchPosteRequiredLevels = useCallback(async (posteId) => {
@@ -431,7 +562,6 @@ const SkillsManagement = ({
   }, [fetchEmployees, fetchCompetenceCatalog]);
 
   useEffect(() => {
-    console.log('[SkillsManagement] selectedEmployeeId changed:', selectedEmployeeId);
     if (selectedEmployeeId) {
       fetchEmployeeCompetences(selectedEmployeeId);
       setShowRequiredOnly(false); // Réinitialiser le filtre lors du changement d'employé
@@ -542,10 +672,11 @@ const SkillsManagement = ({
   useEffect(() => {
     const employeeIdToSet = preSelectedEmployee?.id ?? preSelectedEmployeeId;
     if (employeeIdToSet) {
-      console.log('[SkillsManagement] Setting selectedEmployeeId from parent:', employeeIdToSet);
-      setSelectedEmployeeId(String(employeeIdToSet));
+      const nextSelectedEmployeeId = String(employeeIdToSet);
+      setSelectedEmployeeId(nextSelectedEmployeeId);
+      void fetchEmployeeCompetences(nextSelectedEmployeeId, { silent: true });
     }
-  }, [preSelectedEmployeeId, preSelectedEmployee?.id]); // ← Utiliser preSelectedEmployee?.id au lieu de l'objet entier
+  }, [preSelectedEmployeeId, preSelectedEmployee?.id, fetchEmployeeCompetences]);
 
   // Ne plus auto-sélectionner le premier employé - l'utilisateur doit choisir explicitement
   // useEffect(() => {
@@ -565,6 +696,34 @@ const SkillsManagement = ({
       setSelectedEmployeeId(null);
     }
   }, [filteredEmployees, selectedEmployeeId, preSelectedEmployeeId]);
+
+  useEffect(() => {
+    if (embedded) return;
+    if (!Array.isArray(filteredEmployees) || filteredEmployees.length === 0) return;
+
+    const employeeIds = filteredEmployees
+      .slice(0, PREFETCH_COMPETENCES_LIMIT)
+      .map((emp) => String(emp?.id || ""))
+      .filter(Boolean);
+
+    if (employeeIds.length === 0) return;
+
+    let cancelled = false;
+
+    const prefetch = async () => {
+      for (let i = 0; i < employeeIds.length; i += PREFETCH_COMPETENCES_BATCH) {
+        if (cancelled) return;
+        const batch = employeeIds.slice(i, i + PREFETCH_COMPETENCES_BATCH);
+        await Promise.allSettled(batch.map((id) => fetchEmployeeCompetences(id, { silent: true })));
+      }
+    };
+
+    void prefetch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [embedded, filteredEmployees, fetchEmployeeCompetences]);
 
   const tableRows = useMemo(() => {
     if (!selectedEmployeeId) return [];
@@ -789,7 +948,7 @@ const SkillsManagement = ({
     const competenceIdValue = Number(formState.competenceId);
     await saveCompetenceLevel(selectedEmployeeId, competenceIdValue || formState.competenceId, levelValue);
     // Refresh employee competences to update the table
-    await fetchEmployeeCompetences(selectedEmployeeId);
+    await fetchEmployeeCompetences(selectedEmployeeId, { forceRefresh: true, silent: true });
     Swal.fire("Succès", "Compétence enregistrée.", "success");
     handleCloseDrawer();
   };
@@ -811,7 +970,7 @@ const SkillsManagement = ({
 
       await saveCompetenceLevel(selectedEmployeeId, row.id, 0);
       // Refresh the table
-      await fetchEmployeeCompetences(selectedEmployeeId);
+      await fetchEmployeeCompetences(selectedEmployeeId, { forceRefresh: true, silent: true });
       Swal.fire("Supprimé", "Compétence retirée.", "success");
     },
     [selectedEmployeeId, saveCompetenceLevel, fetchEmployeeCompetences]
@@ -1062,7 +1221,7 @@ const SkillsManagement = ({
               const row = filteredRows.find((item) => item.id === rowId) || null;
               if (row) handleDelete(row);
             }}
-            loading={loading || (loadingEmployeeCompetences && filteredRows.length === 0)}
+            loading={loading || (loadingEmployeeCompetences && tableRows.length === 0)}
             loadingText="Chargement des compétences..."
             canBulkDelete={false}
           />

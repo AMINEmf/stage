@@ -96,7 +96,7 @@ const SuggestedParticipantsPanel = ({ formation, onParticipantAdded }) => {
           style={{ margin: 0, pointerEvents: "none", userSelect: "none" }}
         >
           <span style={{ fontSize: "1rem" }}>🤖</span>
-          <span>Suggestions intelligentes de participants</span>
+          <span>Suggestion des participants</span>
         </div>
         {open ? (
           <ChevronDown size={16} color="#6b7280" />

@@ -5,28 +5,37 @@ import { IoFolderOpenOutline } from "react-icons/io5";
 import { FaMinus, FaPlus } from "react-icons/fa6";
 import "./DepartementPanel.css";
 
+const EMPTY_EMPLOYEES = [];
+const EMPTY_SELECTED_EMPLOYEES = new Set();
+const EMPTY_PROCESSED_EMPLOYEES = new Set();
+
 
 export const DepartmentPanel = memo(({
   onSelectDepartment,
   selectedDepartmentId,
   includeSubDepartments,
   onIncludeSubDepartmentsChange,
-  employees = [],
+  employees = EMPTY_EMPLOYEES,
   selectedEmployee = null,
-  selectedEmployees = new Set(),
-  processedEmployees = new Set(),
+  selectedEmployees = EMPTY_SELECTED_EMPLOYEES,
+  processedEmployees = EMPTY_PROCESSED_EMPLOYEES,
   onSelectEmployee,
   onCheckEmployee,
+  onEmployeeHover,
   findDepartmentName,
-  filtersVisible = false
+  filtersVisible = false,
+  showEmployees = true,
 }) => {
   const [departments, setDepartments] = useState([]);
   const [isLoading, setIsLoading] = useState(false); 
   const [error, setError] = useState(null);
   const [expandedDepartments, setExpandedDepartments] = useState({});
-  const [checkedEmployeesData, setCheckedEmployeesData] = useState([]);
   const [searchTerms, setSearchTerms] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
+
+  const safeEmployees = Array.isArray(employees) ? employees : EMPTY_EMPLOYEES;
+  const safeSelectedEmployees = selectedEmployees instanceof Set ? selectedEmployees : EMPTY_SELECTED_EMPLOYEES;
+  const safeProcessedEmployees = processedEmployees instanceof Set ? processedEmployees : EMPTY_PROCESSED_EMPLOYEES;
 
   const fetchDepartments = useCallback(async () => {
     setError(null);
@@ -81,18 +90,19 @@ export const DepartmentPanel = memo(({
   }, [fetchDepartments]);
 
   useEffect(() => {
-    const checked = employees.filter(emp => selectedEmployees.has(emp.id));
-    setCheckedEmployeesData(checked);
+    if (!showEmployees) {
+      return;
+    }
 
-    if (employees.length > 0) {
-      const allSelected = employees.every(emp =>
-        selectedEmployees.has(emp.id) || processedEmployees.has(emp.id)
+    if (safeEmployees.length > 0) {
+      const allSelected = safeEmployees.every(emp =>
+        safeSelectedEmployees.has(emp.id) || safeProcessedEmployees.has(emp.id)
       );
       setSelectAll(allSelected);
     } else {
       setSelectAll(false);
     }
-  }, [selectedEmployees, employees, processedEmployees]);
+  }, [showEmployees, safeEmployees, safeSelectedEmployees, safeProcessedEmployees]);
 
   const handleSearchChange = (e) => {
     const terms = e.target.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term);
@@ -104,14 +114,14 @@ export const DepartmentPanel = memo(({
     setSelectAll(isChecked);
 
     if (isChecked) {
-      employees.forEach(emp => {
-        if (!processedEmployees.has(emp.id)) {
-          selectedEmployees.add(emp.id);
+      safeEmployees.forEach(emp => {
+        if (!safeProcessedEmployees.has(emp.id)) {
+          safeSelectedEmployees.add(emp.id);
         }
       });
     } else {
-      employees.forEach(emp => {
-        selectedEmployees.delete(emp.id);
+      safeEmployees.forEach(emp => {
+        safeSelectedEmployees.delete(emp.id);
       });
     }
 
@@ -119,8 +129,8 @@ export const DepartmentPanel = memo(({
   };
 
   const filteredEmployees = searchTerms.length === 0
-    ? employees
-    : employees.filter(emp =>
+    ? safeEmployees
+    : safeEmployees.filter(emp =>
       searchTerms.some(term =>
         emp.nom?.toLowerCase().includes(term) ||
         emp.prenom?.toLowerCase().includes(term) ||
@@ -179,7 +189,7 @@ export const DepartmentPanel = memo(({
 
   return (
     <div className={`departement_historique ${filtersVisible ? '' : ''}`}>
-      <div className="departement_list" style={{width: "47%"}}>
+      <div className="departement_list" style={{ width: showEmployees ? "47%" : "100%" }}>
         <div className="checkbox-container">
           <input
             type="checkbox"
@@ -204,119 +214,122 @@ export const DepartmentPanel = memo(({
         )}
       </div>
 
-      <div className="employee-panel">
-        <input
-          type="text"
-          placeholder="Rechercher"
-          onChange={handleSearchChange}
-          className="search-input"
-        />
+      {showEmployees && (
+        <div className="employee-panel">
+          <input
+            type="text"
+            placeholder="Rechercher"
+            onChange={handleSearchChange}
+            className="search-input"
+          />
 
-        {employees.length > 0 && (
-          <div className="checkbox-container">
-            <input
-              type="checkbox"
-              id="selectAllEmployees"
-              checked={selectAll}
-              onChange={handleSelectAllChange}
-            />
-            <label htmlFor="selectAllEmployees">
-              Sélectionner tous les employés
-            </label>
-          </div>
-        )}
+          {safeEmployees.length > 0 && (
+            <div className="checkbox-container">
+              <input
+                type="checkbox"
+                id="selectAllEmployees"
+                checked={selectAll}
+                onChange={handleSelectAllChange}
+              />
+              <label htmlFor="selectAllEmployees">
+                Sélectionner tous les employés
+              </label>
+            </div>
+          )}
 
-        {employees.length === 0 ? (
-          <p style={{ textAlign: "center", marginTop: "20px" }}>
-            Veuillez sélectionner un département pour voir ses employés.
-          </p>
-        ) : (
-          <ul className="employee-list">
-            {filteredEmployees.map((employee) => {
-              const isProcessed = processedEmployees.has(employee.id);
-              const isSelected = selectedEmployees.has(employee.id);
-              const isCurrentlySelectedEmployee = selectedEmployee && selectedEmployee.id === employee.id;
+          {safeEmployees.length === 0 ? (
+            <p style={{ textAlign: "center", marginTop: "20px" }}>
+              Veuillez sélectionner un département pour voir ses employés.
+            </p>
+          ) : (
+            <ul className="employee-list">
+              {filteredEmployees.map((employee) => {
+                const isProcessed = safeProcessedEmployees.has(employee.id);
+                const isSelected = safeSelectedEmployees.has(employee.id);
+                const isCurrentlySelectedEmployee = selectedEmployee && selectedEmployee.id === employee.id;
 
-              return (
-                <li
-                  key={employee.id}
-                  className={`employee-item ${isCurrentlySelectedEmployee ? 'selected' : ''}`}
-                  onClick={() => onSelectEmployee(employee)}
-                >
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <div
-                      style={{
-                        marginRight: "15px",
-                        fontSize: "20px",
-                        color: "#3a8a90",
-                        pointerEvents: isProcessed ? "none" : "auto"
-                      }}
-                    >
-                      <button
+                return (
+                  <li
+                    key={employee.id}
+                    className={`employee-item ${isCurrentlySelectedEmployee ? 'selected' : ''}`}
+                    onMouseEnter={() => onEmployeeHover?.(employee)}
+                    onClick={() => onSelectEmployee(employee)}
+                  >
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <div
                         style={{
-                          border: "none",
-                          backgroundColor: "transparent",
-                          cursor: isProcessed ? "not-allowed" : "pointer",
-                          opacity: isProcessed ? 0.5 : 1
+                          marginRight: "15px",
+                          fontSize: "20px",
+                          color: "#3a8a90",
+                          pointerEvents: isProcessed ? "none" : "auto"
                         }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!isProcessed) {
-                            onCheckEmployee(e, employee);
-                          }
-                        }}
-                        disabled={isProcessed}
                       >
-                        {isSelected ? (
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3a8a90" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <path d="M9 12l2 2 4-4"></path>
-                          </svg>
-                        ) : (
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ddd" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="employee-avatar">
-                      {employee.url_img ? (
-                        <img
-                          src={`http://127.0.0.1:8000/storage/${employee.url_img}`}
-                          alt="Employee"
+                        <button
                           style={{
-                            width: "50px",
-                            height: "50px",
-                            borderRadius: "50%",
-                            border: "2px solid #eee",
+                            border: "none",
+                            backgroundColor: "transparent",
+                            cursor: isProcessed ? "not-allowed" : "pointer",
+                            opacity: isProcessed ? 0.5 : 1
                           }}
-                        />
-                      ) : (
-                        <>
-                          {employee.nom?.charAt(0).toUpperCase() || ""}
-                          {employee.prenom?.charAt(0).toUpperCase() || ""}
-                        </>
-                      )}
-                    </div>
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isProcessed) {
+                              onCheckEmployee(e, employee);
+                            }
+                          }}
+                          disabled={isProcessed}
+                        >
+                          {isSelected ? (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3a8a90" strokeWidth="2">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                              <path d="M9 12l2 2 4-4"></path>
+                            </svg>
+                          ) : (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ddd" strokeWidth="2">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            </svg>
+                          )}
+                        </button>
+                      </div>
 
-                    <div className="employee-info">
-                      <div className="employee-name">
-                        {employee.nom} {employee.prenom}
+                      <div className="employee-avatar">
+                        {employee.url_img ? (
+                          <img
+                            src={`http://127.0.0.1:8000/storage/${employee.url_img}`}
+                            alt="Employee"
+                            style={{
+                              width: "50px",
+                              height: "50px",
+                              borderRadius: "50%",
+                              border: "2px solid #eee",
+                            }}
+                          />
+                        ) : (
+                          <>
+                            {employee.nom?.charAt(0).toUpperCase() || ""}
+                            {employee.prenom?.charAt(0).toUpperCase() || ""}
+                          </>
+                        )}
                       </div>
-                      <div className="employee-details">
-                        {employee.matricule}
-                        <span style={{ marginLeft: '10px' }}></span>
-                        {findDepartmentName(employee.departement_id)}
+
+                      <div className="employee-info">
+                        <div className="employee-name">
+                          {employee.nom} {employee.prenom}
+                        </div>
+                        <div className="employee-details">
+                          {employee.matricule}
+                          <span style={{ marginLeft: '10px' }}></span>
+                          {findDepartmentName(employee.departement_id)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
     
   );
@@ -333,8 +346,10 @@ DepartmentPanel.propTypes = {
   processedEmployees: PropTypes.instanceOf(Set),
   onSelectEmployee: PropTypes.func,
   onCheckEmployee: PropTypes.func,
+  onEmployeeHover: PropTypes.func,
   findDepartmentName: PropTypes.func,
-  filtersVisible: PropTypes.bool
+  filtersVisible: PropTypes.bool,
+  showEmployees: PropTypes.bool,
 };
 
 export default DepartmentPanel;

@@ -20,6 +20,11 @@ import * as XLSX from 'xlsx';
 import { useHeader } from "../Acceuil/HeaderContext";
 
 
+const API_BASE = globalThis.location.hostname === "localhost"
+  ? "http://localhost:8000"
+  : "http://127.0.0.1:8000";
+
+
 
 
 
@@ -318,7 +323,7 @@ function EmpHistorique() {
 
   const findDepartmentById = useCallback((departmentId, departments) => {
     for (const dept of departments) {
-      if (dept.id === departmentId) return dept;
+      if (String(dept.id) === String(departmentId)) return dept;
       if (dept.children && dept.children.length > 0) {
         const found = findDepartmentById(departmentId, dept.children);
         if (found) return found;
@@ -343,6 +348,52 @@ function EmpHistorique() {
     return Array.from(uniqueEmployees.values());
   };
 
+  const mergeDepartmentEmployees = useCallback((flatDepartements, allEmployees) => {
+    const employeesByDepartment = new Map();
+
+    (allEmployees || []).forEach((employee) => {
+      const directDepartmentId = employee?.departement_id;
+      if (directDepartmentId != null) {
+        const key = String(directDepartmentId);
+        if (!employeesByDepartment.has(key)) {
+          employeesByDepartment.set(key, []);
+        }
+        employeesByDepartment.get(key).push(employee);
+      }
+
+      const additionalDepartments = Array.isArray(employee?.departements)
+        ? employee.departements
+        : [];
+
+      additionalDepartments.forEach((department) => {
+        if (department?.id == null) return;
+        const key = String(department.id);
+        if (!employeesByDepartment.has(key)) {
+          employeesByDepartment.set(key, []);
+        }
+        employeesByDepartment.get(key).push(employee);
+      });
+    });
+
+    return (flatDepartements || []).map((departement) => {
+      const existingEmployees = Array.isArray(departement?.employes)
+        ? departement.employes
+        : [];
+      const directEmployees = employeesByDepartment.get(String(departement?.id)) || [];
+
+      const uniqueEmployees = new Map();
+      [...existingEmployees, ...directEmployees].forEach((employee) => {
+        if (employee?.id == null) return;
+        uniqueEmployees.set(employee.id, employee);
+      });
+
+      return {
+        ...departement,
+        employes: Array.from(uniqueEmployees.values()),
+      };
+    });
+  }, []);
+
   const buildDepartementTree = (flatDepartements) => {
     const departementMap = {};
     const tree = [];
@@ -364,8 +415,22 @@ function EmpHistorique() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await axios.get("http://127.0.0.1:8000/api/departements");
-      setDepartements(buildDepartementTree(response.data));
+      const response = await axios.get(`${API_BASE}/api/departements`);
+      const flatDepartements = Array.isArray(response.data) ? response.data : [];
+
+      let mergedDepartements = flatDepartements;
+      try {
+        const employeeResponse = await axios.get(`${API_BASE}/api/employes/list`);
+        const allEmployees = Array.isArray(employeeResponse.data)
+          ? employeeResponse.data
+          : employeeResponse.data?.data ?? [];
+
+        mergedDepartements = mergeDepartmentEmployees(flatDepartements, allEmployees);
+      } catch (employeeError) {
+        console.warn("Unable to enrich departments with employee list:", employeeError);
+      }
+
+      setDepartements(buildDepartementTree(mergedDepartements));
     } catch (error) {
       console.error("Error fetching departments:", error);
       setError("An error occurred while fetching departments. Please try again.");
@@ -373,7 +438,7 @@ function EmpHistorique() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [mergeDepartmentEmployees]);
 
   useEffect(() => {
     fetchDepartements();
@@ -382,7 +447,7 @@ function EmpHistorique() {
   // Employee history functions
   const fetchEmployeeHistory = async (employeeId, currentEmployee) => {
     try {
-      const response = await axios.get(`http://127.0.0.1:8000/api/employee-history?employeeId=${employeeId}`);
+      const response = await axios.get(`${API_BASE}/api/employee-history?employeeId=${employeeId}`);
       return response.data
         .filter(record => record.matricule === currentEmployee.matricule)
         .map((record, index) => ({
@@ -567,16 +632,28 @@ function EmpHistorique() {
 
   const handleDepartementClick = useCallback((departementId) => {
     setSelectedDepartementId(departementId);
-    const selectedDept = findDepartmentById(departementId, departements);
-    if (selectedDept) {
-      const employees = includeSubDepartments
-        ? getAllEmployeesFromDepartment(selectedDept)
-        : [...new Map((selectedDept.employes || []).map(emp => [emp.id, emp])).values()];
-      setSelectedDepartmentEmployees(employees);
-    }
     setEmployeeHistories([]);
     setSelectedEmployees(new Set());
-  }, [departements, includeSubDepartments, findDepartmentById]);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDepartementId) {
+      setSelectedDepartmentEmployees([]);
+      return;
+    }
+
+    const selectedDept = findDepartmentById(selectedDepartementId, departements);
+    if (!selectedDept) {
+      setSelectedDepartmentEmployees([]);
+      return;
+    }
+
+    const employees = includeSubDepartments
+      ? getAllEmployeesFromDepartment(selectedDept)
+      : [...new Map((selectedDept.employes || []).map((employee) => [employee.id, employee])).values()];
+
+    setSelectedDepartmentEmployees(employees);
+  }, [selectedDepartementId, includeSubDepartments, departements, findDepartmentById]);
 
 
 
@@ -629,18 +706,14 @@ function EmpHistorique() {
             position: "relative",
             margin: 0,
             padding: 0,
-            height: "calc(100vh - 120px)",
-            overflow: 'hidden'
-
+            height: "calc(100vh - 80px)",
           }}>
 
             <div style={{
-              width: "300px",
-              minWidth: "300px",
+              width: "34%",
               height: "100%",
               margin: 0,
               padding: 0,
-              borderRight: '1px solid #e5e7eb'
             }}>
               <DepartmentPanel
                 onSelectDepartment={handleDepartementClick}
@@ -648,6 +721,7 @@ function EmpHistorique() {
                 includeSubDepartments={includeSubDepartments}
                 onIncludeSubDepartmentsChange={setIncludeSubDepartments}
                 employees={selectedDepartmentEmployees}
+                selectedEmployee={selectedDepartmentEmployees.find((emp) => selectedEmployees.has(emp.id)) || null}
                 selectedEmployees={selectedEmployees}
                 processedEmployees={processedEmployees}
                 onSelectEmployee={(employee) => handleEmployeeClick(employee)}
@@ -659,25 +733,29 @@ function EmpHistorique() {
 
             {/* Section Table */}
 
-            <div className="container3" style={{
-              flex: 1,
-              minWidth: 0,
-              overflow: 'auto',
-              padding: '20px'
-            }}>
+            <div className="container3" style={{ display: "flex", overflow: "hidden" }}>
 
               <div style={{
-                width: "100%",
+                flex: "1 1 100%",
+                minWidth: 0,
                 height: "100%",
-                transition: "width 0.2s ease",
-                marginTop: "3%",
-                padding: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                boxSizing: "border-box",
               }}>
                 <div className="mt-4">
                   <div className="section-header mb-3">
-                    <div className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: '16px' }}>
-                      <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-                        <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                        alignItems: "center",
+                        columnGap: "16px",
+                        width: "100%",
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c', textTransform: 'none' }}>
                           <i className="fas fa-history me-2"></i>
                           Détails d'historique
                         </span>
@@ -685,6 +763,7 @@ function EmpHistorique() {
                           - Groupe sélectionné
                         </p>
                       </div>
+                      <div></div>
                     </div>
                   </div>
                 </div>

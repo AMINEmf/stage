@@ -63,6 +63,8 @@ const columns = [
   { key: "commentaire", label: "Commentaire" },
 ];
 
+const ACCIDENTS_EMPLOYEES_CACHE_KEY = "accidentsEmployeesCache";
+
 const mapApiToUi = (api) => ({
   id: api.id,
   employe: (typeof api.employe === 'string' ? api.employe : api.employe?.nom) || api.nom_complet || "N/A",
@@ -545,17 +547,39 @@ const AccidentTable = forwardRef((props, ref) => {
     }
   }, [preloadedEmployees]);
 
-  // Charger les employés seulement si pas déjà préchargés
+  // Charger les employes seulement quand le formulaire d'ajout est ouvert
   useEffect(() => {
-    if (allEmployeesCache.length > 0) return; // Déjà préchargés
-    axios.get("http://127.0.0.1:8000/api/employes/light", { withCredentials: true })
-      .then(res => {
-        let emps = res.data;
-        if (!Array.isArray(emps)) emps = [];
+    if (!isAddingEmploye) return;
+    if (allEmployeesCache.length > 0) return;
+
+    try {
+      const rawCache = localStorage.getItem(ACCIDENTS_EMPLOYEES_CACHE_KEY);
+      if (rawCache) {
+        const parsed = JSON.parse(rawCache);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAllEmployeesCache(parsed);
+          return;
+        }
+      }
+    } catch {
+      // ignore malformed cache
+    }
+
+    let cancelled = false;
+    axios
+      .get("http://127.0.0.1:8000/api/employes/light", { withCredentials: true, timeout: 20000 })
+      .then((res) => {
+        if (cancelled) return;
+        const emps = Array.isArray(res.data) ? res.data : [];
         setAllEmployeesCache(emps);
+        localStorage.setItem(ACCIDENTS_EMPLOYEES_CACHE_KEY, JSON.stringify(emps));
       })
-      .catch(err => console.error("Error fetching employees:", err));
-  }, [allEmployeesCache.length]);
+      .catch((err) => console.error("Error fetching employees:", err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAddingEmploye, allEmployeesCache.length]);
 
   // Filtrer les employés localement quand le département change
   useEffect(() => {
@@ -729,7 +753,7 @@ const AccidentTable = forwardRef((props, ref) => {
         }} className="container_employee">
           <div className="mt-4">
             <div className="section-header mb-3">
-              <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
                 {/* Bloc titre */}
                 <div style={{ flex: '1 1 300px', minWidth: 0 }}>
                   <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c' }}>
@@ -742,7 +766,7 @@ const AccidentTable = forwardRef((props, ref) => {
                 </div>
 
                 {/* Bloc Dropdowns */}
-                <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: 'center', justifySelf: 'end' }}>
                   <FontAwesomeIcon
                     onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
                     icon={filtersVisible ? faClose : faFilter}

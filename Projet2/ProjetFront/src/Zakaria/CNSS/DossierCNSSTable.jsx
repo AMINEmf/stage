@@ -86,7 +86,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
     filters: [
       {
         key: "cnss_status",
-        label: "Statut Mutuelle",
+        label: "Statut CNSS",
         type: "select",
         value: "",
         options: [
@@ -103,6 +103,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
   const [drawerWidth, setDrawerWidth] = useState(45); // percentage
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef(null);
+  const dossiersCacheRef = useRef(new Map());
 
   const startResizing = useCallback((e) => {
     e.preventDefault();
@@ -141,18 +142,45 @@ const DossierCNSSTable = forwardRef((props, ref) => {
   const isAnyFormOpen = isDetailsOpen || showAddOperation;
   const hasSelectedDepartement = Boolean(departementId);
 
-  const fetchDossiers = useCallback(async () => {
+  const fetchDossiers = useCallback(async (forceRefresh = false) => {
     if (!departementId) {
       setDossiers([]);
       setIsTableLoading(false);
       return;
     }
 
+    const departementIds = includeSubDepartments && getSubDepartmentIds
+      ? getSubDepartmentIds(departements || [], departementId)
+      : [departementId];
+    const normalizedIds = Array.from(new Set(departementIds.map((id) => String(id)))).sort();
+    const cacheKey = `cnss_dossiers_${includeSubDepartments ? "sub" : "dep"}_${normalizedIds.join("_")}`;
+
+    if (!forceRefresh) {
+      const inMemory = dossiersCacheRef.current.get(cacheKey);
+      if (Array.isArray(inMemory)) {
+        setDossiers(inMemory);
+        setIsTableLoading(false);
+        return;
+      }
+
+      const stored = localStorage.getItem(cacheKey);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            dossiersCacheRef.current.set(cacheKey, parsed);
+            setDossiers(parsed);
+            setIsTableLoading(false);
+            return;
+          }
+        } catch {
+          // ignore malformed cache and continue with network fetch
+        }
+      }
+    }
+
     setIsTableLoading(true);
     try {
-      const departementIds = includeSubDepartments && getSubDepartmentIds
-        ? getSubDepartmentIds(departements || [], departementId)
-        : [departementId];
 
       const response = await axios.get(`${API_BASE}/api/cnss/dossiers`, {
         params: {
@@ -165,9 +193,10 @@ const DossierCNSSTable = forwardRef((props, ref) => {
       const payload = response.data;
       const list = Array.isArray(payload) ? payload : payload?.data || [];
       setDossiers(list);
+      dossiersCacheRef.current.set(cacheKey, list);
+      localStorage.setItem(cacheKey, JSON.stringify(list));
     } catch (error) {
       console.error("Erreur lors du chargement des dossiers CNSS:", error);
-      setDossiers([]);
     } finally {
       setIsTableLoading(false);
     }
@@ -330,7 +359,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
     setAddOperationEmployeId(null);
   }, []);
 
-  const canOpenAddOperation = hasSelectedDepartement;
+  const canOpenAddOperation = hasSelectedDepartement && selectedItems.length === 1;
 
   const handleFilterChange = useCallback((key, value) => {
     setFilterOptions((prev) => ({
@@ -360,7 +389,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
         );
 
         setSelectedItems([]);
-        await fetchDossiers();
+        await fetchDossiers(true);
 
         Swal.fire("Supprimés!", "Les opérations ont été supprimées.", "success");
       } catch (error) {
@@ -400,7 +429,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
     );
 
     doc.setFontSize(18);
-    doc.text("Gestion des opérations Mutuelle", 14, 22);
+    doc.text("Gestion des opérations CNSS", 14, 22);
     doc.setFontSize(11);
     doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 30);
     doc.autoTable({
@@ -408,7 +437,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
       body: tableRows,
       startY: 35,
     });
-    doc.save("mutuelle_operations.pdf");
+    doc.save("cnss_operations.pdf");
   }, [allColumns, columnVisibility, filteredDossiers]);
 
   const exportToExcel = useCallback(() => {
@@ -423,8 +452,8 @@ const DossierCNSSTable = forwardRef((props, ref) => {
 
     const ws = XLSX.utils.json_to_sheet(worksheetData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Opérations Mutuelle");
-    XLSX.writeFile(wb, "mutuelle_operations.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Opérations CNSS");
+    XLSX.writeFile(wb, "cnss_operations.xlsx");
   }, [allColumns, columnVisibility, filteredDossiers]);
 
   const handlePrint = useCallback(() => {
@@ -441,7 +470,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
     const tableHtml = `
       <html>
         <head>
-          <title>Gestion des opérations Mutuelle</title>
+          <title>Gestion des opérations CNSS</title>
           <style>
             table { border-collapse: collapse; width: 100%; }
             th, td { border: 1px solid #000; padding: 8px; text-align: left; }
@@ -449,7 +478,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
           </style>
         </head>
         <body>
-          <h1>Gestion des opérations Mutuelle</h1>
+          <h1>Gestion des opérations CNSS</h1>
           <table>
             <thead>
               <tr>${tableColumns.map((column) => `<th>${column}</th>`).join("")}</tr>
@@ -596,9 +625,17 @@ const DossierCNSSTable = forwardRef((props, ref) => {
         >
           <div className="mt-4">
             <div className="section-header mb-3">
-              <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: "1.5rem" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  alignItems: "center",
+                  columnGap: "1.5rem",
+                  rowGap: "0.75rem",
+                }}
+              >
                 <div>
-                  <SectionTitle icon="fas fa-id-card" text="Gestion des opérations Mutuelle" />
+                  <SectionTitle icon="fas fa-id-card" text="Gestion des opérations CNSS" />
                   {!isDetailsOpen && (
                     <p className="section-description text-muted mb-0">
                       {filteredDossiers.length} opération{filteredDossiers.length > 1 ? "s" : ""} affichée
@@ -607,9 +644,20 @@ const DossierCNSSTable = forwardRef((props, ref) => {
                   )}
                 </div>
 
-                <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ display: "flex", gap: "12px", justifySelf: "end", alignItems: "center" }}>
                   {!isDetailsOpen && (
                     <>
+                      <Button
+                        onClick={handleOpenAddOperation}
+                        className={`btn btn-outline-primary d-flex align-items-center ${!canOpenAddOperation ? "disabled-btn" : ""}`}
+                        disabled={!canOpenAddOperation}
+                        size="sm"
+                        style={{ marginRight: "30px !important", width: "160px" }}
+                      >
+                        <FaPlusCircle className="me-2" />
+                        Ajouter une Opération
+                      </Button>
+
                       <FontAwesomeIcon
                         onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
                         icon={filtersVisible ? faClose : faFilter}
@@ -622,17 +670,6 @@ const DossierCNSSTable = forwardRef((props, ref) => {
                           marginRight: "8px",
                         }}
                       />
-                      <Button
-                        onClick={handleOpenAddOperation}
-                        className={`btn btn-outline-primary d-flex align-items-center ${!canOpenAddOperation ? "disabled-btn" : ""}`}
-                        disabled={!canOpenAddOperation}
-                        size="sm"
-                        style={{ marginRight: "30px !important", width: "160px" }}
-                      >
-                        <FaPlusCircle className="me-2" />
-                        Ajouter une Opération
-                      </Button>
-
                       <Dropdown show={showDropdown} onToggle={(isOpen) => setShowDropdown(isOpen)}>
                         <Dropdown.Toggle
                           as="button"
@@ -742,7 +779,6 @@ const DossierCNSSTable = forwardRef((props, ref) => {
             columns={visibleColumns}
             data={filteredDossiers}
             loading={isTableLoading}
-            loadingText="Chargement des opérations Mutuelle..."
             searchTerm={normalizeValue(globalSearch)}
             highlightText={highlightText}
             selectAll={selectedItems.length === filteredDossiers.length && filteredDossiers.length > 0}
@@ -829,7 +865,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
               <DossierCNSSDetails
                 dossier={selectedDossier}
                 onClose={() => setSelectedDossier(null)}
-                onDocumentsUpdated={fetchDossiers}
+                  onDocumentsUpdated={() => fetchDossiers(true)}
               />
             )}
             {showAddOperation && addOperationEmployeId && (
@@ -841,7 +877,7 @@ const DossierCNSSTable = forwardRef((props, ref) => {
                 onClose={handleCloseAddOperation}
                 onSaved={async () => {
                   handleCloseAddOperation();
-                  await fetchDossiers();
+                  await fetchDossiers(true);
                 }}
               />
             )}

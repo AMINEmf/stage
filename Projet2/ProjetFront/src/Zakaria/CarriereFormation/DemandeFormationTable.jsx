@@ -61,7 +61,6 @@ const DemandeFormationTable = ({
   onView,
   onEdit,
   onDelete,
-  onStatusChange,
 }) => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [page, setPage] = useState(0);
@@ -146,7 +145,15 @@ const DemandeFormationTable = ({
     <div style={{ position: "relative", top: "0", height: "calc(100vh - 120px)", flex: 1, minWidth: 0, overflowY: "auto", overflowX: "visible" }} className="container_employee mobilite-layout-fix">
       <div className="mt-4">
         <div className="section-header mb-3">
-          <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: "16px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              alignItems: "center",
+              columnGap: "16px",
+              width: "100%",
+            }}
+          >
             <div style={{ flex: "1 1 300px", minWidth: 0 }}>
               <span className="section-title mb-1" style={{ fontSize: "1.2rem", fontWeight: "bold", color: "#2c767c" }}>
                 <i className="fas fa-graduation-cap me-2"></i>
@@ -157,7 +164,7 @@ const DemandeFormationTable = ({
               </p>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", justifySelf: "end" }}>
               <FontAwesomeIcon
                 onClick={() => setFiltersVisible((prev) => !prev)}
                 icon={filtersVisible ? faClose : faFilter}
@@ -310,16 +317,6 @@ const DemandeFormationTable = ({
               >
                 <FontAwesomeIcon icon={faEye} style={{ color: "#17a2b8", fontSize: "14px" }} />
               </button>
-
-              <Form.Select
-                size="sm"
-                value={row.statut || ""}
-                style={{ minWidth: 145, height: 30, fontSize: "0.8rem" }}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onStatusChange(row, e.target.value)}
-              >
-                {STATUTS.map((item) => <option key={item} value={item}>{item}</option>)}
-              </Form.Select>
             </>
           )}
           noDataMessage="Aucune donnée disponible"

@@ -132,8 +132,10 @@ function AffiliationMutuelleManager() {
     fetchDepartmentHierarchy();
   }, []);
 
-  const fetchDepartements = useCallback(async () => {
-    setIsLoading(true);
+  const fetchDepartements = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const response = await axios.get("http://127.0.0.1:8000/api/departements");
@@ -151,7 +153,9 @@ function AffiliationMutuelleManager() {
         );
       }
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -161,9 +165,10 @@ function AffiliationMutuelleManager() {
     if (departementsFromStorage) {
       setDepartements(JSON.parse(departementsFromStorage));
       setIsLoading(false);
+      fetchDepartements({ showLoading: false });
+    } else {
+      fetchDepartements();
     }
-
-    fetchDepartements();
 
     document.addEventListener("click", handleClickOutside);
     return () => {
@@ -539,7 +544,7 @@ function AffiliationMutuelleManager() {
     },
   });
 
-  if (isLoading) return <div>Chargement...</div>;
+  if (isLoading && departements.length === 0) return <div>Chargement...</div>;
   if (error) return <div>Erreur: {error}</div>;
 
   return (

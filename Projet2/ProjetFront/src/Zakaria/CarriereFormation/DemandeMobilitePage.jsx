@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Box, ThemeProvider, createTheme } from "@mui/material";
 import Swal from "sweetalert2";
@@ -13,7 +13,76 @@ import ViewDemandeMobilite from "./ViewDemandeMobilite";
 import "../Style.css";
 import "./CareerTraining.css";
 
-const DEMANDES_MOBILITE_CACHE_KEY = "demandes-mobilite:rows";
+const DEMANDES_MOBILITE_CACHE_KEY = "demandes-mobilite:rows:v2";
+const DEMANDES_MOBILITE_CACHE_TTL_MS = 2 * 60 * 1000;
+const DEMANDES_MOBILITE_LEGACY_CACHE_KEY = "demandes-mobilite:rows";
+
+const DEMANDES_MOBILITE_DEFAULT_FILTERS = {
+  search: "",
+  statut: "",
+  type_mobilite: "",
+  departement_id: "",
+  date_from: "",
+  date_to: "",
+};
+
+const normalizeDemandesFilters = (activeFilters = {}) => {
+  const normalized = {
+    search: activeFilters.search ?? "",
+    statut: activeFilters.statut ?? "",
+    type_mobilite: activeFilters.type_mobilite ?? "",
+    departement_id: activeFilters.departement_id ?? "",
+    date_from: activeFilters.date_from ?? "",
+    date_to: activeFilters.date_to ?? "",
+  };
+
+  return Object.fromEntries(
+    Object.entries(normalized).map(([key, value]) => [key, String(value).trim()])
+  );
+};
+
+const buildDemandesCacheKey = (activeFilters = {}) => {
+  const normalized = normalizeDemandesFilters(activeFilters);
+  return JSON.stringify(normalized);
+};
+
+const loadDemandesCacheStore = () => {
+  try {
+    const raw = localStorage.getItem(DEMANDES_MOBILITE_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === "object" && parsed.entries && typeof parsed.entries === "object") {
+      return parsed;
+    }
+  } catch {
+  }
+
+  try {
+    const legacyRaw = sessionStorage.getItem(DEMANDES_MOBILITE_LEGACY_CACHE_KEY);
+    const legacyParsed = legacyRaw ? JSON.parse(legacyRaw) : [];
+    const legacyRows = Array.isArray(legacyParsed) ? legacyParsed : [];
+    if (legacyRows.length > 0) {
+      const defaultKey = buildDemandesCacheKey(DEMANDES_MOBILITE_DEFAULT_FILTERS);
+      return {
+        entries: {
+          [defaultKey]: {
+            rows: legacyRows,
+            timestamp: Date.now(),
+          },
+        },
+      };
+    }
+  } catch {
+  }
+
+  return { entries: {} };
+};
+
+const persistDemandesCacheStore = (cacheStore) => {
+  try {
+    localStorage.setItem(DEMANDES_MOBILITE_CACHE_KEY, JSON.stringify(cacheStore));
+  } catch {
+  }
+};
 
 const extractApiError = (error, fallback) => {
   const apiMessage = error?.response?.data?.message;
@@ -30,15 +99,15 @@ const extractApiError = (error, fallback) => {
 };
 
 const DemandeMobilitePage = () => {
-  const [rows, setRows] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem(DEMANDES_MOBILITE_CACHE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const defaultCacheKey = useMemo(
+    () => buildDemandesCacheKey(DEMANDES_MOBILITE_DEFAULT_FILTERS),
+    []
+  );
+  const demandesCacheStoreRef = useRef(loadDemandesCacheStore());
+  const rowsFromDefaultCache = demandesCacheStoreRef.current.entries?.[defaultCacheKey]?.rows;
+  const [rows, setRows] = useState(Array.isArray(rowsFromDefaultCache) ? rowsFromDefaultCache : []);
+  const rowsRef = useRef(rows);
+  const demandesInFlightRef = useRef(new Map());
   const [employees, setEmployees] = useState([]);
   const [departements, setDepartements] = useState([]);
   const [postes, setPostes] = useState([]);
@@ -47,65 +116,117 @@ const DemandeMobilitePage = () => {
   const [drawerMode, setDrawerMode] = useState(null);
   const [selectedDemande, setSelectedDemande] = useState(null);
 
-  const [filters, setFilters] = useState({
-    search: "",
-    statut: "",
-    type_mobilite: "",
-    departement_id: "",
-    date_from: "",
-    date_to: "",
-  });
+  const [filters, setFilters] = useState(() => ({ ...DEMANDES_MOBILITE_DEFAULT_FILTERS }));
 
   const { setTitle, clearActions } = useHeader();
   const { dynamicStyles } = useOpen();
 
   const isDrawerOpen = drawerMode !== null;
 
-  const fetchDemandes = useCallback(async (activeFilters = filters) => {
-    const shouldShowBlockingLoading = rows.length === 0;
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  const readCachedDemandes = useCallback((cacheKey) => {
+    const entry = demandesCacheStoreRef.current.entries?.[cacheKey];
+    if (!entry || !Array.isArray(entry.rows)) return null;
+
+    return {
+      rows: entry.rows,
+      timestamp: Number(entry.timestamp) || 0,
+      isFresh: Date.now() - (Number(entry.timestamp) || 0) < DEMANDES_MOBILITE_CACHE_TTL_MS,
+    };
+  }, []);
+
+  const writeCachedDemandes = useCallback((cacheKey, nextRows) => {
+    demandesCacheStoreRef.current = {
+      entries: {
+        ...demandesCacheStoreRef.current.entries,
+        [cacheKey]: {
+          rows: Array.isArray(nextRows) ? nextRows : [],
+          timestamp: Date.now(),
+        },
+      },
+    };
+
+    persistDemandesCacheStore(demandesCacheStoreRef.current);
+  }, []);
+
+  const fetchDemandes = useCallback(async (activeFilters = DEMANDES_MOBILITE_DEFAULT_FILTERS, options = {}) => {
+    const { forceRefresh = false } = options;
+    const cacheKey = buildDemandesCacheKey(activeFilters);
+    const cached = readCachedDemandes(cacheKey);
+    const hasCachedRows = Boolean(cached);
+
+    if (cached) {
+      setRows(cached.rows);
+      if (!forceRefresh && cached.isFresh) {
+        setLoading(false);
+        return cached.rows;
+      }
+    }
+
+    const shouldShowBlockingLoading = !hasCachedRows && rowsRef.current.length === 0;
     if (shouldShowBlockingLoading) {
       setLoading(true);
     }
 
-    try {
-      const params = Object.fromEntries(
-        Object.entries(activeFilters).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
-      );
-
-      let data = [];
-
-      try {
-        const response = await apiClient.get("/demandes-mobilite", { params, timeout: 30000 });
-        data = Array.isArray(response.data) ? response.data : [];
-      } catch (primaryError) {
-        const fallbackResponse = await axios.get(`${API_BASE_URL}/demandes-mobilite`, {
-          params,
-          timeout: 30000,
-          headers: { Accept: "application/json" },
-        });
-        data = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
-      }
-
-      setRows(data);
-      try {
-        sessionStorage.setItem(DEMANDES_MOBILITE_CACHE_KEY, JSON.stringify(data));
-      } catch {
-      }
-    } catch (error) {
-      console.error("Erreur chargement demandes mobilité:", error);
-      const statusCode = error?.response?.status;
-      const statusText = statusCode ? ` (code ${statusCode})` : "";
-      Swal.fire("Erreur", `Impossible de charger les demandes de mobilité${statusText}.`, "error");
-
-      if (rows.length === 0) {
-        setRows([]);
-      }
-    } finally {
-      if (shouldShowBlockingLoading) {
-        setLoading(false);
+    if (!forceRefresh) {
+      const inFlight = demandesInFlightRef.current.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
       }
     }
-  }, [filters, rows.length]);
+
+    const requestPromise = (async () => {
+      try {
+        const params = Object.fromEntries(
+          Object.entries(activeFilters).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+        );
+
+        let data = [];
+        try {
+          const response = await apiClient.get("/demandes-mobilite", { params, timeout: 30000 });
+          data = Array.isArray(response.data) ? response.data : [];
+        } catch {
+          const fallbackResponse = await axios.get(`${API_BASE_URL}/demandes-mobilite`, {
+            params,
+            timeout: 30000,
+            headers: { Accept: "application/json" },
+          });
+          data = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
+        }
+
+        setRows(data);
+        writeCachedDemandes(cacheKey, data);
+        try {
+          sessionStorage.setItem(DEMANDES_MOBILITE_LEGACY_CACHE_KEY, JSON.stringify(data));
+        } catch {
+        }
+        return data;
+      } catch (error) {
+        console.error("Erreur chargement demandes mobilité:", error);
+        const statusCode = error?.response?.status;
+        const statusText = statusCode ? ` (code ${statusCode})` : "";
+        if (!cached) {
+          Swal.fire("Erreur", `Impossible de charger les demandes de mobilité${statusText}.`, "error");
+        }
+
+        if (rowsRef.current.length === 0 && !cached) {
+          setRows([]);
+        }
+        throw error;
+      } finally {
+        demandesInFlightRef.current.delete(cacheKey);
+        if (shouldShowBlockingLoading) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    demandesInFlightRef.current.set(cacheKey, requestPromise);
+    return requestPromise;
+  }, [readCachedDemandes, writeCachedDemandes]);
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -160,14 +281,7 @@ const DemandeMobilitePage = () => {
   }, [fetchDemandes]);
 
   const handleResetFilters = useCallback(() => {
-    const reset = {
-      search: "",
-      statut: "",
-      type_mobilite: "",
-      departement_id: "",
-      date_from: "",
-      date_to: "",
-    };
+    const reset = { ...DEMANDES_MOBILITE_DEFAULT_FILTERS };
     setFilters(reset);
     fetchDemandes(reset);
   }, [fetchDemandes]);
@@ -203,9 +317,9 @@ const DemandeMobilitePage = () => {
       Swal.fire("Succès", "La demande de mobilité a été mise à jour.", "success");
     }
 
-    await fetchDemandes();
+    await fetchDemandes(filters, { forceRefresh: true });
     handleCloseDrawer();
-  }, [fetchDemandes, handleCloseDrawer]);
+  }, [fetchDemandes, filters, handleCloseDrawer]);
 
   const handleCreate = useCallback(async (formData) => {
     try {
@@ -239,26 +353,12 @@ const DemandeMobilitePage = () => {
     try {
       await apiClient.delete(`/demandes-mobilite/${row.id}`);
       Swal.fire("Supprimée", "La demande a été supprimée.", "success");
-      await fetchDemandes();
+      await fetchDemandes(filters, { forceRefresh: true });
       if (selectedDemande?.id === row.id) handleCloseDrawer();
     } catch (error) {
       Swal.fire("Erreur", extractApiError(error, "Suppression impossible."), "error");
     }
-  }, [fetchDemandes, selectedDemande, handleCloseDrawer]);
-
-  const handleStatusChange = useCallback(async (row, statut) => {
-    try {
-      await apiClient.post(`/demandes-mobilite/${row.id}/statut`, { statut });
-      await fetchDemandes();
-      if (selectedDemande?.id === row.id) {
-        const response = await apiClient.get(`/demandes-mobilite/${row.id}`);
-        setSelectedDemande(response?.data || null);
-      }
-      Swal.fire("Succès", "Statut mis à jour.", "success");
-    } catch (error) {
-      Swal.fire("Erreur", extractApiError(error, "Mise à jour du statut impossible."), "error");
-    }
-  }, [fetchDemandes, selectedDemande]);
+  }, [fetchDemandes, filters, selectedDemande, handleCloseDrawer]);
 
   const drawerTitle = useMemo(() => {
     if (drawerMode === "add") return "Ajouter une demande de mobilité";
@@ -330,12 +430,21 @@ const DemandeMobilitePage = () => {
                     onView={handleOpenView}
                     onEdit={handleOpenEdit}
                     onDelete={handleDelete}
-                    onStatusChange={handleStatusChange}
                   />
                 </div>
 
                 {isDrawerOpen && (
-                  <div className="cnss-form-section" style={{ flex: "0 0 42%", minWidth: 340, maxWidth: "100%" }}>
+                  <div
+                    className="cnss-form-section"
+                    style={{
+                      flex: "0 0 42%",
+                      minWidth: 340,
+                      maxWidth: "100%",
+                      height: "calc(100vh - 170px)",
+                      maxHeight: "calc(100vh - 170px)",
+                      minHeight: 0,
+                    }}
+                  >
                     <div className="cnss-form-header d-flex justify-content-between align-items-center">
                       <h5 style={{ margin: 0 }}>{drawerTitle}</h5>
                       <button className="cnss-close-btn" onClick={handleCloseDrawer} type="button" aria-label="Fermer">
@@ -343,7 +452,7 @@ const DemandeMobilitePage = () => {
                       </button>
                     </div>
 
-                    <div className="cnss-form-body" style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto" }}>
+                    <div className="cnss-form-body" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {drawerMode === "add" && (
                         <AddDemandeMobilite
                           employees={employees}

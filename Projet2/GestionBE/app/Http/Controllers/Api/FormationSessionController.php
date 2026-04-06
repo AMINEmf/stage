@@ -18,20 +18,27 @@ class FormationSessionController extends Controller
     {
         $hasAttendance = Schema::hasTable('formation_attendance');
 
-        $sessions = $formation->sessions()
+        $query = $formation->sessions()
             ->orderBy('date')
-            ->orderBy('heure_debut')
-            ->get();
+            ->orderBy('heure_debut');
 
-        $sessions->each(function ($session) use ($hasAttendance) {
-            if ($hasAttendance) {
-                $session->attendance_count = $session->attendance()->count();
-                $session->present_count    = $session->attendance()->where('statut', 'Présent')->count();
-            } else {
+        if ($hasAttendance) {
+            $query->withCount('attendance')
+                ->withCount([
+                    'attendance as present_count' => function ($q) {
+                        $q->where('statut', 'Présent');
+                    },
+                ]);
+        }
+
+        $sessions = $query->get();
+
+        if (!$hasAttendance) {
+            $sessions->each(function ($session) {
                 $session->attendance_count = 0;
                 $session->present_count    = 0;
-            }
-        });
+            });
+        }
 
         return response()->json($sessions);
     }

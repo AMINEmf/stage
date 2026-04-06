@@ -3,6 +3,7 @@
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   forwardRef,
   useImperativeHandle,
 } from "react";
@@ -22,6 +23,7 @@ import apiClient from "../../services/apiClient";
 import { useHeader } from "../../Acceuil/HeaderContext";
 import { useOpen } from "../../Acceuil/OpenProvider";
 import { STATUTS_CYCLE_FORMATION } from "../../constants/status";
+import { prefetchFormationSessions } from "./features/formations/useFormationSessions";
 import "../Style.css";
 import "./CareerTraining.css";
 
@@ -79,6 +81,7 @@ const TrainingCatalog = forwardRef(
       onAdd,
       onEdit,
       onDelete,
+      onParticipantsHover,
       onParticipantsClick,
       globalSearch,
       filtersVisible,
@@ -104,6 +107,11 @@ const TrainingCatalog = forwardRef(
     const [columnVisibility, setColumnVisibility] = useState({});
     const [expandedRows, setExpandedRows] = useState({});
     const [sessionsData, setSessionsData] = useState({});
+    const [loadingSessionsData, setLoadingSessionsData] = useState({});
+    const sessionsPrefetchedAtRef = useRef(new Map());
+    const expandedRowsRef = useRef({});
+    const sessionsDataRef = useRef({});
+    const toggleRowExpansionRef = useRef(null);
     const [filterOptions, setFilterOptions] = useState({
       filters: [
         {
@@ -353,6 +361,16 @@ const TrainingCatalog = forwardRef(
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onParticipantsClick(item); }}
+                  onMouseEnter={() => {
+                    if (onParticipantsHover) {
+                      onParticipantsHover(item);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (onParticipantsHover) {
+                      onParticipantsHover(item);
+                    }
+                  }}
                   style={{
                     background: "none",
                     border: "none",
@@ -469,6 +487,45 @@ const TrainingCatalog = forwardRef(
       setColumnVisibility(defaults);
       localStorage.setItem("formationsColumnVisibility", JSON.stringify(defaults));
     }, [allColumns]);
+
+    useEffect(() => {
+      expandedRowsRef.current = expandedRows;
+    }, [expandedRows]);
+
+    useEffect(() => {
+      sessionsDataRef.current = sessionsData;
+    }, [sessionsData]);
+
+    useEffect(() => {
+      if (!Array.isArray(rows) || rows.length === 0) return;
+
+      setSessionsData((prev) => {
+        let changed = false;
+        const next = { ...prev };
+
+        rows.forEach((row) => {
+          const key = String(row?.id ?? "");
+          if (!key) return;
+
+          if (Array.isArray(row?.sessions)) {
+            const current = next[key];
+            const currentLength = Array.isArray(current) ? current.length : -1;
+            if (!Array.isArray(current) || row.sessions.length > currentLength) {
+              next[key] = row.sessions;
+              changed = true;
+            }
+            return;
+          }
+
+          if (!Object.hasOwn(next, key) && Number(row?.sessions_count ?? 0) === 0) {
+            next[key] = [];
+            changed = true;
+          }
+        });
+
+        return changed ? next : prev;
+      });
+    }, [rows]);
 
     const searchTerm = globalSearch || searchQuery || "";
 
@@ -631,47 +688,130 @@ const TrainingCatalog = forwardRef(
       );
     }, []);
 
-    const fetchSessionsForFormation = useCallback(async (formationId) => {
+    const fetchSessionsForFormation = useCallback(async (formationId, options = {}) => {
+      const { forceRefresh = false, knownSessionsCount = null } = options;
+      if (!formationId) return [];
+
+      const key = String(formationId);
       try {
-        const res = await apiClient.get(`/formations/${formationId}/sessions`);
+        setLoadingSessionsData((prev) => ({ ...prev, [key]: true }));
+        const sessions = await prefetchFormationSessions(formationId, {
+          forceRefresh,
+          knownSessionsCount,
+        });
         setSessionsData((prev) => ({
           ...prev,
-          [formationId]: Array.isArray(res.data) ? res.data : []
+          [key]: Array.isArray(sessions) ? sessions : [],
         }));
+        return Array.isArray(sessions) ? sessions : [];
       } catch (err) {
         console.error("Erreur chargement séances:", err);
         setSessionsData((prev) => ({
           ...prev,
-          [formationId]: []
+          [key]: [],
         }));
+        return [];
+      } finally {
+        setLoadingSessionsData((prev) => ({ ...prev, [key]: false }));
       }
     }, []);
 
     const toggleRowExpansion = useCallback(async (formationId) => {
+      const key = String(formationId);
+      const row = rows.find((item) => String(item.id) === key);
       setExpandedRows((prev) => {
-        const isCurrentlyExpanded = prev[formationId];
-        const newState = { ...prev, [formationId]: !isCurrentlyExpanded };
+        const isCurrentlyExpanded = prev[key];
+        const newState = { ...prev, [key]: !isCurrentlyExpanded };
+        const hasInlineSessions = Array.isArray(row?.sessions);
         
         // If expanding and sessions not yet loaded, fetch them
-        if (!isCurrentlyExpanded && !sessionsData[formationId]) {
-          fetchSessionsForFormation(formationId);
+        if (
+          !isCurrentlyExpanded &&
+          !hasInlineSessions &&
+          !Object.hasOwn(sessionsData, key)
+        ) {
+          fetchSessionsForFormation(formationId, {
+            knownSessionsCount: row?.sessions_count,
+          });
         }
         
         return newState;
       });
-    }, [sessionsData, fetchSessionsForFormation]);
+    }, [rows, sessionsData, fetchSessionsForFormation]);
+
+    useEffect(() => {
+      toggleRowExpansionRef.current = toggleRowExpansion;
+    }, [toggleRowExpansion]);
+
+    useEffect(() => {
+      const expandedKeys = Object.keys(expandedRows).filter((key) => !!expandedRows[key]);
+      if (expandedKeys.length === 0) return;
+
+      expandedKeys.forEach((key) => {
+        const row = rows.find((item) => String(item?.id) === key);
+        if (!row) return;
+        if (Array.isArray(row.sessions)) return;
+        if (Object.hasOwn(sessionsData, key)) return;
+        if (loadingSessionsData[key]) return;
+
+        fetchSessionsForFormation(row.id, {
+          knownSessionsCount: row.sessions_count,
+        });
+      });
+    }, [expandedRows, rows, sessionsData, loadingSessionsData, fetchSessionsForFormation]);
+
+    useEffect(() => {
+      if (!Array.isArray(filteredRows) || filteredRows.length === 0) return;
+
+      const start = currentPage * itemsPerPage;
+      const end = start + itemsPerPage;
+      const now = Date.now();
+      const candidates = filteredRows
+        .slice(start, end)
+        .filter((row) => Number(row?.sessions_count ?? 0) > 0)
+        .filter((row) => !Array.isArray(row?.sessions))
+        .filter((row) => {
+          const key = String(row.id || "");
+          if (!key) return false;
+          const last = sessionsPrefetchedAtRef.current.get(key) || 0;
+          if (now - last < 90 * 1000) return false;
+          sessionsPrefetchedAtRef.current.set(key, now);
+          return true;
+        });
+
+      if (candidates.length === 0) return;
+
+      let cancelled = false;
+
+      const warm = async () => {
+        for (let i = 0; i < candidates.length; i += 3) {
+          if (cancelled) return;
+          const chunk = candidates.slice(i, i + 3);
+          await Promise.allSettled(
+            chunk.map((row) =>
+              fetchSessionsForFormation(row.id, {
+                knownSessionsCount: row.sessions_count,
+              })
+            )
+          );
+        }
+      };
+
+      warm();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [filteredRows, currentPage, itemsPerPage, fetchSessionsForFormation]);
 
     const exportToPDF = useCallback(() => {
       const doc = new jsPDF();
       const cols = visibleColumns.map((c) => c.label);
       const tableRows = filteredRows.map((item) =>
-        visibleColumns.map((c) => {
-          if (c.key === "budget") return formatBudget(item[c.key]);
-          return item[c.key] ?? "-";
-        })
+        visibleColumns.map((c) => (c.key === "budget" ? formatBudget(item[c.key]) : (item[c.key] ?? "-")))
       );
       doc.setFontSize(18);
-      doc.text("Formations", 14, 22);
+      doc.text("Liste des formations", 14, 22);
       doc.autoTable({ head: [cols], body: tableRows, startY: 30 });
       doc.save("formations.pdf");
     }, [visibleColumns, filteredRows]);
@@ -778,8 +918,16 @@ const TrainingCatalog = forwardRef(
 
         <div className="mt-4">
           <div className="section-header mb-3">
-            <div className="d-flex align-items-center justify-content-between" style={{ gap: 24 }}>
-              <div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) auto",
+                alignItems: "center",
+                columnGap: "16px",
+                width: "100%",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
                 <SectionTitle icon="fas fa-graduation-cap" text="Formations" />
                 {!drawerOpen && (
                   <p className="section-description text-muted mb-0">
@@ -789,7 +937,7 @@ const TrainingCatalog = forwardRef(
                 )}
               </div>
 
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "12px", alignItems: "center", justifySelf: "end" }}>
                 <FontAwesomeIcon
                   onClick={() => handleFiltersToggle && handleFiltersToggle(!filtersVisible)}
                   icon={filtersVisible ? faClose : faFilter}
@@ -951,7 +1099,7 @@ const TrainingCatalog = forwardRef(
             cursor: "pointer",
             transition: "background-color 0.2s ease",
           })}
-          renderActions={(item) => (
+          renderCustomActions={(item) => (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -971,8 +1119,30 @@ const TrainingCatalog = forwardRef(
           expandedRows={expandedRows}
           toggleRowExpansion={toggleRowExpansion}
           renderExpandedRow={(item) => {
-            const sessions = sessionsData[item.id] || [];
+            const key = String(item.id);
+            const hasInlineSessions = Array.isArray(item.sessions);
+            const hasStateSessions = Object.hasOwn(sessionsData, key);
+            const stateSessions = hasStateSessions ? sessionsData[key] : null;
+            const normalizedStateSessions = Array.isArray(stateSessions) ? stateSessions : [];
+            const inlineSessions = hasInlineSessions ? item.sessions : [];
+            const useInlineOverState =
+              hasInlineSessions &&
+              normalizedStateSessions.length === 0 &&
+              inlineSessions.length > 0;
+            const sessions = useInlineOverState
+              ? inlineSessions
+              : hasStateSessions
+                ? normalizedStateSessions
+                : inlineSessions;
+            const hasLoadedSessions = hasInlineSessions || hasStateSessions;
+            const isLoadingSessions = !!loadingSessionsData[key] && !hasLoadedSessions;
             
+            if (isLoadingSessions) {
+              return (
+                <div style={{ padding: "12px 20px" }} />
+              );
+            }
+
             if (sessions.length === 0) {
               return (
                 <div style={{ padding: "20px", textAlign: "center", color: "#6b7280" }}>

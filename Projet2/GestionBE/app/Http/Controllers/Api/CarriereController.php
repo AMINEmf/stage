@@ -467,5 +467,59 @@ class CarriereController extends Controller
 
         return response()->json($postesEnAttente);
     }
+
+    /**
+     * Get pending postes for multiple employees in one request.
+     */
+    public function getPostesEnAttenteBatch(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'employee_ids.*' => ['integer', 'distinct', 'exists:employes,id'],
+        ]);
+
+        $employeeIds = collect($validated['employee_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($employeeIds->isEmpty()) {
+            return response()->json(['data' => []]);
+        }
+
+        $rows = GpEmployePosteHistorique::query()
+            ->whereIn('employe_id', $employeeIds->all())
+            ->where('statut', 'Proposé')
+            ->with(['poste.competences', 'grade'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy('employe_id');
+
+        $rowsByEmployee = [];
+        foreach ($employeeIds as $employeeId) {
+            $rowsByEmployee[(string) $employeeId] = $rows
+                ->get($employeeId, collect())
+                ->map(function ($historique) {
+                    return [
+                        'id' => $historique->id,
+                        'poste' => $historique->poste?->nom ?? 'N/A',
+                        'grade' => $historique->grade?->label ?? null,
+                        'date_proposition' => $historique->created_at?->format('d/m/Y'),
+                        'type_evolution' => $historique->type_evolution,
+                        'competences_requises' => $historique->poste?->competences->map(function ($comp) {
+                            return [
+                                'id' => $comp->id,
+                                'nom' => $comp->nom,
+                                'categorie' => $comp->categorie,
+                                'niveau_requis' => $comp->pivot->niveau_requis ?? null,
+                            ];
+                        }) ?? [],
+                    ];
+                })
+                ->values();
+        }
+
+        return response()->json(['data' => $rowsByEmployee]);
+    }
 }
 

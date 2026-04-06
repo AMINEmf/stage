@@ -831,3 +831,105 @@ button.onClose:hover {
   cursor: url("/assets/no-cursor.png"), not-allowed !important;
   user-select: none;
 }
+
+/* Global alignment with Accident de travail visual language */
+:root {
+  --accident-primary: #2c767c;
+  --accident-primary-dark: #245f64;
+  --accident-muted: #6b7280;
+  --accident-card-radius: 10px;
+  --accident-card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.container3,
+.container4,
+.container_employee {
+  border-radius: var(--accident-card-radius) !important;
+  box-shadow: var(--accident-card-shadow) !important;
+}
+
+.section-header.mb-3 {
+  border-bottom: none !important;
+  padding-bottom: 15px !important;
+  margin: 0.5% 0 1% !important;
+}
+
+.section-header.mb-3 > div {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  column-gap: 16px !important;
+  width: 100% !important;
+}
+
+.section-header.mb-3 > div > div:first-child {
+  min-width: 0 !important;
+}
+
+.section-header.mb-3 > div > div:last-child {
+  display: flex !important;
+  align-items: center !important;
+  justify-self: end !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+.section-header .section-title {
+  font-size: 1.2rem !important;
+  font-weight: 700 !important;
+  color: var(--accident-primary) !important;
+  margin-bottom: 4px !important;
+}
+
+.section-header .section-description {
+  font-size: 14px !important;
+  color: var(--accident-muted) !important;
+  margin-bottom: 0 !important;
+}
+
+.section-header .btn.d-flex.align-items-center,
+.section-header .cnss-btn-add,
+.section-header .btn-ajout-uniforme,
+.section-header .btn-primary {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
+  border: none !important;
+  background: var(--accident-primary) !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 34px !important;
+  box-shadow: 0 2px 6px rgba(44, 118, 124, 0.35) !important;
+}
+
+.section-header .btn.d-flex.align-items-center:hover,
+.section-header .cnss-btn-add:hover,
+.section-header .btn-ajout-uniforme:hover,
+.section-header .btn-primary:hover {
+  background: var(--accident-primary-dark) !important;
+}
+
+.section-header.mb-3 > div > div:last-child > button:not(.btn):not(.dropdown-toggle):not(.MuiButton-root) {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 8px !important;
+  border: none !important;
+  background: var(--accident-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(44, 118, 124, 0.35) !important;
+}
+
+.section-header.mb-3 > div > div:last-child > button:not(.btn):not(.dropdown-toggle):not(.MuiButton-root):hover {
+  background: var(--accident-primary-dark) !important;
+}
+
+.section-header .dropdown-toggle {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 8px !important;
+  border: 1px solid #d1d5db !important;
+  background: #f9fafb !important;
+  box-shadow: none !important;
+}

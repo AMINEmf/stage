@@ -51,8 +51,34 @@ const colors = {
     cardBg: '#ffffff',
 };
 
+const DEFAULT_CIMR_STATS = {
+    totalAffiliations: 0,
+    declarationsThisMonth: 0,
+    totalAmountThisMonth: 0,
+    monthlyEvolution: [],
+    statusBreakdown: [],
+    recentAffiliations: [],
+    recentDeclarations: [],
+};
+
+const CIMR_DASHBOARD_CACHE_KEY = "dashboard-cimr-cache-v2";
+const CACHE_TTL = 5 * 60 * 1000;
+
+const readCimrDashboardCache = () => {
+    try {
+        const raw = globalThis.localStorage.getItem(CIMR_DASHBOARD_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        return parsed;
+    } catch (error) {
+        console.warn("CIMR dashboard cache invalide:", error);
+        return null;
+    }
+};
+
 const CimrDashboard = () => {
-    const [stats, setStats] = useState(null);
+    const [stats, setStats] = useState(DEFAULT_CIMR_STATS);
     const [loading, setLoading] = useState(true);
 
     const { setTitle, clearActions } = useHeader();
@@ -70,12 +96,39 @@ const CimrDashboard = () => {
     }, []);
 
     const fetchDashboardStats = async () => {
+        let hasCachedData = false;
+
+        const cached = readCimrDashboardCache();
+        if (cached?.data) {
+            setStats(cached.data);
+            setLoading(false);
+            hasCachedData = true;
+
+            const isFresh = cached?.timestamp && Date.now() - Number(cached.timestamp) < CACHE_TTL;
+            if (isFresh) {
+                return;
+            }
+        }
+
         try {
-            setLoading(true);
+            if (!hasCachedData) {
+                setLoading(true);
+            }
             const response = await axios.get('http://127.0.0.1:8000/api/cimr-declarations/dashboard-stats', {
                 withCredentials: true
             });
             setStats(response.data);
+            try {
+                globalThis.localStorage.setItem(
+                    CIMR_DASHBOARD_CACHE_KEY,
+                    JSON.stringify({
+                        data: response.data,
+                        timestamp: Date.now(),
+                    })
+                );
+            } catch (cacheError) {
+                console.warn("Impossible d'enregistrer le cache CIMR:", cacheError);
+            }
         } catch (error) {
             console.error('Error fetching dashboard stats:', error);
         } finally {
@@ -233,47 +286,6 @@ const CimrDashboard = () => {
             default: return statut;
         }
     };
-
-    // Section de chargement
-    if (loading || !stats) {
-        return (
-            <ThemeProvider theme={createTheme()}>
-                <Box sx={{ ...dynamicStyles, backgroundColor: '#ffffff', minHeight: '100vh' }}>
-                    <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 12 }}>
-                        <Box sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            minHeight: '50vh',
-                            gap: 2
-                        }}>
-                            <Box sx={{
-                                width: 60,
-                                height: 60,
-                                borderRadius: '50%',
-                                border: '3px solid',
-                                borderColor: `${colors.primary}30`,
-                                borderTopColor: colors.primary,
-                                animation: 'spin 1s linear infinite',
-                                '@keyframes spin': {
-                                    '0%': { transform: 'rotate(0deg)' },
-                                    '100%': { transform: 'rotate(360deg)' },
-                                },
-                            }} />
-                            <Typography sx={{
-                                color: colors.textSecondary,
-                                fontSize: '1rem',
-                                fontWeight: 500
-                            }}>
-                                Chargement du tableau de bord...
-                            </Typography>
-                        </Box>
-                    </Box>
-                </Box>
-            </ThemeProvider>
-        );
-    }
 
     const monthlyData = getMonthlyBarData();
     const pieData = getStatusPieData();

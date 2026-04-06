@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Cache;
 
 class AuthController extends Controller
 {
@@ -112,6 +113,8 @@ class AuthController extends Controller
                 $role->permissions()->sync($permissions);
             }
 
+            Cache::forget('users.index.v1');
+
             return response()->json([
                 'status' => 1,
                 'message' => 'Utilisateur ajouter avec succès',
@@ -180,7 +183,7 @@ class AuthController extends Controller
                 'name' => 'string|max:255',
                 'email' => 'string|email|max:255',
                 'photo' => 'file|mimes:jpeg,png,jpg,gif|max:2048',
-                'password' => 'string|min:8',
+                'password' => 'nullable|string|min:8',
                 'role' => 'string',
                 'permissions' => 'array',
                 'permissions.*' => 'string|exists:permissions,name',
@@ -254,6 +257,8 @@ class AuthController extends Controller
             }
     
             Log::info('--- [UPDATE USER] Fin de la mise à jour ---');
+
+            Cache::forget('users.index.v1');
     
             return response()->json([
                 'status' => 1,
@@ -276,6 +281,8 @@ class AuthController extends Controller
 
             $user->delete();
 
+            Cache::forget('users.index.v1');
+
             return response()->json([
                 'status' => 1,
                 'message' => 'Utilisateur supprimé avec succès',
@@ -289,8 +296,16 @@ class AuthController extends Controller
     {
         // Vérifie si l'utilisateur est autorisé à voir tous les utilisateurs
         if (Gate::allows('view_all_users')) {
-            // Récupère tous les utilisateurs avec leurs rôles et permissions
-            $users = User::with('roles.permissions')->get();
+            // Cache court pour accélérer l'affichage de la liste utilisateurs.
+            $users = Cache::remember('users.index.v1', now()->addSeconds(30), function () {
+                return User::query()
+                    ->select(['id', 'name', 'email', 'photo'])
+                    ->with([
+                        'roles:id,name',
+                        'roles.permissions:id,name',
+                    ])
+                    ->get();
+            });
             
             // Retourne la réponse JSON avec la liste des utilisateurs
             return response()->json($users, 200);

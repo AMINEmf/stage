@@ -25,6 +25,19 @@ use App\Http\Controllers\LigneFactureController;
 use App\Http\Controllers\LigneLivraisonController;
 use App\Http\Controllers\LivreurController;
 use App\Http\Controllers\ObjectifController;
+use App\Http\Controllers\MutuelleController;
+use App\Http\Controllers\MutuelleDashboardController;
+use App\Http\Controllers\RegimeMutuelleController;
+use App\Http\Controllers\AffiliationMutuelleController;
+use App\Http\Controllers\MutuelleDossierController;
+use App\Http\Controllers\MutuelleOperationController;
+use App\Http\Controllers\MutuelleDocumentController;
+use App\Http\Controllers\TypeOperationController;
+use App\Http\Controllers\TypeDocumentController;
+use App\Http\Controllers\ConflitController;
+use App\Http\Controllers\ConflitResourceController;
+use App\Http\Controllers\SanctionController;
+use App\Http\Controllers\SanctionResourceController;
 use App\Http\Controllers\OeuffinisemifiniController;
 use App\Http\Controllers\PermisController;
 use App\Http\Controllers\PermissionController;
@@ -53,9 +66,10 @@ use App\Http\Controllers\ClientGroupeClientController;  //new
 use App\Http\Controllers\OffreGroupeController;  //new
  
 
-// // use App\Http\Controllers\SocieteController;
+use App\Http\Controllers\SocieteController;
 use App\Http\Controllers\DepartementController;
 use App\Http\Controllers\EmployeController;
+use App\Http\Controllers\PaysController;
 use App\Http\Controllers\EmployeDepartementController;
 use App\Http\Controllers\CnssAffiliationController;
 use App\Http\Controllers\CnssDeclarationController;
@@ -487,8 +501,8 @@ Route::get('/employes', [EmployeController::class, 'index']);
 // use App\Http\Controllers\EmployeDepartementController;
 // use App\Http\Controllers\ContratController;
 // use App\Http\Controllers\AccidentController;
-// use App\Http\Controllers\CimrAffiliationController;
-// use App\Http\Controllers\CimrDeclarationController;
+use App\Http\Controllers\CimrAffiliationController;
+use App\Http\Controllers\CimrDeclarationController;
 // use App\Http\Controllers\AccidentLieuController;
 
 
@@ -621,14 +635,101 @@ Route::post("/login", [AuthController::class, 'login']);
     //logout
      Route::post("/logout", [AuthController::class, 'logout']);
 
-// Accidents public API (no auth)
-Route::apiResource('accidents', AccidentController::class);
-Route::apiResource('cimr-affiliations', CimrAffiliationController::class);
-Route::get('cimr-declarations/dashboard-stats', [CimrDeclarationController::class, 'dashboardStats']);
-Route::get('cimr-declarations/eligible-employees', [CimrDeclarationController::class, 'eligibleEmployees']);
-Route::post('cimr-declarations/delete-by-period', [CimrDeclarationController::class, 'destroyByPeriod']);
-Route::apiResource('cimr-declarations', CimrDeclarationController::class);
-Route::apiResource('accident-lieux', AccidentLieuController::class);
+// APIs RH protégées par authentification + permissions CRUD
+Route::middleware('auth:sanctum')->group(function () {
+    // Accidents
+    Route::apiResource('accidents', AccidentController::class)->only(['index', 'show'])->middleware('can:view_all_accidents');
+    Route::apiResource('accidents', AccidentController::class)->only(['store'])->middleware('can:create_accidents');
+    Route::apiResource('accidents', AccidentController::class)->only(['update'])->middleware('can:update_accidents');
+    Route::apiResource('accidents', AccidentController::class)->only(['destroy'])->middleware('can:delete_accidents');
+
+    Route::apiResource('accident-lieux', AccidentLieuController::class)->only(['index'])->middleware('can:view_all_accidents');
+    Route::apiResource('accident-lieux', AccidentLieuController::class)->only(['store'])->middleware('can:create_accidents');
+    Route::apiResource('accident-lieux', AccidentLieuController::class)->only(['update'])->middleware('can:update_accidents');
+    Route::apiResource('accident-lieux', AccidentLieuController::class)->only(['destroy'])->middleware('can:delete_accidents');
+
+    Route::apiResource('accident-types', AccidentTypeController::class)->only(['index'])->middleware('can:view_all_accidents');
+    Route::apiResource('accident-types', AccidentTypeController::class)->only(['store'])->middleware('can:create_accidents');
+    Route::apiResource('accident-types', AccidentTypeController::class)->only(['update'])->middleware('can:update_accidents');
+    Route::apiResource('accident-types', AccidentTypeController::class)->only(['destroy'])->middleware('can:delete_accidents');
+
+    Route::apiResource('accident-natures', AccidentNatureController::class)->only(['index'])->middleware('can:view_all_accidents');
+    Route::apiResource('accident-natures', AccidentNatureController::class)->only(['store'])->middleware('can:create_accidents');
+    Route::apiResource('accident-natures', AccidentNatureController::class)->only(['update'])->middleware('can:update_accidents');
+    Route::apiResource('accident-natures', AccidentNatureController::class)->only(['destroy'])->middleware('can:delete_accidents');
+
+    // CIMR
+    Route::apiResource('cimr-affiliations', CimrAffiliationController::class)->only(['index', 'show'])->middleware('can:view_all_cimr');
+    Route::apiResource('cimr-affiliations', CimrAffiliationController::class)->only(['store'])->middleware('can:create_cimr');
+    Route::apiResource('cimr-affiliations', CimrAffiliationController::class)->only(['update'])->middleware('can:update_cimr');
+    Route::apiResource('cimr-affiliations', CimrAffiliationController::class)->only(['destroy'])->middleware('can:delete_cimr');
+    Route::get('cimr-declarations/dashboard-stats', [CimrDeclarationController::class, 'dashboardStats'])->middleware('can:view_all_cimr');
+    Route::get('cimr-declarations/eligible-employees', [CimrDeclarationController::class, 'eligibleEmployees'])->middleware('can:view_all_cimr');
+    Route::post('cimr-declarations/delete-by-period', [CimrDeclarationController::class, 'destroyByPeriod'])->middleware('can:delete_cimr');
+    Route::apiResource('cimr-declarations', CimrDeclarationController::class)->only(['index', 'show'])->middleware('can:view_all_cimr');
+    Route::apiResource('cimr-declarations', CimrDeclarationController::class)->only(['store'])->middleware('can:create_cimr');
+    Route::apiResource('cimr-declarations', CimrDeclarationController::class)->only(['update'])->middleware('can:update_cimr');
+    Route::apiResource('cimr-declarations', CimrDeclarationController::class)->only(['destroy'])->middleware('can:delete_cimr');
+
+    // Conflits
+    // Keep static routes before resource show route to avoid {conflit} shadowing (e.g. dashboard-stats, labels)
+    Route::get('conflits/dashboard-stats', [ConflitController::class, 'dashboardStats'])->middleware('can:view_all_conflits');
+    Route::get('conflits/labels', [ConflitController::class, 'getLabels'])->middleware('can:view_all_conflits');
+    Route::apiResource('conflits', ConflitController::class)->only(['index', 'show'])->middleware('can:view_all_conflits');
+    Route::apiResource('conflits', ConflitController::class)->only(['store'])->middleware('can:create_conflits');
+    Route::apiResource('conflits', ConflitController::class)->only(['update'])->middleware('can:update_conflits');
+    Route::apiResource('conflits', ConflitController::class)->only(['destroy'])->middleware('can:delete_conflits');
+    Route::post('conflits/{conflit}/upload-file', [ConflitController::class, 'uploadFile'])->middleware('can:update_conflits');
+    Route::delete('conflits/{conflit}/files/{pieceJointe}', [ConflitController::class, 'deleteFile'])->middleware('can:delete_conflits');
+    Route::get('conflit-lieux', [ConflitResourceController::class, 'indexLieux'])->middleware('can:view_all_conflits');
+    Route::post('conflit-lieux', [ConflitResourceController::class, 'storeLieu'])->middleware('can:create_conflits');
+    Route::put('conflit-lieux/{id}', [ConflitResourceController::class, 'updateLieu'])->middleware('can:update_conflits');
+    Route::delete('conflit-lieux/{id}', [ConflitResourceController::class, 'destroyLieu'])->middleware('can:delete_conflits');
+    Route::get('conflit-types', [ConflitResourceController::class, 'indexTypes'])->middleware('can:view_all_conflits');
+    Route::post('conflit-types', [ConflitResourceController::class, 'storeType'])->middleware('can:create_conflits');
+    Route::put('conflit-types/{id}', [ConflitResourceController::class, 'updateType'])->middleware('can:update_conflits');
+    Route::delete('conflit-types/{id}', [ConflitResourceController::class, 'destroyType'])->middleware('can:delete_conflits');
+    Route::get('conflit-statuts', [ConflitResourceController::class, 'indexStatuts'])->middleware('can:view_all_conflits');
+    Route::post('conflit-statuts', [ConflitResourceController::class, 'storeStatut'])->middleware('can:create_conflits');
+    Route::put('conflit-statuts/{id}', [ConflitResourceController::class, 'updateStatut'])->middleware('can:update_conflits');
+    Route::delete('conflit-statuts/{id}', [ConflitResourceController::class, 'destroyStatut'])->middleware('can:delete_conflits');
+
+    // Sanctions
+    // Keep static routes before resource show route to avoid {sanction} shadowing dashboard endpoints
+    Route::get('sanctions/dashboard-stats', [SanctionController::class, 'dashboardStats'])->middleware('can:view_all_sanctions');
+    Route::get('sanctions/employee-history/{matricule}', [SanctionController::class, 'employeeHistory'])->middleware('can:view_all_sanctions');
+    Route::apiResource('sanctions', SanctionController::class)->only(['index', 'show'])->middleware('can:view_all_sanctions');
+    Route::apiResource('sanctions', SanctionController::class)->only(['store'])->middleware('can:create_sanctions');
+    Route::apiResource('sanctions', SanctionController::class)->only(['update'])->middleware('can:update_sanctions');
+    Route::apiResource('sanctions', SanctionController::class)->only(['destroy'])->middleware('can:delete_sanctions');
+    Route::get('sanction-types', [SanctionResourceController::class, 'indexTypes'])->middleware('can:view_all_sanctions');
+    Route::post('sanction-types', [SanctionResourceController::class, 'storeType'])->middleware('can:create_sanctions');
+    Route::put('sanction-types/{sanction_type}', [SanctionResourceController::class, 'updateType'])->middleware('can:update_sanctions');
+    Route::delete('sanction-types/{sanction_type}', [SanctionResourceController::class, 'destroyType'])->middleware('can:delete_sanctions');
+    Route::get('sanction-gravites', [SanctionResourceController::class, 'indexGravites'])->middleware('can:view_all_sanctions');
+    Route::post('sanction-gravites', [SanctionResourceController::class, 'storeGravite'])->middleware('can:create_sanctions');
+    Route::put('sanction-gravites/{sanction_gravite}', [SanctionResourceController::class, 'updateGravite'])->middleware('can:update_sanctions');
+    Route::delete('sanction-gravites/{sanction_gravite}', [SanctionResourceController::class, 'destroyGravite'])->middleware('can:delete_sanctions');
+    Route::get('sanction-statuts', [SanctionResourceController::class, 'indexStatuts'])->middleware('can:view_all_sanctions');
+    Route::post('sanction-statuts', [SanctionResourceController::class, 'storeStatut'])->middleware('can:create_sanctions');
+    Route::put('sanction-statuts/{sanction_statut}', [SanctionResourceController::class, 'updateStatut'])->middleware('can:update_sanctions');
+    Route::delete('sanction-statuts/{sanction_statut}', [SanctionResourceController::class, 'destroyStatut'])->middleware('can:delete_sanctions');
+
+    // CNSS document types (frontend expects name-based identifiers for update/delete)
+    Route::get('/cnss/document-types', [TypeDocumentController::class, 'index'])->middleware('can:view_all_cnss');
+    Route::post('/cnss/document-types', [TypeDocumentController::class, 'store'])->middleware('can:create_cnss');
+    Route::get('/cnss/document-types/{id}', [TypeDocumentController::class, 'show'])->middleware('can:view_all_cnss');
+    Route::put('/cnss/document-types/{id}', [TypeDocumentController::class, 'update'])->middleware('can:update_cnss');
+    Route::delete('/cnss/document-types/{id}', [TypeDocumentController::class, 'destroy'])->middleware('can:delete_cnss');
+
+    // Mutuelle operation type parametrage
+    Route::get('/mutuelles/parametrage/types-operations', [TypeOperationController::class, 'index'])->middleware('can:view_all_mutuelle');
+    Route::post('/mutuelles/parametrage/types-operations', [TypeOperationController::class, 'store'])->middleware('can:create_mutuelle');
+    Route::get('/mutuelles/parametrage/types-operations/{id}', [TypeOperationController::class, 'show'])->middleware('can:view_all_mutuelle');
+    Route::put('/mutuelles/parametrage/types-operations/{id}', [TypeOperationController::class, 'update'])->middleware('can:update_mutuelle');
+    Route::delete('/mutuelles/parametrage/types-operations/{id}', [TypeOperationController::class, 'destroy'])->middleware('can:delete_mutuelle');
+});
+
 Route::get('/departements/employes', [EmployeController::class, 'index']);
 
 
@@ -777,41 +878,49 @@ Route::get('/total-departemet', [DepartementController::class, 'TotalDepartemet'
 Route::get('/employees/{employe}', [EmployeController::class, 'show']);
 
 // Routes CNSS Affiliations
-Route::get('/cnss/affiliations', [CnssAffiliationController::class, 'index']);
-Route::post('/cnss/affiliations', [CnssAffiliationController::class, 'store']);
-Route::get('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'show']);
-Route::put('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'update']);
-Route::delete('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'destroy']);
-Route::get('/employes/{employeId}/cnss/affiliations', [CnssAffiliationController::class, 'getByEmploye']);
+Route::middleware('can:view_all_cnss')->group(function () {
+    Route::get('/cnss/affiliations', [CnssAffiliationController::class, 'index']);
+    Route::get('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'show']);
+    Route::get('/employes/{employeId}/cnss/affiliations', [CnssAffiliationController::class, 'getByEmploye']);
+});
+Route::post('/cnss/affiliations', [CnssAffiliationController::class, 'store'])->middleware('can:create_cnss');
+Route::put('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'update'])->middleware('can:update_cnss');
+Route::delete('/cnss/affiliations/{id}', [CnssAffiliationController::class, 'destroy'])->middleware('can:delete_cnss');
 
 // Routes CNSS Declarations
-Route::get('/cnss/declarations/eligible-employees', [CnssDeclarationController::class, 'eligibleEmployees']);
-Route::get('/cnss/declarations', [CnssDeclarationController::class, 'index']);
-Route::post('/cnss/declarations', [CnssDeclarationController::class, 'store']);
-Route::get('/cnss/declarations/{id}', [CnssDeclarationController::class, 'show']);
-Route::put('/cnss/declarations/{id}', [CnssDeclarationController::class, 'update']);
-Route::delete('/cnss/declarations/{id}', [CnssDeclarationController::class, 'destroy']);
+Route::middleware('can:view_all_cnss')->group(function () {
+    Route::get('/cnss/declarations/eligible-employees', [CnssDeclarationController::class, 'eligibleEmployees']);
+    Route::get('/cnss/declarations', [CnssDeclarationController::class, 'index']);
+    Route::get('/cnss/declarations/{id}', [CnssDeclarationController::class, 'show']);
+});
+Route::post('/cnss/declarations', [CnssDeclarationController::class, 'store'])->middleware('can:create_cnss');
+Route::put('/cnss/declarations/{id}', [CnssDeclarationController::class, 'update'])->middleware('can:update_cnss');
+Route::delete('/cnss/declarations/{id}', [CnssDeclarationController::class, 'destroy'])->middleware('can:delete_cnss');
 
 // Routes CNSS Declarations Individuelles
-Route::get('/cnss/declarations-individuelles', [DeclarationIndividuelleCnssController::class, 'index']);
-Route::post('/cnss/declarations-individuelles', [DeclarationIndividuelleCnssController::class, 'store']);
-Route::put('/cnss/declarations-individuelles/{id}', [DeclarationIndividuelleCnssController::class, 'update']);
-Route::delete('/cnss/declarations-individuelles/{id}', [DeclarationIndividuelleCnssController::class, 'destroy']);
-Route::get('/employes/{employeId}/declarations-individuelles-cnss', [DeclarationIndividuelleCnssController::class, 'byEmploye']);
+Route::middleware('can:view_all_cnss')->group(function () {
+    Route::get('/cnss/declarations-individuelles', [DeclarationIndividuelleCnssController::class, 'index']);
+    Route::get('/employes/{employeId}/declarations-individuelles-cnss', [DeclarationIndividuelleCnssController::class, 'byEmploye']);
+});
+Route::post('/cnss/declarations-individuelles', [DeclarationIndividuelleCnssController::class, 'store'])->middleware('can:create_cnss');
+Route::put('/cnss/declarations-individuelles/{id}', [DeclarationIndividuelleCnssController::class, 'update'])->middleware('can:update_cnss');
+Route::delete('/cnss/declarations-individuelles/{id}', [DeclarationIndividuelleCnssController::class, 'destroy'])->middleware('can:delete_cnss');
 
 // Routes CNSS Dossiers / Dashboard
-Route::get('/cnss/dashboard', [CnssDashboardController::class, 'index']);
-Route::get('/cnss/dossiers', [CnssDossierController::class, 'index']);
-Route::get('/cnss/dossiers/{employe}', [CnssDossierController::class, 'show']);
-Route::post('/cnss/dossiers/{employe}/documents', [CnssDocumentController::class, 'store']);
-Route::post('/cnss/operations/{operation}/documents', [CnssDocumentController::class, 'storeForOperation']);
-Route::get('/cnss/documents/{document}/download', [CnssDocumentController::class, 'download']);
-Route::delete('/cnss/documents/{document}', [CnssDocumentController::class, 'destroy']);
-Route::get('/cnss/dossiers/{employe}/operations', [CnssOperationController::class, 'index']);
-Route::post('/cnss/dossiers/{employe}/operations', [CnssOperationController::class, 'store']);
-Route::get('/cnss/operations/{operation}', [CnssOperationController::class, 'show']);
-Route::put('/cnss/operations/{operation}', [CnssOperationController::class, 'update']);
-Route::delete('/cnss/operations/{operation}', [CnssOperationController::class, 'destroy']);
+Route::middleware('can:view_all_cnss')->group(function () {
+    Route::get('/cnss/dashboard', [CnssDashboardController::class, 'index']);
+    Route::get('/cnss/dossiers', [CnssDossierController::class, 'index']);
+    Route::get('/cnss/dossiers/{employe}', [CnssDossierController::class, 'show']);
+    Route::get('/cnss/documents/{document}/download', [CnssDocumentController::class, 'download']);
+    Route::get('/cnss/dossiers/{employe}/operations', [CnssOperationController::class, 'index']);
+    Route::get('/cnss/operations/{operation}', [CnssOperationController::class, 'show']);
+});
+Route::post('/cnss/dossiers/{employe}/documents', [CnssDocumentController::class, 'store'])->middleware('can:create_cnss');
+Route::post('/cnss/operations/{operation}/documents', [CnssDocumentController::class, 'storeForOperation'])->middleware('can:create_cnss');
+Route::delete('/cnss/documents/{document}', [CnssDocumentController::class, 'destroy'])->middleware('can:delete_cnss');
+Route::post('/cnss/dossiers/{employe}/operations', [CnssOperationController::class, 'store'])->middleware('can:create_cnss');
+Route::put('/cnss/operations/{operation}', [CnssOperationController::class, 'update'])->middleware('can:update_cnss');
+Route::delete('/cnss/operations/{operation}', [CnssOperationController::class, 'destroy'])->middleware('can:delete_cnss');
 
 
 
@@ -1246,90 +1355,163 @@ Route::apiResource('heures-travail', HeureTravailController::class);
 Route::apiResource('horaire-exceptionnel', HoraireExceptionnelController::class);
 
 // Carriere / Formation module
-Route::get('/grades', [GradeController::class, 'index']);
-Route::get('/grades/{grade}', [GradeController::class, 'show']);
-Route::post('/grades', [GradeController::class, 'store']);
-Route::put('/grades/{grade}', [GradeController::class, 'update']);
-Route::delete('/grades/{grade}', [GradeController::class, 'destroy']);
+Route::middleware('can:view_all_carrieres_formations')->group(function () {
+    Route::get('/grades', [GradeController::class, 'index']);
+    Route::get('/grades/{grade}', [GradeController::class, 'show']);
 
-Route::get('/competences', [CompetenceController::class, 'index']);
-Route::get('/competences/{competence}', [CompetenceController::class, 'show']);
-Route::post('/competences', [CompetenceController::class, 'store']);
-Route::put('/competences/{competence}', [CompetenceController::class, 'update']);
-Route::delete('/competences/{competence}', [CompetenceController::class, 'destroy']);
+    Route::get('/competences', [CompetenceController::class, 'index']);
+    Route::get('/competences/{competence}', [CompetenceController::class, 'show']);
 
-Route::get('/postes', [PosteController::class, 'index']);
-Route::get('/postes/{poste}', [PosteController::class, 'show']);
-Route::post('/postes', [PosteController::class, 'store']);
-Route::put('/postes/{poste}', [PosteController::class, 'update']);
-Route::delete('/postes/{poste}', [PosteController::class, 'destroy']);
-Route::get('/postes/{poste}/competences', [PosteController::class, 'getCompetences']);
-Route::put('/postes/{poste}/competences', [PosteController::class, 'updateCompetences']);
-Route::get('/postes/{id}/suggestions', [PosteController::class, 'aiSuggestions']);
+    Route::get('/postes', [PosteController::class, 'index']);
+    Route::get('/postes/{poste}', [PosteController::class, 'show']);
+    Route::get('/postes/{poste}/competences', [PosteController::class, 'getCompetences']);
+    Route::get('/postes/{id}/suggestions', [PosteController::class, 'aiSuggestions']);
 
-Route::get('/services', [ServiceController::class, 'index']);
-Route::get('/services/{id}', [ServiceController::class, 'show']);
-Route::get('/unites', [UniteController::class, 'index']);
-Route::get('/unites/{id}', [UniteController::class, 'show']);
+    Route::get('/services', [ServiceController::class, 'index']);
+    Route::get('/services/{id}', [ServiceController::class, 'show']);
+    Route::get('/unites', [UniteController::class, 'index']);
+    Route::get('/unites/{id}', [UniteController::class, 'show']);
 
-Route::get('/types-evolution', [TypeEvolutionController::class, 'index']);
-Route::post('/types-evolution', [TypeEvolutionController::class, 'store']);
-Route::put('/types-evolution/{id}', [TypeEvolutionController::class, 'update']);
-Route::delete('/types-evolution/{id}', [TypeEvolutionController::class, 'destroy']);
+    Route::get('/types-evolution', [TypeEvolutionController::class, 'index']);
 
-Route::get('/carrieres', [CarriereController::class, 'index']);
-Route::post('/carrieres', [CarriereController::class, 'store']);
-Route::delete('/carrieres/{id}', [CarriereController::class, 'destroy']);
-Route::post('/carrieres/{id}/accept', [CarriereController::class, 'acceptPoste']);
-Route::post('/carrieres/{id}/refuse', [CarriereController::class, 'refusePoste']);
-Route::get('/employes/{id}/parcours', [CarriereController::class, 'parcours']);
-Route::get('/employes/{id}/postes-en-attente', [CarriereController::class, 'getPostesEnAttente']);
+    Route::get('/carrieres', [CarriereController::class, 'index']);
+    Route::get('/employes/{id}/parcours', [CarriereController::class, 'parcours']);
+    Route::get('/employes/{id}/postes-en-attente', [CarriereController::class, 'getPostesEnAttente']);
+    Route::post('/carrieres/postes-en-attente/batch', [CarriereController::class, 'getPostesEnAttenteBatch']);
 
-Route::get('/dashboard/carrieres', [DashboardController::class, 'carrieres']);
-Route::get('/dashboard/formations', [DashboardController::class, 'formations']);
+    Route::get('/dashboard/carrieres', [DashboardController::class, 'carrieres']);
+    Route::get('/dashboard/formations', [DashboardController::class, 'formations']);
 
-Route::get('/formateurs', [FormateurController::class, 'index']);
-Route::post('/formateurs', [FormateurController::class, 'store']);
-Route::put('/formateurs/{id}', [FormateurController::class, 'update']);
-Route::delete('/formateurs/{id}', [FormateurController::class, 'destroy']);
+    Route::get('/formateurs', [FormateurController::class, 'index']);
 
-Route::get('/formations', [FormationController::class, 'index']);
-Route::get('/formations/{formation}', [FormationController::class, 'show']);
-Route::post('/formations', [FormationController::class, 'store']);
-Route::put('/formations/{formation}', [FormationController::class, 'update']);
-Route::delete('/formations/{formation}', [FormationController::class, 'destroy']);
-Route::get('/formations/{formation}/participants', [FormationController::class, 'participants']);
-Route::get('/formations/{formation}/participants-with-attendance', [FormationController::class, 'participantsWithAttendance']);
-Route::post('/formations/{formation}/participants', [FormationController::class, 'addParticipant']);
-Route::put('/formations/{formation}/participants/{participant}', [FormationController::class, 'updateParticipant']);
-Route::delete('/formations/{formation}/participants/{participant}', [FormationController::class, 'removeParticipant']);
-Route::get('/formations/{formation}/competences', [FormationController::class, 'getCompetences']);
-Route::post('/formations/{formation}/competences/sync', [FormationController::class, 'syncCompetences']);
-Route::get('/formations/{formation}/suggested-participants', [FormationController::class, 'suggestedParticipants']);
-Route::get('/formations/{formation}/smart-suggestions', [FormationController::class, 'smartSuggestions']);
+    Route::get('/formations', [FormationController::class, 'index']);
+    Route::get('/formations/{formation}/summary', [FormationController::class, 'summary']);
+    Route::get('/formations/{formation}', [FormationController::class, 'show']);
+    Route::get('/formations/{formation}/participants', [FormationController::class, 'participants']);
+    Route::get('/formations/{formation}/participants-with-attendance', [FormationController::class, 'participantsWithAttendance']);
+    Route::get('/formations/{formation}/competences', [FormationController::class, 'getCompetences']);
+    Route::get('/formations/{formation}/suggested-participants', [FormationController::class, 'suggestedParticipants']);
+    Route::get('/formations/{formation}/smart-suggestions', [FormationController::class, 'smartSuggestions']);
 
-Route::get('/formations/{formation}/sessions', [FormationSessionController::class, 'index']);
-Route::post('/formations/{formation}/sessions', [FormationSessionController::class, 'store']);
-Route::put('/sessions/{session}', [FormationSessionController::class, 'update']);
-Route::delete('/sessions/{session}', [FormationSessionController::class, 'destroy']);
-Route::get('/sessions/{session}/attendance', [FormationAttendanceController::class, 'index']);
-Route::post('/sessions/{session}/attendance/bulk-update', [FormationAttendanceController::class, 'bulkUpdate']);
+    Route::get('/formations/{formation}/sessions', [FormationSessionController::class, 'index']);
+    Route::get('/sessions/{session}/attendance', [FormationAttendanceController::class, 'index']);
 
-Route::get('/demandes-mobilite', [DemandeMobiliteController::class, 'index']);
-Route::get('/demandes-mobilite/{id}', [DemandeMobiliteController::class, 'show']);
-Route::post('/demandes-mobilite', [DemandeMobiliteController::class, 'store']);
-Route::put('/demandes-mobilite/{id}', [DemandeMobiliteController::class, 'update']);
-Route::post('/demandes-mobilite/{id}/statut', [DemandeMobiliteController::class, 'updateStatus']);
-Route::delete('/demandes-mobilite/{id}', [DemandeMobiliteController::class, 'destroy']);
+    Route::get('/demandes-mobilite', [DemandeMobiliteController::class, 'index']);
+    Route::get('/demandes-mobilite/{id}', [DemandeMobiliteController::class, 'show']);
 
-Route::get('/demandes-formation', [DemandeFormationController::class, 'index']);
-Route::get('/demandes-formation/{id}', [DemandeFormationController::class, 'show']);
-Route::post('/demandes-formation', [DemandeFormationController::class, 'store']);
-Route::put('/demandes-formation/{id}', [DemandeFormationController::class, 'update']);
-Route::patch('/demandes-formation/{id}/status', [DemandeFormationController::class, 'updateStatus']);
-Route::delete('/demandes-formation/{id}', [DemandeFormationController::class, 'destroy']);
+    Route::get('/demandes-formation', [DemandeFormationController::class, 'index']);
+    Route::get('/demandes-formation/{id}', [DemandeFormationController::class, 'show']);
+});
+
+Route::post('/grades', [GradeController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/grades/{grade}', [GradeController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::delete('/grades/{grade}', [GradeController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+
+Route::post('/competences', [CompetenceController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/competences/{competence}', [CompetenceController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::delete('/competences/{competence}', [CompetenceController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+
+Route::post('/postes', [PosteController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/postes/{poste}', [PosteController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::delete('/postes/{poste}', [PosteController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+Route::put('/postes/{poste}/competences', [PosteController::class, 'updateCompetences'])->middleware('can:update_carrieres_formations');
+Route::post('/postes/{id}/assign-employe', [PosteController::class, 'assignEmploye'])->middleware('can:update_carrieres_formations');
+
+Route::post('/types-evolution', [TypeEvolutionController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/types-evolution/{id}', [TypeEvolutionController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::delete('/types-evolution/{id}', [TypeEvolutionController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+
+Route::post('/carrieres', [CarriereController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::delete('/carrieres/{id}', [CarriereController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+Route::post('/carrieres/{id}/accept', [CarriereController::class, 'acceptPoste'])->middleware('can:update_carrieres_formations');
+Route::post('/carrieres/{id}/refuse', [CarriereController::class, 'refusePoste'])->middleware('can:update_carrieres_formations');
+
+Route::post('/formateurs', [FormateurController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/formateurs/{id}', [FormateurController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::delete('/formateurs/{id}', [FormateurController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+
+Route::post('/formations', [FormationController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/formations/{formation}', [FormationController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::delete('/formations/{formation}', [FormationController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+Route::post('/formations/{formation}/participants', [FormationController::class, 'addParticipant'])->middleware('can:create_carrieres_formations');
+Route::put('/formations/{formation}/participants/{participant}', [FormationController::class, 'updateParticipant'])->middleware('can:update_carrieres_formations');
+Route::delete('/formations/{formation}/participants/{participant}', [FormationController::class, 'removeParticipant'])->middleware('can:delete_carrieres_formations');
+Route::post('/formations/{formation}/competences/sync', [FormationController::class, 'syncCompetences'])->middleware('can:update_carrieres_formations');
+
+Route::post('/formations/{formation}/sessions', [FormationSessionController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/sessions/{session}', [FormationSessionController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::delete('/sessions/{session}', [FormationSessionController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+Route::post('/sessions/{session}/attendance/bulk-update', [FormationAttendanceController::class, 'bulkUpdate'])->middleware('can:update_carrieres_formations');
+
+Route::post('/demandes-mobilite', [DemandeMobiliteController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/demandes-mobilite/{id}', [DemandeMobiliteController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::post('/demandes-mobilite/{id}/statut', [DemandeMobiliteController::class, 'updateStatus'])->middleware('can:update_carrieres_formations');
+Route::delete('/demandes-mobilite/{id}', [DemandeMobiliteController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+
+Route::post('/demandes-formation', [DemandeFormationController::class, 'store'])->middleware('can:create_carrieres_formations');
+Route::put('/demandes-formation/{id}', [DemandeFormationController::class, 'update'])->middleware('can:update_carrieres_formations');
+Route::patch('/demandes-formation/{id}/status', [DemandeFormationController::class, 'updateStatus'])->middleware('can:update_carrieres_formations');
+Route::delete('/demandes-formation/{id}', [DemandeFormationController::class, 'destroy'])->middleware('can:delete_carrieres_formations');
+
+// Mutuelle / Affiliation mutuelle
+Route::middleware('can:view_all_mutuelle')->group(function () {
+    Route::get('/mutuelle/dashboard-stats', [MutuelleDashboardController::class, 'dashboardStats']);
+    Route::get('/mutuelles/dashboard-stats', [MutuelleDashboardController::class, 'dashboardStats']);
+
+    // Routes Mutuelle Dossiers / Operations / Documents
+    Route::get('/mutuelles/dossiers', [MutuelleDossierController::class, 'index']);
+    Route::get('/mutuelles/dossiers/{numero_dossier}', [MutuelleDossierController::class, 'show']);
+    Route::get('/mutuelles/dossiers/{employe}/operations', [MutuelleOperationController::class, 'indexByEmploye']);
+
+    Route::get('/mutuelles/operations', [MutuelleOperationController::class, 'index']);
+    Route::get('/mutuelles/operations/{operation}', [MutuelleOperationController::class, 'show']);
+    Route::get('/mutuelles/documents/{document}/download', [MutuelleDocumentController::class, 'download']);
+
+    Route::get('/mutuelles', [MutuelleController::class, 'index']);
+    Route::get('/mutuelles/{id}', [MutuelleController::class, 'show']);
+
+    Route::get('/mutuelles/{mutuelleId}/regimes', [RegimeMutuelleController::class, 'getByMutuelle']);
+
+    Route::get('/regimes-mutuelle', [RegimeMutuelleController::class, 'index']);
+    Route::get('/regimes-mutuelle/{id}', [RegimeMutuelleController::class, 'show']);
+
+    Route::get('/affiliations-mutuelle', [AffiliationMutuelleController::class, 'index']);
+    Route::get('/affiliations-mutuelle/{id}', [AffiliationMutuelleController::class, 'show']);
+
+    Route::get('/employes/eligibles-mutuelle', [AffiliationMutuelleController::class, 'employesEligibles']);
+    Route::get('/employes/affilies-mutuelle', [AffiliationMutuelleController::class, 'employesAffilies']);
+    Route::get('/employes/{employeId}/affiliations-mutuelle', [AffiliationMutuelleController::class, 'getByEmploye']);
+});
+
+Route::post('/mutuelles/dossiers/{employe}/documents', [MutuelleDocumentController::class, 'storeByEmploye'])->middleware('can:create_mutuelle');
+Route::post('/mutuelles/dossiers/{employe}/operations', [MutuelleOperationController::class, 'storeByEmploye'])->middleware('can:create_mutuelle');
+Route::put('/mutuelles/operations/{operation}', [MutuelleOperationController::class, 'update'])->middleware('can:update_mutuelle');
+Route::delete('/mutuelles/operations/{operation}', [MutuelleOperationController::class, 'destroy'])->middleware('can:delete_mutuelle');
+
+Route::post('/mutuelles/documents', [MutuelleDocumentController::class, 'store'])->middleware('can:create_mutuelle');
+Route::delete('/mutuelles/documents/{document}', [MutuelleDocumentController::class, 'destroy'])->middleware('can:delete_mutuelle');
+
+Route::post('/mutuelles', [MutuelleController::class, 'store'])->middleware('can:create_mutuelle');
+Route::put('/mutuelles/{id}', [MutuelleController::class, 'update'])->middleware('can:update_mutuelle');
+Route::delete('/mutuelles/{id}', [MutuelleController::class, 'destroy'])->middleware('can:delete_mutuelle');
+
+Route::post('/mutuelles/{mutuelleId}/regimes', [RegimeMutuelleController::class, 'storeForMutuelle'])->middleware('can:create_mutuelle');
+Route::put('/mutuelles/{mutuelleId}/regimes/{id}', [RegimeMutuelleController::class, 'updateForMutuelle'])->middleware('can:update_mutuelle');
+Route::delete('/mutuelles/{mutuelleId}/regimes/{id}', [RegimeMutuelleController::class, 'destroyForMutuelle'])->middleware('can:delete_mutuelle');
+
+Route::post('/regimes-mutuelle', [RegimeMutuelleController::class, 'store'])->middleware('can:create_mutuelle');
+Route::put('/regimes-mutuelle/{id}', [RegimeMutuelleController::class, 'update'])->middleware('can:update_mutuelle');
+Route::delete('/regimes-mutuelle/{id}', [RegimeMutuelleController::class, 'destroy'])->middleware('can:delete_mutuelle');
+
+Route::post('/affiliations-mutuelle', [AffiliationMutuelleController::class, 'store'])->middleware('can:create_mutuelle');
+Route::put('/affiliations-mutuelle/{id}', [AffiliationMutuelleController::class, 'update'])->middleware('can:update_mutuelle');
+Route::delete('/affiliations-mutuelle/{id}', [AffiliationMutuelleController::class, 'destroy'])->middleware('can:delete_mutuelle');
+Route::put('/affiliations-mutuelle/{id}/resilier', [AffiliationMutuelleController::class, 'resilier'])->middleware('can:update_mutuelle');
+Route::get('/employes/{employe}', [EmployeController::class, 'show'])->whereNumber('employe');
+Route::get('/employes/light', [EmployeController::class, 'listLight']);
 
 Route::get('/employes/list', [EmployeController::class, 'listForSelect']);
+Route::post('/employes/competences/batch', [EmployeController::class, 'getCompetencesBatch']);
 Route::get('/employes/{id}/competences', [EmployeController::class, 'getCompetences']);
 Route::post('/employes/{id}/competences', [EmployeController::class, 'addCompetence']);
 Route::put('/employes/{id}/competences/{competenceId}', [EmployeController::class, 'updateCompetence']);

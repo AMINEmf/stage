@@ -105,7 +105,9 @@ const EmployeeSelector = ({
                 style={{ maxHeight: '250px', overflowY: 'auto' }}
             >
                 {isLoading ? (
-                    <div className="text-center p-3 text-muted">Chargement des employes...</div>
+                    <div className="text-center p-3 text-muted">
+                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                    </div>
                 ) : filteredEmployees.length === 0 ? (
                     <div className="text-center p-3 text-muted">Aucun employe trouve.</div>
                 ) : (

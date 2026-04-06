@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Button, Form, Table, InputGroup } from 'react-bootstrap';
 import { Trash2, Edit2, Check, X } from 'lucide-react';
 import {
@@ -16,10 +16,14 @@ const ManageResourceModal = ({
   onEdit,
   onDelete,
   resourceName = "Ressource",
-  fields = [] // [{ name: 'label', label: 'Libellé', type: 'text' }]
+  fields = [], // [{ name: 'label', label: 'Libellé', type: 'text' }]
+  initialItems = null,
+  cacheKey = null,
+  cacheTtlMs = 10 * 60 * 1000,
 }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // State for single-field mode (backward compatibility)
   const [newItemName, setNewItemName] = useState("");
@@ -34,12 +38,47 @@ const ManageResourceModal = ({
   const [editingData, setEditingData] = useState({});
 
   const [editingId, setEditingId] = useState(null);
+  const loadRequestRef = useRef(0);
 
   const isMultiField = fields && fields.length > 0;
 
+  const readModalCache = () => {
+    if (!cacheKey) return null;
+
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (!Array.isArray(parsed.data) || !parsed.ts) return null;
+      if (Date.now() - parsed.ts > cacheTtlMs) return null;
+
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeModalCache = (nextItems) => {
+    if (!cacheKey) return;
+
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: nextItems }));
+    } catch {
+      // Ignore localStorage write errors.
+    }
+  };
+
   useEffect(() => {
     if (show) {
-      loadItems();
+      const seedFromProps = Array.isArray(initialItems) ? initialItems : null;
+      const seedFromCache = readModalCache();
+      const seedItems = seedFromProps ?? seedFromCache ?? [];
+
+      setItems(Array.isArray(seedItems) ? seedItems : []);
+      loadItems({ silent: true });
+
       if (isMultiField) {
         setNewItemData(initialFormState);
       } else {
@@ -48,15 +87,39 @@ const ManageResourceModal = ({
     }
   }, [show]);
 
-  const loadItems = async () => {
-    setLoading(true);
+  useEffect(() => {
+    if (!show) return;
+    if (!Array.isArray(initialItems)) return;
+    setItems(initialItems);
+  }, [show, initialItems]);
+
+  const loadItems = async ({ silent = false } = {}) => {
+    const requestId = ++loadRequestRef.current;
+
+    if (silent) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
       const data = await fetchItems();
-      setItems(data || []);
+      if (requestId !== loadRequestRef.current) return;
+
+      const nextItems = Array.isArray(data) ? data : [];
+      setItems(nextItems);
+      writeModalCache(nextItems);
     } catch (error) {
+      if (requestId !== loadRequestRef.current) return;
       console.error("Erreur chargement:", error);
     } finally {
-      setLoading(false);
+      if (requestId !== loadRequestRef.current) return;
+
+      if (silent) {
+        setIsRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -91,7 +154,7 @@ const ManageResourceModal = ({
         await onAdd(newItemName);
         setNewItemName("");
       }
-      loadItems();
+      loadItems({ silent: true });
       window.dispatchEvent(new CustomEvent('operationTypesUpdated'));
       showSuccessMessage(
         'Ajouté!',
@@ -122,7 +185,7 @@ const ManageResourceModal = ({
         setEditingId(null);
         setEditingName("");
       }
-      loadItems();
+      loadItems({ silent: true });
       window.dispatchEvent(new CustomEvent('operationTypesUpdated'));
       showSuccessMessage(
         'Modifié!',
@@ -172,7 +235,7 @@ const ManageResourceModal = ({
 
       if (result.isConfirmed) {
         await onDelete(id);
-        loadItems();
+        loadItems({ silent: true });
         window.dispatchEvent(new CustomEvent('operationTypesUpdated'));
         showSuccessMessage(
           'Supprimé!',
@@ -399,7 +462,13 @@ const ManageResourceModal = ({
           </div>
 
           <div className="resource-table-container">
-            {loading ? (
+            {isRefreshing && items.length > 0 && (
+              <div className="text-end px-3 pt-2">
+                <small className="text-muted">Mise a jour...</small>
+              </div>
+            )}
+
+            {loading && items.length === 0 ? (
               <div className="text-center p-4">
                 <div className="spinner-border spinner-border-sm text-secondary me-2" role="status"></div>
                 <span className="small text-muted">Chargement...</span>

@@ -46,6 +46,230 @@ const StatutChip = ({ statut }) => {
 };
 
 const MOIS_LABELS = ["", "Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+const CNSS_DECL_ALL_EMPLOYEES_CACHE_KEY = "cnssDeclIndivAllEmployees";
+const CNSS_DECL_LEGACY_EMPLOYEES_CACHE_KEY = "cnssDossierEmployees";
+const CNSS_DECL_SHARED_EMPLOYEES_CACHE_KEY = "cnssEmployees";
+const CNSS_DECL_DEPT_EMPLOYEES_CACHE_PREFIX = "cnssDeclDeptEmployees_";
+const CNSS_DECL_CACHE_PREFIX = "cnss_decl_indiv_";
+const CNSS_DECL_CACHE_TTL_MS = 20 * 1000;
+const CNSS_DECL_EMPLOYEES_CACHE_TTL_MS = 10 * 60 * 1000;
+const CNSS_DECL_DEPT_EMPLOYEES_CACHE_TTL_MS = 10 * 60 * 1000;
+const CNSS_DECL_PREFETCH_EMPLOYEE_LIMIT = 40;
+const CNSS_DECL_PREFETCH_CONCURRENCY = 6;
+const declarationCacheMemory = new Map();
+const declarationRequestInFlight = new Map();
+const departmentEmployeesCacheMemory = new Map();
+
+const readCachedArrayEntry = (rawValue) => {
+  if (!rawValue) return null;
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (Array.isArray(parsed)) {
+      return { data: parsed, updatedAt: 0 };
+    }
+
+    const data = Array.isArray(parsed?.data) ? parsed.data : null;
+    if (!data) return null;
+
+    return {
+      data,
+      updatedAt: Number(parsed.updatedAt ?? 0) || 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const readCachedAllEmployees = () => {
+  const sourceKeys = [
+    CNSS_DECL_ALL_EMPLOYEES_CACHE_KEY,
+    CNSS_DECL_SHARED_EMPLOYEES_CACHE_KEY,
+    CNSS_DECL_LEGACY_EMPLOYEES_CACHE_KEY,
+  ];
+
+  for (const key of sourceKeys) {
+    const entry = readCachedArrayEntry(localStorage.getItem(key));
+    if (entry?.data) {
+      return entry;
+    }
+  }
+
+  return { data: [], updatedAt: 0 };
+};
+
+const getDepartmentEmployeesCacheKey = (departmentIds) => {
+  if (!Array.isArray(departmentIds) || departmentIds.length === 0) return null;
+  const normalized = departmentIds
+    .map(String)
+    .sort((left, right) => left.localeCompare(right))
+    .join("_");
+  return `${CNSS_DECL_DEPT_EMPLOYEES_CACHE_PREFIX}${normalized}`;
+};
+
+const readCachedDepartmentEmployees = (departmentIds) => {
+  const cacheKey = getDepartmentEmployeesCacheKey(departmentIds);
+  if (!cacheKey) return null;
+
+  const inMemory = departmentEmployeesCacheMemory.get(cacheKey);
+  if (inMemory?.data) {
+    return inMemory;
+  }
+
+  const fromStorage = readCachedArrayEntry(localStorage.getItem(cacheKey));
+  if (!fromStorage?.data) return null;
+
+  departmentEmployeesCacheMemory.set(cacheKey, fromStorage);
+  return fromStorage;
+};
+
+const writeCachedDepartmentEmployees = (departmentIds, employees) => {
+  const cacheKey = getDepartmentEmployeesCacheKey(departmentIds);
+  if (!cacheKey) return;
+
+  const entry = {
+    data: Array.isArray(employees) ? employees : [],
+    updatedAt: Date.now(),
+  };
+
+  departmentEmployeesCacheMemory.set(cacheKey, entry);
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(entry));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const writeCachedAllEmployees = (employees) => {
+  const list = Array.isArray(employees) ? employees : [];
+
+  try {
+    localStorage.setItem(
+      CNSS_DECL_ALL_EMPLOYEES_CACHE_KEY,
+      JSON.stringify({
+        data: list,
+        updatedAt: Date.now(),
+      })
+    );
+
+    // Shared as plain array for screens that only support array-form cache.
+    localStorage.setItem(CNSS_DECL_SHARED_EMPLOYEES_CACHE_KEY, JSON.stringify(list));
+    localStorage.setItem(CNSS_DECL_LEGACY_EMPLOYEES_CACHE_KEY, JSON.stringify(list));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const readDepartmentHierarchyCache = () => {
+  const sources = ["departmentPanelData", "departmentHierarchy"];
+
+  for (const sourceKey of sources) {
+    try {
+      const raw = localStorage.getItem(sourceKey);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // ignore malformed cached hierarchy
+    }
+  }
+
+  return [];
+};
+
+const getSubDepartmentIdsFromHierarchy = (departments, departmentId) => {
+  if (!departmentId) return [];
+
+  const ids = new Set([String(departmentId)]);
+  const departmentList = Array.isArray(departments) ? departments : [];
+
+  const findDepartment = (items, targetId) => {
+    for (const item of items) {
+      if (String(item?.id) === String(targetId)) {
+        return item;
+      }
+
+      if (Array.isArray(item?.children) && item.children.length > 0) {
+        const found = findDepartment(item.children, targetId);
+        if (found) return found;
+      }
+    }
+
+    return null;
+  };
+
+  const collectChildren = (department) => {
+    if (!Array.isArray(department?.children) || department.children.length === 0) return;
+
+    department.children.forEach((child) => {
+      if (child?.id != null) {
+        ids.add(String(child.id));
+      }
+      collectChildren(child);
+    });
+  };
+
+  const root = findDepartment(departmentList, departmentId);
+  if (root) collectChildren(root);
+
+  return Array.from(ids);
+};
+
+const filterEmployeesByDepartments = (employees, departmentIds) => {
+  if (!Array.isArray(employees) || employees.length === 0) return [];
+  if (!Array.isArray(departmentIds) || departmentIds.length === 0) return [];
+
+  const targetIds = new Set(departmentIds.map(String));
+
+  return employees.filter((employee) => {
+    const directMatch = employee?.departement_id != null
+      ? targetIds.has(String(employee.departement_id))
+      : false;
+
+    const linkedMatch = Array.isArray(employee?.departements)
+      ? employee.departements.some((department) => targetIds.has(String(department?.id)))
+      : false;
+
+    return directMatch || linkedMatch;
+  });
+};
+
+const getDeclarationCacheKey = (employeId) => `${CNSS_DECL_CACHE_PREFIX}${String(employeId)}`;
+
+const readCachedDeclarations = (employeId) => {
+  if (!employeId) return null;
+
+  const cacheKey = getDeclarationCacheKey(employeId);
+  const inMemoryEntry = declarationCacheMemory.get(cacheKey);
+  if (inMemoryEntry && Array.isArray(inMemoryEntry.data)) {
+    return inMemoryEntry;
+  }
+
+  const fromStorage = readCachedArrayEntry(localStorage.getItem(cacheKey));
+  if (!fromStorage?.data) return null;
+
+  declarationCacheMemory.set(cacheKey, fromStorage);
+  return fromStorage;
+};
+
+const writeCachedDeclarations = (employeId, declarations) => {
+  if (!employeId) return;
+
+  const entry = {
+    data: Array.isArray(declarations) ? declarations : [],
+    updatedAt: Date.now(),
+  };
+
+  const cacheKey = getDeclarationCacheKey(employeId);
+  declarationCacheMemory.set(cacheKey, entry);
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(entry));
+  } catch {
+    // ignore storage errors
+  }
+};
 
 // ─── Composant principal ────────────────────────────────────────────────────────
 function DeclarationsIndividuellesCNSS() {
@@ -57,6 +281,8 @@ function DeclarationsIndividuellesCNSS() {
   const [selectedDepartementId, setSelectedDepartementId] = useState(null);
   const [includeSubDepartments, setIncludeSubDepartments] = useState(false);
   const [departmentEmployees, setDepartmentEmployees] = useState([]);
+  const [allEmployees, setAllEmployees] = useState(() => readCachedAllEmployees().data);
+  const [departmentHierarchy, setDepartmentHierarchy] = useState(() => readDepartmentHierarchyCache());
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // ── Déclarations ──────────────────────────────────────────────────────────────
@@ -72,6 +298,7 @@ function DeclarationsIndividuellesCNSS() {
 
   // ── Graphe ────────────────────────────────────────────────────────────────────
   const [showChart, setShowChart] = useState(false);
+  const latestDeclarationsFetchRef = useRef(0);
 
   // ── Expand rows ───────────────────────────────────────────────────────────────
   const [expandedRows, setExpandedRows] = useState({});
@@ -190,46 +417,232 @@ function DeclarationsIndividuellesCNSS() {
     if (setOnExportPDF) setOnExportPDF(() => exportToPDF);
   }, [setOnPrint, setOnExportPDF, handlePrint, exportToPDF]);
 
-  // ── Fetch employés par département (pour DepartmentPanel) ─────────────────────
-  const fetchEmployes = useCallback(async (deptId) => {
-    if (!deptId) { setDepartmentEmployees([]); return; }
+  const fetchDepartmentHierarchy = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/employes`);
-      const list = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
-      const filtered = list.filter((e) => {
-        if (e.departement_id) return String(e.departement_id) === String(deptId);
-        if (Array.isArray(e.departements)) return e.departements.some((d) => String(d.id) === String(deptId));
-        return false;
-      });
+      const response = await axios.get(`${API_BASE}/api/departements/hierarchy`);
+      const hierarchy = Array.isArray(response.data) ? response.data : [];
+      setDepartmentHierarchy(hierarchy);
+      localStorage.setItem("departmentPanelData", JSON.stringify(hierarchy));
+      localStorage.setItem("departmentHierarchy", JSON.stringify(hierarchy));
+    } catch {
+      // keep cached hierarchy
+    }
+  }, []);
+
+  const fetchEmployees = useCallback(async ({ forceRefresh = false } = {}) => {
+    const cached = readCachedAllEmployees();
+    const hasWarmCache = Array.isArray(cached?.data) && cached.data.length > 0;
+
+    if (hasWarmCache) {
+      setAllEmployees((prev) => (prev.length > 0 ? prev : cached.data));
+    }
+
+    const isCacheFresh = hasWarmCache
+      && cached.updatedAt > 0
+      && (Date.now() - cached.updatedAt) < CNSS_DECL_EMPLOYEES_CACHE_TTL_MS;
+
+    if (!forceRefresh && isCacheFresh) {
+      return;
+    }
+
+    const endpoints = [
+      `${API_BASE}/api/employes/list`,
+      `${API_BASE}/api/employes/light`,
+      `${API_BASE}/api/departements/employes`,
+      `${API_BASE}/api/employes`,
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await axios.get(endpoint);
+        const list = Array.isArray(response.data) ? response.data : response.data?.data ?? [];
+        setAllEmployees(list);
+        writeCachedAllEmployees(list);
+        return;
+      } catch {
+        // try next endpoint
+      }
+    }
+
+    if (!hasWarmCache) {
+      setAllEmployees([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDepartmentHierarchy();
+    fetchEmployees();
+  }, [fetchDepartmentHierarchy, fetchEmployees]);
+
+  const selectedDepartmentIds = useMemo(() => {
+    if (!selectedDepartementId) return [];
+    if (!includeSubDepartments) return [String(selectedDepartementId)];
+
+    return getSubDepartmentIdsFromHierarchy(departmentHierarchy, selectedDepartementId);
+  }, [selectedDepartementId, includeSubDepartments, departmentHierarchy]);
+
+  useEffect(() => {
+    if (!selectedDepartementId) {
+      setDepartmentEmployees([]);
+      return;
+    }
+
+    const cachedDepartmentEmployees = readCachedDepartmentEmployees(selectedDepartmentIds);
+    const hasWarmDepartmentCache = Array.isArray(cachedDepartmentEmployees?.data)
+      && cachedDepartmentEmployees.data.length > 0;
+
+    if (hasWarmDepartmentCache) {
+      setDepartmentEmployees(cachedDepartmentEmployees.data);
+    }
+
+    const isDepartmentCacheFresh = hasWarmDepartmentCache
+      && cachedDepartmentEmployees.updatedAt > 0
+      && (Date.now() - cachedDepartmentEmployees.updatedAt) < CNSS_DECL_DEPT_EMPLOYEES_CACHE_TTL_MS;
+
+    const filtered = filterEmployeesByDepartments(allEmployees, selectedDepartmentIds);
+    if (filtered.length > 0 || allEmployees.length > 0) {
       setDepartmentEmployees(filtered);
-    } catch { setDepartmentEmployees([]); }
+      writeCachedDepartmentEmployees(selectedDepartmentIds, filtered);
+      return;
+    }
+
+    if (!isDepartmentCacheFresh) {
+      fetchEmployees();
+    }
+  }, [allEmployees, selectedDepartementId, selectedDepartmentIds, fetchEmployees]);
+
+  const fetchDeclarationsFromApi = useCallback(async (employeId) => {
+    if (!employeId) return [];
+
+    const cacheKey = getDeclarationCacheKey(employeId);
+    const inFlight = declarationRequestInFlight.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const requestPromise = axios
+      .get(`${API_BASE}/api/employes/${employeId}/declarations-individuelles-cnss`)
+      .then((response) => {
+        const list = Array.isArray(response.data) ? response.data : response.data?.data ?? [];
+        writeCachedDeclarations(employeId, list);
+        return list;
+      })
+      .finally(() => {
+        declarationRequestInFlight.delete(cacheKey);
+      });
+
+    declarationRequestInFlight.set(cacheKey, requestPromise);
+    return requestPromise;
   }, []);
 
   // ── Fetch déclarations par employé ────────────────────────────────────────────
-  const fetchDeclarations = useCallback(async (employeId) => {
-    if (!employeId) { setDeclarations([]); return; }
-    setLoadingDecl(true);
+  const fetchDeclarations = useCallback(async (employeId, { forceRefresh = false } = {}) => {
+    if (!employeId) {
+      setDeclarations([]);
+      setLoadingDecl(false);
+      return;
+    }
+
+    const cachedEntry = readCachedDeclarations(employeId);
+    const hasWarmCache = Array.isArray(cachedEntry?.data);
+
+    if (hasWarmCache) {
+      setDeclarations(cachedEntry.data);
+      setLoadingDecl(false);
+    } else {
+      setLoadingDecl(true);
+    }
+
+    const isCacheFresh = hasWarmCache
+      && cachedEntry.updatedAt > 0
+      && (Date.now() - cachedEntry.updatedAt) < CNSS_DECL_CACHE_TTL_MS;
+
+    if (!forceRefresh && isCacheFresh) {
+      return;
+    }
+
+    const fetchId = latestDeclarationsFetchRef.current + 1;
+    latestDeclarationsFetchRef.current = fetchId;
+
     try {
-      const res = await axios.get(`${API_BASE}/api/employes/${employeId}/declarations-individuelles-cnss`);
-      setDeclarations(Array.isArray(res.data) ? res.data : res.data?.data ?? []);
-    } catch { setDeclarations([]); }
-    finally { setLoadingDecl(false); }
-  }, []);
+      const list = await fetchDeclarationsFromApi(employeId);
+      if (latestDeclarationsFetchRef.current !== fetchId) return;
+      setDeclarations(list);
+    } catch {
+      if (latestDeclarationsFetchRef.current !== fetchId) return;
+      if (!hasWarmCache) {
+        setDeclarations([]);
+      }
+    } finally {
+      if (latestDeclarationsFetchRef.current === fetchId && !hasWarmCache) {
+        setLoadingDecl(false);
+      }
+    }
+  }, [fetchDeclarationsFromApi]);
+
+  const prefetchDeclarationsForEmployee = useCallback(async (employeId) => {
+    if (!employeId) return;
+
+    const cachedEntry = readCachedDeclarations(employeId);
+    const isCacheFresh = cachedEntry
+      && cachedEntry.updatedAt > 0
+      && (Date.now() - cachedEntry.updatedAt) < CNSS_DECL_CACHE_TTL_MS;
+
+    if (isCacheFresh) {
+      return;
+    }
+
+    try {
+      await fetchDeclarationsFromApi(employeId);
+    } catch {
+      // keep prefetch silent
+    }
+  }, [fetchDeclarationsFromApi]);
+
+  const prefetchCandidateIds = useMemo(
+    () => departmentEmployees
+      .slice(0, CNSS_DECL_PREFETCH_EMPLOYEE_LIMIT)
+      .map((employee) => employee?.id)
+      .filter(Boolean),
+    [departmentEmployees]
+  );
+
+  useEffect(() => {
+    if (!selectedDepartementId || prefetchCandidateIds.length === 0) return;
+
+    let cancelled = false;
+
+    const runPrefetch = async () => {
+      for (let i = 0; i < prefetchCandidateIds.length; i += CNSS_DECL_PREFETCH_CONCURRENCY) {
+        if (cancelled) return;
+        const batch = prefetchCandidateIds.slice(i, i + CNSS_DECL_PREFETCH_CONCURRENCY);
+        const jobs = batch.map((id) => prefetchDeclarationsForEmployee(id));
+        await Promise.allSettled(jobs);
+      }
+    };
+
+    runPrefetch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDepartementId, prefetchCandidateIds, prefetchDeclarationsForEmployee]);
 
   // ── Handlers DepartmentPanel ──────────────────────────────────────────────────
   const handleSelectDepartment = useCallback((deptId) => {
     setSelectedDepartementId(deptId);
     setSelectedEmployee(null);
     setDeclarations([]);
+    setLoadingDecl(false);
     setFormMode(null);
-    fetchEmployes(deptId);
-  }, [fetchEmployes]);
+  }, []);
 
   const handleSelectEmployee = useCallback((emp) => {
+    if (!emp?.id) return;
     setSelectedEmployee(emp);
     setFormMode(null);
     setEditDeclaration(null);
-    fetchDeclarations(emp?.id);
+    fetchDeclarations(emp.id);
   }, [fetchDeclarations]);
 
   // ── Auto-sélection via navigation state (depuis DeclarationDetails) ───────────
@@ -266,7 +679,7 @@ function DeclarationsIndividuellesCNSS() {
 
   const handleSaved = () => {
     handleCloseForm();
-    if (selectedEmployee) fetchDeclarations(selectedEmployee.id);
+    if (selectedEmployee) fetchDeclarations(selectedEmployee.id, { forceRefresh: true });
   };
 
   // ── Suppression en masse ─────────────────────────────────────────────────────
@@ -291,7 +704,7 @@ function DeclarationsIndividuellesCNSS() {
       );
       setSelectedItems([]);
       Swal.fire("Supprimé", "Les déclarations sélectionnées ont été supprimées.", "success");
-      if (selectedEmployee) fetchDeclarations(selectedEmployee.id);
+      if (selectedEmployee) fetchDeclarations(selectedEmployee.id, { forceRefresh: true });
     } catch {
       Swal.fire("Erreur", "Impossible de supprimer certaines déclarations.", "error");
     }
@@ -313,7 +726,7 @@ function DeclarationsIndividuellesCNSS() {
     try {
       await axios.delete(`${API_BASE}/api/cnss/declarations-individuelles/${decl.id}`);
       Swal.fire("Supprimé", "Déclaration supprimée.", "success");
-      if (selectedEmployee) fetchDeclarations(selectedEmployee.id);
+      if (selectedEmployee) fetchDeclarations(selectedEmployee.id, { forceRefresh: true });
     } catch { Swal.fire("Erreur", "Impossible de supprimer.", "error"); }
   };
 
@@ -466,6 +879,7 @@ function DeclarationsIndividuellesCNSS() {
                 processedEmployees={new Set()}
                 onSelectEmployee={handleSelectEmployee}
                 onCheckEmployee={() => {}}
+                onEmployeeHover={(employee) => prefetchDeclarationsForEmployee(employee?.id)}
                 findDepartmentName={() => ""}
                 filtersVisible={false}
               />
@@ -486,8 +900,16 @@ function DeclarationsIndividuellesCNSS() {
                 <div className="mt-4">
                   {/* En-tête section */}
                   <div className="section-header mb-3">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                        alignItems: "center",
+                        columnGap: "16px",
+                        width: "100%",
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
                         <span className="section-title mb-1" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#2c767c', textTransform: 'none' }}>
                           <i className="fas fa-id-card me-2"></i>
                           Déclarations individuelles CNSS
@@ -499,7 +921,7 @@ function DeclarationsIndividuellesCNSS() {
                         </p>
                       </div>
                       {!isFormOpen && (
-                        <div className="d-flex align-items-center" style={{ gap: "12px" }}>
+                        <div className="d-flex align-items-center" style={{ gap: "12px", justifySelf: "end" }}>
                           <FontAwesomeIcon
                             onClick={() => setFiltersVisible((v) => !v)}
                             icon={filtersVisible ? faClose : faFilter}
@@ -600,7 +1022,6 @@ function DeclarationsIndividuellesCNSS() {
                     data={filteredDeclarations}
                     filteredData={filteredDeclarations}
                     loading={loadingDecl}
-                    loadingText="Chargement des déclarations…"
                     searchTerm={globalSearch}
                     highlightText={(text) => text}
                     selectAll={selectedItems.length === filteredDeclarations.length && filteredDeclarations.length > 0}

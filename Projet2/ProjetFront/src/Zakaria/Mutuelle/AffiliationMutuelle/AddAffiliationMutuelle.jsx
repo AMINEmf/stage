@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Select from 'react-select';
-import axios from 'axios';
+import apiClient from '../../../services/apiClient';
 import { Form, Button as BsButton } from 'react-bootstrap';
 import { Box, Typography, IconButton, Button as MuiButton } from '@mui/material';
 import { ToastContainer } from 'react-toastify';
@@ -16,10 +16,7 @@ import './AddAffiliationMutuelle.css';
 import EmployeInfoReadonly from './EmployeInfoReadonly';
 import ManageResourceModal from '../MutuelleDossier/ManageResourceModal';
 
-// Configuration de l'instance axios sans credentials (routes publiques)
-const api = axios.create({
-  baseURL: "http://localhost:8000/api",
-});
+const api = apiClient;
 
 const normalizeDate = (date) => (date ? date.split("T")[0] : "");
 
@@ -59,6 +56,44 @@ const loaderCSS = `
 }
 `;
 
+const EMPLOYES_CACHE_TTL_MS = 2 * 60 * 1000;
+const MUTUELLES_CACHE_TTL_MS = 10 * 60 * 1000;
+const REGIMES_CACHE_TTL_MS = 10 * 60 * 1000;
+const ALL_REGIMES_CACHE_KEY = 'mutuelle:regimes-all:v1';
+const EMPLOYES_CACHE_VERSION = 'v2';
+const REGIMES_CACHE_VERSION = 'v1';
+const API_REQUEST_TIMEOUT_MS = 45 * 1000;
+
+const getEmployesCacheKey = (departementId) => `mutuelle:eligibles:${EMPLOYES_CACHE_VERSION}:${departementId ?? 'all'}`;
+const getRegimesCacheKey = (mutuelleId) => `mutuelle:regimes:${REGIMES_CACHE_VERSION}:${mutuelleId ?? 'none'}`;
+const MUTUELLES_CACHE_KEY = 'mutuelle:list:v1';
+
+const readCache = (key, ttlMs) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const { ts, data } = parsed;
+    if (!ts || !Array.isArray(data)) return null;
+    if (Date.now() - ts > ttlMs) return null;
+
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+const writeCache = (key, data) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // Ignore cache write errors (quota/private mode)
+  }
+};
+
 function AddAffiliationMutuelle({
   toggleAffiliationForm,
   onAffiliationAdded = () => { },
@@ -66,7 +101,8 @@ function AddAffiliationMutuelle({
   onAffiliationUpdated,
   fetchAffiliations,
   isSidebar = false,
-  selectedDepartementId = null
+  selectedDepartementId = null,
+  preloadedEmployes = null
 }) {
   // États pour les champs d'affiliation mutuelle
   const [formData, setFormData] = useState({
@@ -83,9 +119,13 @@ function AddAffiliationMutuelle({
   });
 
   // États pour les listes déroulantes
-  const [employes, setEmployes] = useState([]);
+  const [employes, setEmployes] = useState(() => (Array.isArray(preloadedEmployes) ? preloadedEmployes : []));
   const [mutuelles, setMutuelles] = useState([]);
   const [regimes, setRegimes] = useState([]);
+  const [allRegimes, setAllRegimes] = useState(() => {
+    const cached = readCache(ALL_REGIMES_CACHE_KEY, REGIMES_CACHE_TTL_MS);
+    return Array.isArray(cached) ? cached : [];
+  });
   const [selectedEmploye, setSelectedEmploye] = useState(null);
   const [selectedMutuelle, setSelectedMutuelle] = useState(null);
   const [selectedRegime, setSelectedRegime] = useState(null);
@@ -101,6 +141,9 @@ function AddAffiliationMutuelle({
   // Modals gestion mutuelles et régimes
   const [showMutuelleModal, setShowMutuelleModal] = useState(false);
   const [showRegimeModal, setShowRegimeModal] = useState(false);
+  const employesRequestRef = useRef(0);
+  const lastLoadedEmployesDepartementRef = useRef(null);
+  const lastObservedDepartementRef = useRef(null);
 
   const broadcastMutuellesUpdate = (list = []) => {
     try {
@@ -117,12 +160,12 @@ function AddAffiliationMutuelle({
 
   // --- Handlers CRUD Mutuelle pour le modal ---
   const getMutuellesForModal = async () => {
-    try {
-      const res = await api.get('/mutuelles');
-      const data = res.data?.data || res.data;
-      const list = Array.isArray(data) ? data : [];
-      return list.map(m => ({ id: m.id, nom: m.nom, label: m.nom }));
-    } catch (e) { return []; }
+    const immediate = Array.isArray(mutuelles)
+      ? mutuelles.map((m) => ({ id: m.id, nom: m.nom, label: m.nom }))
+      : [];
+
+    void fetchMutuelles();
+    return immediate;
   };
 
   const addMutuelleForModal = async (nom) => {
@@ -143,31 +186,63 @@ function AddAffiliationMutuelle({
   // --- Handlers CRUD Régime pour le modal ---
   const getRegimesForModal = async () => {
     if (!formData.mutuelle_id) return [];
-    try {
-      const res = await api.get(`/mutuelles/${formData.mutuelle_id}/regimes`);
-      const data = res.data?.data || res.data;
-      const list = Array.isArray(data) ? data : [];
-      return list.map(r => ({ id: r.id, nom: r.libelle, label: r.libelle }));
-    } catch (e) { return []; }
+
+    const immediate = getImmediateRegimesForMutuelle(formData.mutuelle_id)
+      .map((r) => ({ id: r.id, nom: r.libelle, label: r.libelle }));
+
+    void fetchRegimes(formData.mutuelle_id, { force: true, silent: true });
+    return immediate;
   };
 
   const addRegimeForModal = async (libelle) => {
     await api.post(`/mutuelles/${formData.mutuelle_id}/regimes`, { libelle });
-    await fetchRegimes(formData.mutuelle_id);
+    await fetchRegimes(formData.mutuelle_id, { force: true });
+    await fetchAllRegimes({ silent: true });
   };
 
   const editRegimeForModal = async (id, libelle) => {
     await api.put(`/mutuelles/${formData.mutuelle_id}/regimes/${id}`, { libelle });
-    await fetchRegimes(formData.mutuelle_id);
+    await fetchRegimes(formData.mutuelle_id, { force: true });
+    await fetchAllRegimes({ silent: true });
   };
 
   const deleteRegimeForModal = async (id) => {
     await api.delete(`/mutuelles/${formData.mutuelle_id}/regimes/${id}`);
-    await fetchRegimes(formData.mutuelle_id);
+    await fetchRegimes(formData.mutuelle_id, { force: true });
+    await fetchAllRegimes({ silent: true });
   };
 
   useEffect(() => {
-    fetchEmployes(selectedDepartementId);
+    const normalizedDepartementId = Number.isFinite(Number(selectedDepartementId))
+      ? Number(selectedDepartementId)
+      : null;
+
+    const departementChanged = lastObservedDepartementRef.current !== normalizedDepartementId;
+    if (departementChanged) {
+      lastObservedDepartementRef.current = normalizedDepartementId;
+
+      if (!selectedAffiliation) {
+        setSelectedEmploye(null);
+        setEmployeDetails(null);
+        setEmployeInfo({});
+        setFormData(prev => ({
+          ...prev,
+          employe_id: '',
+          ayant_droit: 0,
+          conjoint_ayant_droit: 0,
+        }));
+      }
+    }
+
+    const hasPreloadedEmployes = Array.isArray(preloadedEmployes);
+    if (hasPreloadedEmployes) {
+      setEmployes(preloadedEmployes);
+      lastLoadedEmployesDepartementRef.current = normalizedDepartementId;
+    } else {
+      setEmployes([]);
+      fetchEmployes(normalizedDepartementId, { silent: true });
+    }
+
     fetchMutuelles();
 
     if (selectedAffiliation) {
@@ -231,7 +306,7 @@ function AddAffiliationMutuelle({
           value: selectedAffiliation.mutuelle_id,
           label: selectedAffiliation.mutuelle.nom
         });
-        fetchRegimes(selectedAffiliation.mutuelle_id);
+        fetchRegimes(selectedAffiliation.mutuelle_id, { silent: true });
       }
 
       if (selectedAffiliation.regime) {
@@ -241,24 +316,102 @@ function AddAffiliationMutuelle({
         });
       }
     }
-  }, [selectedAffiliation, selectedDepartementId]);
+  }, [selectedAffiliation, selectedDepartementId, preloadedEmployes]);
 
-  const fetchEmployes = async (departementId = null) => {
-    try {
-      const params = departementId ? { departement_id: departementId } : {};
-      const response = await api.get('/employes/eligibles-mutuelle', { params });
-      if (response.data && response.data.success && Array.isArray(response.data.data)) {
-        setEmployes(response.data.data);
-      } else if (response.data && Array.isArray(response.data)) {
-        setEmployes(response.data);
+  const fetchEmployes = async (departementId = null, { force = false, silent = false } = {}) => {
+    const normalizedDepartementId = Number.isFinite(Number(departementId))
+      ? Number(departementId)
+      : null;
+
+    if (normalizedDepartementId === null) {
+      lastLoadedEmployesDepartementRef.current = null;
+      setEmployes([]);
+      return [];
+    }
+
+    const requestId = ++employesRequestRef.current;
+    const cacheKey = getEmployesCacheKey(normalizedDepartementId);
+
+    if (!force) {
+      const cachedEmployes = readCache(cacheKey, EMPLOYES_CACHE_TTL_MS);
+      if (Array.isArray(cachedEmployes)) {
+        setEmployes(cachedEmployes);
+        lastLoadedEmployesDepartementRef.current = normalizedDepartementId;
+        return cachedEmployes;
       }
+    }
+
+    if (lastLoadedEmployesDepartementRef.current !== normalizedDepartementId) {
+      // Prevent showing a previous department list while loading the new one.
+      setEmployes([]);
+    }
+
+    try {
+      const response = await api.get('/employes/eligibles-mutuelle', {
+        params: { departement_id: normalizedDepartementId },
+        timeout: API_REQUEST_TIMEOUT_MS,
+      });
+
+      if (requestId !== employesRequestRef.current) return [];
+
+      let list = [];
+      if (response.data && response.data.success && Array.isArray(response.data.data)) {
+        list = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
+        list = response.data;
+      }
+
+      setEmployes(list);
+      lastLoadedEmployesDepartementRef.current = normalizedDepartementId;
+      writeCache(cacheKey, list);
+      return list;
     } catch (error) {
-      console.error('Erreur lors de la récupération des employés:', error);
-      showErrorToast('Erreur lors du chargement des employés');
+      if (requestId !== employesRequestRef.current) return [];
+
+      const isTimeout =
+        error?.code === 'ECONNABORTED' ||
+        /timeout/i.test(String(error?.message || ''));
+
+      if (!silent) {
+        if (isTimeout) {
+          console.warn(
+            'Délai dépassé pour la récupération des employés. Utilisation du cache local si disponible.',
+            error
+          );
+        } else {
+          console.error('Erreur lors de la récupération des employés:', error);
+        }
+      }
+
+      const cachedFallback = readCache(cacheKey, EMPLOYES_CACHE_TTL_MS);
+
+      if (Array.isArray(cachedFallback)) {
+        setEmployes(cachedFallback);
+        lastLoadedEmployesDepartementRef.current = normalizedDepartementId;
+        return cachedFallback;
+      }
+
+      if (lastLoadedEmployesDepartementRef.current !== normalizedDepartementId) {
+        setEmployes([]);
+      }
+
+      if (!silent) {
+        showErrorToast(
+          isTimeout
+            ? 'Le serveur met trop de temps à répondre. Données locales utilisées quand disponibles.'
+            : 'Erreur lors du chargement des employés'
+        );
+      }
+      return [];
     }
   };
 
   const fetchMutuelles = async () => {
+    const cachedMutuelles = readCache(MUTUELLES_CACHE_KEY, MUTUELLES_CACHE_TTL_MS);
+    if (Array.isArray(cachedMutuelles) && cachedMutuelles.length > 0) {
+      setMutuelles(cachedMutuelles);
+    }
+
     try {
       const response = await api.get('/mutuelles');
       console.log('Réponse API mutuelles:', response.data);
@@ -271,6 +424,7 @@ function AddAffiliationMutuelle({
       }
 
       setMutuelles(list);
+      writeCache(MUTUELLES_CACHE_KEY, list);
       broadcastMutuellesUpdate(list);
       console.log('Mutuelles chargées:', list);
       return list;
@@ -281,26 +435,164 @@ function AddAffiliationMutuelle({
     }
   };
 
-  const fetchRegimes = async (mutuelleId) => {
+  const getImmediateRegimesForMutuelle = (mutuelleId) => {
+    const normalizedMutuelleId = Number.isFinite(Number(mutuelleId))
+      ? Number(mutuelleId)
+      : null;
+
+    if (normalizedMutuelleId === null) return [];
+
+    const cacheKey = getRegimesCacheKey(normalizedMutuelleId);
+    const cachedRegimes = readCache(cacheKey, REGIMES_CACHE_TTL_MS);
+    if (Array.isArray(cachedRegimes)) {
+      return cachedRegimes;
+    }
+
+    if (!Array.isArray(allRegimes) || allRegimes.length === 0) {
+      return [];
+    }
+
+    return allRegimes.filter((regime) => Number(regime?.mutuelle_id) === normalizedMutuelleId);
+  };
+
+  const fetchAllRegimes = async ({ silent = false } = {}) => {
+    const cachedAllRegimes = readCache(ALL_REGIMES_CACHE_KEY, REGIMES_CACHE_TTL_MS);
+    if (Array.isArray(cachedAllRegimes) && cachedAllRegimes.length > 0) {
+      setAllRegimes(cachedAllRegimes);
+    }
+
     try {
-      const response = await api.get(`/mutuelles/${mutuelleId}/regimes`);
+      const response = await api.get('/regimes-mutuelle', {
+        params: { active: 1 },
+        timeout: 8000,
+      });
+
+      let list = [];
+      if (response.data && response.data.success && Array.isArray(response.data.data)) {
+        list = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
+        list = response.data;
+      }
+
+      setAllRegimes(list);
+      writeCache(ALL_REGIMES_CACHE_KEY, list);
+
+      // Seed per-mutuelle caches to enable instant filtering on selection.
+      const byMutuelle = new Map();
+      list.forEach((regime) => {
+        const mutuelleId = Number(regime?.mutuelle_id);
+        if (!Number.isFinite(mutuelleId)) return;
+        const existing = byMutuelle.get(mutuelleId) || [];
+        existing.push(regime);
+        byMutuelle.set(mutuelleId, existing);
+      });
+      byMutuelle.forEach((items, mutuelleId) => {
+        writeCache(getRegimesCacheKey(mutuelleId), items);
+      });
+
+      const currentMutuelleId = Number.isFinite(Number(formData.mutuelle_id))
+        ? Number(formData.mutuelle_id)
+        : null;
+      if (currentMutuelleId !== null) {
+        const currentRegimes = byMutuelle.get(currentMutuelleId) || [];
+        setRegimes(currentRegimes);
+      }
+
+      return list;
+    } catch (error) {
+      if (!silent) {
+        console.error('Erreur lors du préchargement des régimes:', error);
+      }
+
+      return Array.isArray(cachedAllRegimes) ? cachedAllRegimes : [];
+    }
+  };
+
+  const fetchRegimes = async (mutuelleId, { force = false, silent = false } = {}) => {
+    const normalizedMutuelleId = Number.isFinite(Number(mutuelleId))
+      ? Number(mutuelleId)
+      : null;
+
+    if (normalizedMutuelleId === null) {
+      setRegimes([]);
+      return [];
+    }
+
+    const immediateRegimes = getImmediateRegimesForMutuelle(normalizedMutuelleId);
+    if (Array.isArray(immediateRegimes)) {
+      setRegimes(immediateRegimes);
+      if (!force && immediateRegimes.length > 0) {
+        return immediateRegimes;
+      }
+    }
+
+    const cacheKey = getRegimesCacheKey(normalizedMutuelleId);
+    const cachedRegimes = readCache(cacheKey, REGIMES_CACHE_TTL_MS);
+    if (Array.isArray(cachedRegimes) && cachedRegimes.length > 0) {
+      setRegimes(cachedRegimes);
+      if (!force) {
+        return cachedRegimes;
+      }
+    }
+
+    try {
+      const response = await api.get(`/mutuelles/${normalizedMutuelleId}/regimes`, {
+        timeout: 8000,
+      });
       console.log('Réponse API régimes:', response.data);
 
       if (response.data && response.data.success && Array.isArray(response.data.data)) {
         setRegimes(response.data.data);
+        writeCache(cacheKey, response.data.data);
+        setAllRegimes((prev) => {
+          const others = Array.isArray(prev)
+            ? prev.filter((regime) => Number(regime?.mutuelle_id) !== normalizedMutuelleId)
+            : [];
+          const merged = [...others, ...response.data.data];
+          writeCache(ALL_REGIMES_CACHE_KEY, merged);
+          return merged;
+        });
         console.log('Régimes chargés:', response.data.data);
+        return response.data.data;
       } else if (response.data && Array.isArray(response.data)) {
         setRegimes(response.data);
+        writeCache(cacheKey, response.data);
+        setAllRegimes((prev) => {
+          const others = Array.isArray(prev)
+            ? prev.filter((regime) => Number(regime?.mutuelle_id) !== normalizedMutuelleId)
+            : [];
+          const merged = [...others, ...response.data];
+          writeCache(ALL_REGIMES_CACHE_KEY, merged);
+          return merged;
+        });
         console.log('Régimes chargés (format direct):', response.data);
+        return response.data;
       } else {
         setRegimes([]);
         console.log('Format régimes inattendu:', response.data);
+        return [];
       }
     } catch (error) {
-      console.error('Erreur lors de la récupération des régimes:', error);
-      showErrorToast('Erreur lors du chargement des mutuelles');
+      if (!silent) {
+        console.error('Erreur lors de la récupération des régimes:', error);
+      }
+      if (!Array.isArray(cachedRegimes)) {
+        const fallback = getImmediateRegimesForMutuelle(normalizedMutuelleId);
+        if (Array.isArray(fallback) && fallback.length > 0) {
+          return fallback;
+        }
+
+        if (!silent) {
+          showErrorToast('Erreur lors du chargement des régimes');
+        }
+      }
+      return Array.isArray(cachedRegimes) ? cachedRegimes : [];
     }
   };
+
+  useEffect(() => {
+    void fetchAllRegimes({ silent: true });
+  }, []);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -361,7 +653,7 @@ function AddAffiliationMutuelle({
         mutuelle_id: selectedOption.value,
         regime_mutuelle_id: ''
       }));
-      fetchRegimes(selectedOption.value);
+      fetchRegimes(selectedOption.value, { silent: true });
     } else {
       setFormData(prev => ({
         ...prev,
@@ -507,6 +799,18 @@ function AddAffiliationMutuelle({
   });
 
   const computedStatut = formData.statut || (formData.date_resiliation ? 'RESILIE' : 'ACTIVE');
+  const mutuelleItemsForModal = useMemo(
+    () => mutuelles.map((m) => ({ id: m.id, nom: m.nom, label: m.nom })),
+    [mutuelles]
+  );
+  const regimeItemsForModal = useMemo(
+    () => regimes.map((r) => ({ id: r.id, nom: r.libelle, label: r.libelle })),
+    [regimes]
+  );
+  const regimesModalCacheKey = useMemo(
+    () => (formData.mutuelle_id ? getRegimesCacheKey(formData.mutuelle_id) : null),
+    [formData.mutuelle_id]
+  );
   const isResilie = computedStatut === 'RESILIE';
   const nbEnfants = Number(employeDetails?.nb_enfants || 0);
   const situationFm = (employeDetails?.situation_fm || '').toString().toLowerCase();
@@ -600,6 +904,10 @@ function AddAffiliationMutuelle({
                         placeholder="Sélectionner un employé non affilié..."
                         isClearable
                         isSearchable
+                        noOptionsMessage={({ inputValue }) => {
+                          if (inputValue) return 'Aucun employé trouvé';
+                          return 'Aucun employé éligible';
+                        }}
                         isDisabled={!!selectedAffiliation}
                         className={errors.employe_id ? 'is-invalid' : ''}
                         styles={{
@@ -668,6 +976,8 @@ function AddAffiliationMutuelle({
                           variant="outline-secondary"
                           type="button"
                           onClick={() => setShowMutuelleModal(true)}
+                          onMouseEnter={() => { void fetchMutuelles(); }}
+                          onFocus={() => { void fetchMutuelles(); }}
                           style={{
                             height: '40px',
                             width: '42px',
@@ -719,6 +1029,16 @@ function AddAffiliationMutuelle({
                           variant="outline-secondary"
                           type="button"
                           onClick={() => setShowRegimeModal(true)}
+                          onMouseEnter={() => {
+                            if (formData.mutuelle_id) {
+                              void fetchRegimes(formData.mutuelle_id, { force: true, silent: true });
+                            }
+                          }}
+                          onFocus={() => {
+                            if (formData.mutuelle_id) {
+                              void fetchRegimes(formData.mutuelle_id, { force: true, silent: true });
+                            }
+                          }}
                           disabled={!selectedMutuelle}
                           style={{
                             height: '40px',
@@ -982,6 +1302,9 @@ function AddAffiliationMutuelle({
         onAdd={addMutuelleForModal}
         onEdit={editMutuelleForModal}
         onDelete={deleteMutuelleForModal}
+        initialItems={mutuelleItemsForModal}
+        cacheKey={MUTUELLES_CACHE_KEY}
+        cacheTtlMs={MUTUELLES_CACHE_TTL_MS}
       />
 
       {/* Modal gestion des régimes (contextuel à la mutuelle sélectionnée) */}
@@ -994,6 +1317,9 @@ function AddAffiliationMutuelle({
         onAdd={addRegimeForModal}
         onEdit={editRegimeForModal}
         onDelete={deleteRegimeForModal}
+        initialItems={regimeItemsForModal}
+        cacheKey={regimesModalCacheKey}
+        cacheTtlMs={REGIMES_CACHE_TTL_MS}
       />
     </>
   );

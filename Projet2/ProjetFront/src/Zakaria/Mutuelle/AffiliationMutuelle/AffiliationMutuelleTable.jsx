@@ -7,7 +7,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import axios from "axios";
+import apiClient from "../../../services/apiClient";
 import { Button, Table, Modal, Form } from "react-bootstrap";
 import {
   faTrash,
@@ -42,17 +42,77 @@ import AffiliationMutuelleFichePrint from "./AffiliationMutuelleFichePrint";
 import "../../Style.css";
 import { useOpen } from "../../../Acceuil/OpenProvider";
 
-/**
- * ✅ IMPORTANT
- * Utilise le même host partout dans le projet.
- * Ton Manager utilise http://localhost:8000, donc on garde pareil ici.
- */
-const API_BASE = "http://localhost:8000/api";
+const api = apiClient;
+const EMPLOYES_CACHE_TTL_MS = 10 * 60 * 1000;
+const EMPLOYES_CACHE_VERSION = "v2";
+const AFFILIATIONS_CACHE_TTL_MS = 10 * 60 * 1000;
+const AFFILIATIONS_STALE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const API_REQUEST_TIMEOUT_MS = 45 * 1000;
 
-const api = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true, // ✅ indispensable si tu utilises cookies/session
-});
+const toNumericId = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getAffiliationsCacheKey = (scopeKey) =>
+  `mutuelle:affiliations:v1:${scopeKey ?? "all"}`;
+
+const readAffiliationsCache = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    // Backward compatibility with older plain-array cache format.
+    if (Array.isArray(parsed)) return parsed;
+
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!Array.isArray(parsed.data) || !parsed.ts) return null;
+
+    // Serve stale cache immediately, then refresh in background.
+    if (Date.now() - parsed.ts > AFFILIATIONS_STALE_MAX_AGE_MS) return null;
+
+    return parsed.data;
+  } catch {
+    return null;
+  }
+};
+
+const writeAffiliationsCache = (key, data) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // Ignore localStorage quota/private mode errors.
+  }
+};
+
+const getEmployesCacheKey = (departementId) =>
+  `mutuelle:eligibles:${EMPLOYES_CACHE_VERSION}:${departementId ?? "all"}`;
+
+const readEmployesCache = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!Array.isArray(parsed.data) || !parsed.ts) return null;
+    if (Date.now() - parsed.ts > EMPLOYES_CACHE_TTL_MS) return null;
+
+    return parsed.data;
+  } catch {
+    return null;
+  }
+};
+
+const writeEmployesCache = (key, data) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // Ignore localStorage quota/private mode errors.
+  }
+};
 
 const getApiErrorMessage = (error) => {
   const status = error?.response?.status;
@@ -121,6 +181,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
   const [expandedRows, setExpandedRows] = useState({});
   const [selectedAffiliation, setSelectedAffiliation] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [eligibleEmployes, setEligibleEmployes] = useState([]);
 
   const [selectedAffiliations, setSelectedAffiliations] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -132,6 +193,15 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
   );
 
   const dropdownRef = useRef(null);
+  const affiliationsRequestRef = useRef(0);
+  const lastLoadedAffiliationsDepartementRef = useRef(null);
+  const lastAffiliationsDataRef = useRef([]);
+  const eligibleEmployesRequestRef = useRef(0);
+  const lastLoadedEligibleDepartementRef = useRef(null);
+
+  useEffect(() => {
+    lastAffiliationsDataRef.current = affiliationsWithDetails;
+  }, [affiliationsWithDetails]);
 
   // Print fiche
   const [showFicheModal, setShowFicheModal] = useState(false);
@@ -158,7 +228,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(filterSearch);
-    }, 500);
+    }, 120);
     return () => clearTimeout(handler);
   }, [filterSearch]);
 
@@ -172,6 +242,40 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
     setDateResiliationTo("");
     setCurrentPage(0);
   };
+
+  const normalizedDepartementId = useMemo(() => {
+    const parsed = toNumericId(departementId);
+    return parsed === null ? null : parsed;
+  }, [departementId]);
+
+  const scopedDepartementIds = useMemo(() => {
+    if (normalizedDepartementId === null) return [];
+
+    const rawIds = includeSubDepartments
+      ? getSubDepartmentIds(departements, departementId)
+      : [departementId];
+
+    const ids = Array.isArray(rawIds) ? rawIds : [departementId];
+
+    return Array.from(
+      new Set(
+        ids
+          .map((id) => toNumericId(id))
+          .filter((id) => id !== null)
+      )
+    ).sort((a, b) => a - b);
+  }, [
+    normalizedDepartementId,
+    includeSubDepartments,
+    getSubDepartmentIds,
+    departements,
+    departementId,
+  ]);
+
+  const scopedDepartementIdsSet = useMemo(
+    () => new Set(scopedDepartementIds),
+    [scopedDepartementIds]
+  );
 
   // --------------------------
   // FETCH (mutuelles + affiliations) - table vide si pas de departement
@@ -207,34 +311,62 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
   }, [fetchMutuelles]);
 
   const fetchAffiliationsWithDetails = useCallback(async (showLoading = true) => {
-    if (!departementId) {
+    if (!departementId || scopedDepartementIds.length === 0) {
+      lastLoadedAffiliationsDepartementRef.current = null;
       setAffiliationsWithDetails([]);
       return;
     }
 
-    const cacheKey = `aff_cache_${departementId}`;
-    const cachedData = localStorage.getItem(cacheKey);
+    const requestScopeKey = scopedDepartementIds.join(',');
+
+    const requestId = ++affiliationsRequestRef.current;
+    const cacheKey = getAffiliationsCacheKey(requestScopeKey);
+    const cachedData = readAffiliationsCache(cacheKey);
 
     // Si on n'a pas de filtres actifs, on montre le cache tout de suite
-    const hasActiveFilters = selectedMutuelleFilter || filterStatut || debouncedSearch || dateAdhesionFrom;
+    const hasActiveFilters = Boolean(
+      selectedMutuelleFilter ||
+      filterStatut ||
+      debouncedSearch ||
+      dateAdhesionFrom ||
+      dateAdhesionTo ||
+      dateResiliationFrom ||
+      dateResiliationTo
+    );
 
-    if (cachedData && !hasActiveFilters) {
-      try {
-        const parsed = JSON.parse(cachedData);
-        if (Array.isArray(parsed)) {
-          setAffiliationsWithDetails(parsed);
-          if (showLoading) showLoading = false; // On ne montre pas le loader principal si on a déjà du contenu
-        }
-      } catch (e) {
-        console.warn("[AFF] Erreur cache:", e);
-      }
+    const hasInMemoryDataForSameDepartement =
+      lastLoadedAffiliationsDepartementRef.current ===
+        requestScopeKey &&
+      Array.isArray(lastAffiliationsDataRef.current) &&
+      lastAffiliationsDataRef.current.length > 0;
+
+    const hasCacheForCurrentDepartement =
+      Array.isArray(cachedData) && cachedData.length > 0;
+
+    const hasFallbackData =
+      hasCacheForCurrentDepartement || hasInMemoryDataForSameDepartement;
+
+    if (Array.isArray(cachedData) && !hasActiveFilters) {
+      setAffiliationsWithDetails(cachedData);
+      lastLoadedAffiliationsDepartementRef.current =
+        requestScopeKey;
+      if (showLoading) showLoading = false; // On ne montre pas le loader principal si on a déjà du contenu
+    } else if (
+      lastLoadedAffiliationsDepartementRef.current !==
+        requestScopeKey &&
+      !hasCacheForCurrentDepartement
+    ) {
+      // Evite d'afficher les données d'un autre département pendant le chargement.
+      setAffiliationsWithDetails([]);
     }
 
     if (showLoading) setLoadingAffiliations(true);
 
     try {
       const params = {
-        departement_id: departementId,
+        departement_id: normalizedDepartementId || undefined,
+        departement_ids: requestScopeKey,
+        include_subdepartments: includeSubDepartments ? 1 : 0,
         mutuelle_id: selectedMutuelleFilter || undefined,
         statut: filterStatut || undefined,
         search: debouncedSearch || undefined,
@@ -244,28 +376,47 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
         date_resiliation_to: dateResiliationTo || undefined,
       };
 
-      const response = await api.get("/affiliations-mutuelle", { params });
+      const response = await api.get("/affiliations-mutuelle", {
+        params,
+        timeout: API_REQUEST_TIMEOUT_MS,
+      });
+
+      if (requestId !== affiliationsRequestRef.current) return;
 
       if (response.data?.success && Array.isArray(response.data.data)) {
         const data = response.data.data;
         setAffiliationsWithDetails(data);
+        lastLoadedAffiliationsDepartementRef.current =
+          requestScopeKey;
 
         // Mettre en cache seulement si pas de filtres
         if (!hasActiveFilters) {
-          localStorage.setItem(cacheKey, JSON.stringify(data));
+          writeAffiliationsCache(cacheKey, data);
         }
-      } else {
+      } else if (!hasFallbackData) {
         setAffiliationsWithDetails([]);
       }
     } catch (error) {
+      if (requestId !== affiliationsRequestRef.current) return;
+
       const e = getApiErrorMessage(error);
       console.error("Erreur lors de la récupération des affiliations:", e);
-      // Ne réinitialiser à vide que si on n'a rien du tout (pas même le cache)
-      if (!localStorage.getItem(cacheKey)) {
+
+      const cachedFallback = !hasActiveFilters
+        ? readAffiliationsCache(cacheKey)
+        : null;
+
+      if (Array.isArray(cachedFallback)) {
+        setAffiliationsWithDetails(cachedFallback);
+        lastLoadedAffiliationsDepartementRef.current =
+          requestScopeKey;
+      } else if (!hasFallbackData) {
         setAffiliationsWithDetails([]);
       }
     } finally {
-      setLoadingAffiliations(false);
+      if (requestId === affiliationsRequestRef.current) {
+        setLoadingAffiliations(false);
+      }
     }
   }, [
     departementId,
@@ -275,18 +426,101 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
     dateAdhesionFrom,
     dateAdhesionTo,
     dateResiliationFrom,
-    dateResiliationTo
+    dateResiliationTo,
+    normalizedDepartementId,
+    scopedDepartementIds,
+    includeSubDepartments,
   ]);
 
+  const fetchEligibleEmployes = useCallback(async (targetDepartementId, { force = false } = {}) => {
+    const normalizedTargetDepartementId = toNumericId(targetDepartementId);
+
+    if (normalizedTargetDepartementId === null) {
+      lastLoadedEligibleDepartementRef.current = null;
+      setEligibleEmployes([]);
+      return [];
+    }
+
+    const requestId = ++eligibleEmployesRequestRef.current;
+    const cacheKey = getEmployesCacheKey(normalizedTargetDepartementId);
+
+    if (!force) {
+      const cached = readEmployesCache(cacheKey);
+      if (Array.isArray(cached)) {
+        setEligibleEmployes(cached);
+        lastLoadedEligibleDepartementRef.current = normalizedTargetDepartementId;
+        return cached;
+      }
+    }
+
+    if (lastLoadedEligibleDepartementRef.current !== normalizedTargetDepartementId) {
+      // Prevent showing employees from the previous department while the new one loads.
+      setEligibleEmployes([]);
+    }
+
+    try {
+      const response = await api.get('/employes/eligibles-mutuelle', {
+        params: { departement_id: normalizedTargetDepartementId },
+        timeout: API_REQUEST_TIMEOUT_MS,
+      });
+
+      if (requestId !== eligibleEmployesRequestRef.current) return [];
+
+      let list = [];
+      if (response.data?.success && Array.isArray(response.data.data)) {
+        list = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        list = response.data;
+      }
+
+      setEligibleEmployes(list);
+      lastLoadedEligibleDepartementRef.current = normalizedTargetDepartementId;
+      writeEmployesCache(cacheKey, list);
+      return list;
+    } catch (error) {
+      if (requestId !== eligibleEmployesRequestRef.current) return [];
+
+      const e = getApiErrorMessage(error);
+      const isTimeout =
+        error?.code === "ECONNABORTED" ||
+        /timeout/i.test(String(e?.message || ""));
+
+      if (isTimeout) {
+        console.warn(
+          'Délai dépassé pour la récupération des employés éligibles. Utilisation du cache local si disponible.',
+          e
+        );
+      } else {
+        console.error('Erreur lors de la récupération des employés éligibles:', e);
+      }
+
+      const cachedFallback = readEmployesCache(cacheKey);
+      if (Array.isArray(cachedFallback)) {
+        setEligibleEmployes(cachedFallback);
+        lastLoadedEligibleDepartementRef.current = normalizedTargetDepartementId;
+        return cachedFallback;
+      }
+
+      if (lastLoadedEligibleDepartementRef.current !== normalizedTargetDepartementId) {
+        setEligibleEmployes([]);
+      }
+
+      return [];
+    }
+  }, []);
+
   useEffect(() => {
-    if (!departementId) {
+    if (normalizedDepartementId === null) {
       setAffiliationsWithDetails([]);
+      setEligibleEmployes([]);
       setSelectedAffiliations([]);
       setExpandedRows({});
       return;
     }
+
     fetchAffiliationsWithDetails();
-  }, [departementId, fetchAffiliationsWithDetails]);
+    fetchEligibleEmployes(normalizedDepartementId);
+  }, [normalizedDepartementId, fetchAffiliationsWithDetails, fetchEligibleEmployes]);
 
   // Click outside dropdown
   useEffect(() => {
@@ -435,13 +669,25 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
   // --------------------------
   // LOGIQUE ADD/EDIT/CLOSE (copie EmployeTable)
   // --------------------------
+  const warmEligibleEmployes = useCallback(() => {
+    if (normalizedDepartementId === null) return;
+    void fetchEligibleEmployes(normalizedDepartementId);
+  }, [normalizedDepartementId, fetchEligibleEmployes]);
+
+  const refreshEligibleEmployes = useCallback(() => {
+    if (normalizedDepartementId === null) return;
+    void fetchEligibleEmployes(normalizedDepartementId, { force: true });
+  }, [normalizedDepartementId, fetchEligibleEmployes]);
+
   const handleAddNewAffiliation = useCallback(() => {
     if (!showAddForm) {
       setSelectedAffiliation(null);
       setShowAddForm(true);
       setIsAddingAffiliation(true);
+      // Refresh in background so the panel opens instantly.
+      warmEligibleEmployes();
     }
-  }, [showAddForm, setIsAddingAffiliation]);
+  }, [showAddForm, setIsAddingAffiliation, warmEligibleEmployes]);
 
   const handleEditAffiliation = useCallback(
     (affiliation) => {
@@ -464,8 +710,9 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
       handleCloseForm();
       // On fetch sans bloquer l'UI
       fetchAffiliationsWithDetails();
+      refreshEligibleEmployes();
     },
-    [handleCloseForm, fetchAffiliationsWithDetails]
+    [handleCloseForm, fetchAffiliationsWithDetails, refreshEligibleEmployes]
   );
 
   const handleAffiliationUpdated = useCallback(
@@ -474,8 +721,9 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
       handleCloseForm();
       // Recharger en arrière-plan
       fetchAffiliationsWithDetails();
+      refreshEligibleEmployes();
     },
-    [handleCloseForm, fetchAffiliationsWithDetails]
+    [handleCloseForm, fetchAffiliationsWithDetails, refreshEligibleEmployes]
   );
 
   // --------------------------
@@ -522,6 +770,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
             );
 
             fetchAffiliationsWithDetails();
+            refreshEligibleEmployes();
           } catch (error) {
             console.error("Erreur résiliation:", error);
             const msg = error.response?.data?.message || error.response?.data?.error || "Une erreur est survenue lors de la résiliation.";
@@ -558,6 +807,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
             );
 
             fetchAffiliationsWithDetails();
+            refreshEligibleEmployes();
           } catch (error) {
             console.error("Erreur suppression:", error);
             const msg = error.response?.data?.message || error.response?.data?.error || "Impossible de supprimer cette affiliation.";
@@ -569,7 +819,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
         }
       }
     },
-    [fetchAffiliationsWithDetails, affiliationsWithDetails]
+    [fetchAffiliationsWithDetails, affiliationsWithDetails, refreshEligibleEmployes]
   );
 
 
@@ -582,19 +832,26 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
   // 2. Global Search (top-bar search)
   // Note: Specific filters (search field, status, dates) are handled server-side
   const filteredAffiliations = useMemo(() => {
-    if (!departementId) return [];
+    if (scopedDepartementIds.length === 0) return [];
 
-    let result = includeSubDepartments
-      ? affiliationsWithDetails.filter((a) => {
-        const subIds = getSubDepartmentIds(departements, departementId);
-        return subIds.includes(a.employe?.departement_id);
-      })
-      : affiliationsWithDetails.filter(
-        (a) => a.employe?.departement_id === departementId
-      );
+    let result = affiliationsWithDetails.filter((a) => {
+      const employeDepartementId = toNumericId(a.employe?.departement_id);
+      if (employeDepartementId !== null && scopedDepartementIdsSet.has(employeDepartementId)) {
+        return true;
+      }
 
-    if (globalSearch.trim()) {
-      const s = globalSearch.toLowerCase().trim();
+      if (!Array.isArray(a.employe?.departements)) {
+        return false;
+      }
+
+      return a.employe.departements.some((dept) => {
+        const linkedDepartementId = toNumericId(dept?.id ?? dept?.departement_id);
+        return linkedDepartementId !== null && scopedDepartementIdsSet.has(linkedDepartementId);
+      });
+    });
+
+    const normalizedSearch = (globalSearch || "").toLowerCase().trim();
+    if (normalizedSearch) {
       result = result.filter((a) => {
         const searchValues = [
           a.employe?.matricule,
@@ -609,8 +866,8 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
           a.commentaire,
           a.numero_adherent,
         ];
-        return searchValues.some(
-          (v) => v && v.toString().toLowerCase().includes(s)
+        return searchValues.some((v) =>
+          v && v.toString().toLowerCase().includes(normalizedSearch)
         );
       });
     }
@@ -618,10 +875,8 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
     return result;
   }, [
     affiliationsWithDetails,
-    departementId,
-    includeSubDepartments,
-    getSubDepartmentIds,
-    departements,
+    scopedDepartementIds,
+    scopedDepartementIdsSet,
     globalSearch,
   ]);
 
@@ -629,6 +884,39 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
   const filteredAffiliationsWithFilters = useMemo(() => {
     return filteredAffiliations;
   }, [filteredAffiliations]);
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [
+    departementId,
+    includeSubDepartments,
+    globalSearch,
+    selectedMutuelleFilter,
+    filterStatut,
+    debouncedSearch,
+    dateAdhesionFrom,
+    dateAdhesionTo,
+    dateResiliationFrom,
+    dateResiliationTo,
+  ]);
+
+  useEffect(() => {
+    if (currentPage === 0) return;
+
+    const totalPages = Math.max(
+      1,
+      Math.ceil(filteredAffiliationsWithFilters.length / affiliationsPerPage)
+    );
+    const lastPageIndex = totalPages - 1;
+
+    if (currentPage > lastPageIndex) {
+      setCurrentPage(lastPageIndex);
+    }
+  }, [
+    currentPage,
+    affiliationsPerPage,
+    filteredAffiliationsWithFilters.length,
+  ]);
 
 
   // highlightText JSX (comme EmployeTable)
@@ -897,6 +1185,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
           }
 
           await fetchAffiliationsWithDetails();
+          refreshEligibleEmployes();
           setSelectedAffiliations([]);
 
         } catch (error) {
@@ -927,6 +1216,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
           );
 
           await fetchAffiliationsWithDetails();
+          refreshEligibleEmployes();
           setSelectedAffiliations([]);
 
           showSuccessMessage("Supprimées !", "Les affiliations ont été supprimées.");
@@ -937,7 +1227,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
         }
       }
     }
-  }, [selectedAffiliations, affiliationsWithDetails, fetchAffiliationsWithDetails]);
+  }, [selectedAffiliations, affiliationsWithDetails, fetchAffiliationsWithDetails, refreshEligibleEmployes]);
 
   // --------------------------
   // PAGINATION
@@ -1220,7 +1510,6 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
           display: 'flex',
           flexDirection: 'column',
           padding: '20px',
-          minWidth: 0,
           position: 'relative',
           zIndex: 1
         }}
@@ -1228,7 +1517,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
           {/* Header Moved Here */}
           <div className="mt-1">
             <div className="custom-affiliation-header mb-3">
-              <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '16px', width: '100%' }}>
                 {/* Bloc titre */}
                 <div style={{ flex: "1 1 300px", minWidth: 0 }}>
                   <span
@@ -1239,23 +1528,21 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
                   </span>
 
                   <p className="custom-affiliation-desc mb-0">
-                    {loadingAffiliations && affiliationsWithDetails.length === 0
-                      ? "Recherche des affiliations..."
-                      : (
-                        <>
-                          {departementId ? affiliationsWithDetails.length : 0}{" "}
-                          affiliation
-                          {affiliationsWithDetails.length != 1 ? "s" : ""}{" "}
-                          actuellement affichée
-                          {affiliationsWithDetails.length != 1 ? "s" : ""}
-                        </>
-                      )
-                    }
+                    <>
+                      {departementId ? affiliationsWithDetails.length : 0}{" "}
+                      affiliation
+                      {affiliationsWithDetails.length !== 1 ? "s" : ""}{" "}
+                      actuellement affichée
+                      {affiliationsWithDetails.length !== 1 ? "s" : ""}
+                      {loadingAffiliations && affiliationsWithDetails.length > 0
+                        ? " (mise a jour...)"
+                        : ""}
+                    </>
                   </p>
                 </div>
 
                 {/* Bloc actions */}
-                <div style={{ display: "flex", gap: "10px", alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: 'center', justifySelf: 'end' }}>
                   <FontAwesomeIcon
                     onClick={() =>
                       handleFiltersToggle && handleFiltersToggle(!filtersVisible)
@@ -1271,7 +1558,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
                     }}
                   />
 
-                  <Button
+                    <Button
                     onClick={() => {
                       if (!departementId) return;
                       handleAddNewAffiliation();
@@ -1288,16 +1575,24 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
                       color: "white",
                       transition: "all 0.2s ease"
                     }}
-                    onMouseOver={(e) => {
+                      onMouseEnter={(e) => {
+                        if (departementId) {
+                          warmEligibleEmployes();
+                        }
                       e.currentTarget.style.transform = 'translateY(-2px)';
                       e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
                       e.currentTarget.style.backgroundColor = '#2c767c';
                       e.currentTarget.style.borderColor = '#2c767c';
                     }}
-                    onMouseOut={(e) => {
+                      onMouseLeave={(e) => {
                       e.currentTarget.style.transform = 'translateY(0)';
                       e.currentTarget.style.boxShadow = 'none';
                     }}
+                      onFocus={() => {
+                        if (departementId) {
+                          warmEligibleEmployes();
+                        }
+                      }}
                   >
                     <FaPlusCircle className="me-2" />
                     Ajouter Affiliation
@@ -1461,7 +1756,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: '45%', opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
               style={{
                 overflow: 'hidden',
                 height: '100%',
@@ -1477,6 +1772,7 @@ const AffiliationMutuelleTable = forwardRef((props, ref) => {
                 <AddAffiliationMutuelle
                   toggleAffiliationForm={handleCloseForm}
                   selectedDepartementId={departementId}
+                  preloadedEmployes={eligibleEmployes}
                   onAffiliationAdded={handleAffiliationAdded}
                   selectedAffiliation={selectedAffiliation}
                   onAffiliationUpdated={handleAffiliationUpdated}

@@ -362,5 +362,41 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('create_bultin_models_details', function ($user) { return $user->hasPermission('create_bultin_models_details'); });
         Gate::define('update_bultin_models_details', function ($user) { return $user->hasPermission('update_bultin_models_details'); });
         Gate::define('delete_bultin_models_details', function ($user) { return $user->hasPermission('delete_bultin_models_details'); });
+
+        // === RH Navigation Interfaces ===
+        Gate::define('view_all_accidents', function ($user) { return $user->hasPermission('view_all_accidents'); });
+        Gate::define('create_accidents', function ($user) { return $user->hasPermission('create_accidents'); });
+        Gate::define('update_accidents', function ($user) { return $user->hasPermission('update_accidents'); });
+        Gate::define('delete_accidents', function ($user) { return $user->hasPermission('delete_accidents'); });
+
+        Gate::define('view_all_cimr', function ($user) { return $user->hasPermission('view_all_cimr'); });
+        Gate::define('create_cimr', function ($user) { return $user->hasPermission('create_cimr'); });
+        Gate::define('update_cimr', function ($user) { return $user->hasPermission('update_cimr'); });
+        Gate::define('delete_cimr', function ($user) { return $user->hasPermission('delete_cimr'); });
+
+        Gate::define('view_all_mutuelle', function ($user) { return $user->hasPermission('view_all_mutuelle'); });
+        Gate::define('create_mutuelle', function ($user) { return $user->hasPermission('create_mutuelle'); });
+        Gate::define('update_mutuelle', function ($user) { return $user->hasPermission('update_mutuelle'); });
+        Gate::define('delete_mutuelle', function ($user) { return $user->hasPermission('delete_mutuelle'); });
+
+        Gate::define('view_all_cnss', function ($user) { return $user->hasPermission('view_all_cnss'); });
+        Gate::define('create_cnss', function ($user) { return $user->hasPermission('create_cnss'); });
+        Gate::define('update_cnss', function ($user) { return $user->hasPermission('update_cnss'); });
+        Gate::define('delete_cnss', function ($user) { return $user->hasPermission('delete_cnss'); });
+
+        Gate::define('view_all_carrieres_formations', function ($user) { return $user->hasPermission('view_all_carrieres_formations'); });
+        Gate::define('create_carrieres_formations', function ($user) { return $user->hasPermission('create_carrieres_formations'); });
+        Gate::define('update_carrieres_formations', function ($user) { return $user->hasPermission('update_carrieres_formations'); });
+        Gate::define('delete_carrieres_formations', function ($user) { return $user->hasPermission('delete_carrieres_formations'); });
+
+        Gate::define('view_all_conflits', function ($user) { return $user->hasPermission('view_all_conflits'); });
+        Gate::define('create_conflits', function ($user) { return $user->hasPermission('create_conflits'); });
+        Gate::define('update_conflits', function ($user) { return $user->hasPermission('update_conflits'); });
+        Gate::define('delete_conflits', function ($user) { return $user->hasPermission('delete_conflits'); });
+
+        Gate::define('view_all_sanctions', function ($user) { return $user->hasPermission('view_all_sanctions'); });
+        Gate::define('create_sanctions', function ($user) { return $user->hasPermission('create_sanctions'); });
+        Gate::define('update_sanctions', function ($user) { return $user->hasPermission('update_sanctions'); });
+        Gate::define('delete_sanctions', function ($user) { return $user->hasPermission('delete_sanctions'); });
     }
 }
